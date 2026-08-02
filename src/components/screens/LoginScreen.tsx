@@ -13,6 +13,7 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }: LoginScre
 
   const handleLogin = () => {
     onLogin();
+    localStorage.setItem('showWelcomeToast', 'true');
     router.push('/exporter-dashboard');
   };
   return (

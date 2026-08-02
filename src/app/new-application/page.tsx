@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
+import Sidebar from '@/components/Sidebar';
+import { FiArrowRight } from "react-icons/fi";
 
 export default function NewApplication() {
   const router = useRouter();
-  const [selectedCert, setSelectedCert] = useState(0);
-  const [step, setStep] = useState(1);
-  const [transportMode, setTransportMode] = useState('sea');
+  const [step, setStep] = React.useState(1);
+  const [transportMode, setTransportMode] = React.useState('sea');
+  const [selectedCert, setSelectedCert] = React.useState<number | null>(null);
 
   return (
     <div className="h-screen flex flex-col">
@@ -22,14 +24,7 @@ export default function NewApplication() {
           </div>
         </div>
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
-          <nav className="w-[200px] bg-[#f8fafd] border-r border-[#dde3ee] flex-shrink-0 py-[18px] overflow-hidden">
-            <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push('/exporter-dashboard')}>
-              <span className=" w-[15px] text-center">🏠</span> Dashboard
-            </div>
-            <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold">
-              <span className=" w-[15px] text-center">➕</span> New Application
-            </div>
-          </nav>
+          <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             {step === 1 && (
               <>
@@ -76,8 +71,8 @@ export default function NewApplication() {
                   ))}
                 </div>
                 <div className="flex justify-end gap-2">
-                  <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/exporter-dashboard')}>Cancel</button>
-                  <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => setStep(2)}>Continue with Certificate of Origin →</button>
+                  <button className="inline-flex items-center gap-1 px-[14px] rounded py-[10px] border-gray-200 border text-[12px] font-semibold cursor-pointer transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/exporter-dashboard')}>Cancel</button>
+                  <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => setStep(2)}>Continue with Certificate of Origin <FiArrowRight size={16} color="white"/></button>
                 </div>
               </>
             )}

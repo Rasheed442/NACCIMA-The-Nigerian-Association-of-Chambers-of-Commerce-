@@ -8,11 +8,22 @@ import { useRouter } from 'next/navigation';
 export default function ExporterDashboard() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showWelcomeToast, setShowWelcomeToast] = useState(false);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
+  }, []);
+
+  useEffect(() => {
+    const shouldShowToast = localStorage.getItem('showWelcomeToast');
+    if (shouldShowToast === 'true') {
+      setShowWelcomeToast(true);
+      localStorage.removeItem('showWelcomeToast');
+      const timer = setTimeout(() => setShowWelcomeToast(false), 4000);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   const handleLogout = () => {
@@ -138,8 +149,21 @@ export default function ExporterDashboard() {
             <div className="text-[16px] font-bold text-[#1a2236] mb-2">Confirm Logout</div>
             <div className="text-[12px] text-[#6a7a9a] mb-5">Are you sure you want to log out of your account?</div>
             <div className="flex justify-end gap-2">
-              <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setShowLogoutModal(false)}>Cancel</button>
-              <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#e53e3e] text-white hover:bg-[#dc2626]" onClick={handleLogout}>Log Out</button>
+              <button className="inline-flex items-center gap-1 px-[14px] py-[7px]  text-[12px] font-semibold cursor-pointer border border-gray-200 transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setShowLogoutModal(false)}>Cancel</button>
+              <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px]  text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#e53e3e] text-white hover:bg-[#dc2626]" onClick={handleLogout}>Log Out</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Welcome Toast */}
+      {showWelcomeToast && (
+        <div className="fixed top-4 right-4 z-50 animate-slide-in">
+          <div className="bg-[#059669] text-white px-4 py-3 rounded-[8px] shadow-[0_4px_12px_rgba(0,0,0,0.15)] flex items-center gap-3">
+            <span className="text-[18px]">👋</span>
+            <div>
+              <div className="text-[13px] font-bold">Welcome back!</div>
+              <div className="text-[11px] opacity-90">You're now logged into your dashboard</div>
             </div>
           </div>
         </div>
