@@ -52,7 +52,7 @@ export default function Sidebar() {
         <span className="text-[13px] w-[15px] text-center">📁</span> My Documents
       </div>
       <div className="flex-1"></div>
-      <div className="px-[16px] py-[20px] flex items-center gap-2 text-[15px] text-[#e53e3e] cursor-pointer w-full transition-all hover:bg-[#fef2f2] hover:text-[#dc2626] absolute bottom-30 border-t-1 border-[#dc2626]" onClick={() => window.dispatchEvent(new CustomEvent('open-logout-modal'))}>
+      <div className="px-[16px] py-[20px] flex items-center gap-2 text-[15px] text-[#e53e3e] cursor-pointer w-full transition-all bg-[#fef2f2] hover:text-[#dc2626] absolute bottom-30 border-t border-[#cdabab]" onClick={() => window.dispatchEvent(new CustomEvent('open-logout-modal'))}>
         <span className="text-[15px] w-[15px] text-center">🚪</span> Log Out
       </div>
     </nav>

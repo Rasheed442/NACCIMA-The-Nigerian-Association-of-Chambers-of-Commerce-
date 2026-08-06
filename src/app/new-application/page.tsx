@@ -129,12 +129,12 @@ export default function NewApplication() {
                       <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="importer@overseas.com" />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Shipper's Name <span className="text-[#e53e3e]">*</span></label>
+                      <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Name <span className="text-[#e53e3e]">*</span></label>
                       <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value="Lagos Traders Ltd" readOnly />
                       <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified name — contact Admin to correct</div>
                     </div>
                     <div className="flex flex-col gap-1 col-span-2">
-                      <label className="text-[11px] font-semibold text-[#374151]">Shipper's Address <span className="text-[#e53e3e]">*</span></label>
+                      <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Address <span className="text-[#e53e3e]">*</span></label>
                       <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value="14 Commerce Road, Apapa, Lagos State, Nigeria" readOnly />
                       <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified address — contact Admin to correct</div>
                     </div>
