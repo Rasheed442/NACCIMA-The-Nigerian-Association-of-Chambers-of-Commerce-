@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
 import LogoutModal from '../components/LogoutModal';
@@ -34,9 +35,17 @@ function AppContent() {
     };
   }, [logout]);
 
-  const handleLogin = () => {
+  const router = useRouter();
+
+  const handleLoginAsRole = (role: 'admin' | 'exporter' | 'vetting') => {
     login();
-    setActiveScreen('s-exporter-home');
+    if (role === 'admin') {
+      router.push('/admin');
+    } else if (role === 'vetting') {
+      setActiveScreen('s-vetting-queue');
+    } else {
+      router.push('/exporter-dashboard');
+    }
   };
 
   const handleNavigateToRegister = () => {
@@ -81,7 +90,7 @@ function AppContent() {
       <>
         {authScreen === 'login' && (
           <LoginScreen 
-            onLogin={handleLogin} 
+            onLoginAsRole={handleLoginAsRole} 
             onNavigateToRegister={handleNavigateToRegister} 
           />
         )}

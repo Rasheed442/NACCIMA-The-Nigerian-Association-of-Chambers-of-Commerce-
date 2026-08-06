@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { FiArrowRight } from "react-icons/fi";
+import { FiArrowRight } from 'react-icons/fi';
 
-export default function NewApplication() {
+export default function AdminNewApplication() {
   const router = useRouter();
-  const [step, setStep] = React.useState(1);
-  const [transportMode, setTransportMode] = React.useState('sea');
-  const [selectedCert, setSelectedCert] = React.useState<number | null>(null);
+  const [step, setStep] = useState(1);
+  const [transportMode, setTransportMode] = useState('sea');
+  const [selectedCert, setSelectedCert] = useState<number | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
@@ -28,31 +28,31 @@ export default function NewApplication() {
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
-        <AppHeader role="exporter" />
+        <AppHeader role="admin" />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
-          <Sidebar />
-          <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
+          <Sidebar role="admin" />
+          <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto bg-[#fbfbfe]">
             {step === 1 && (
               <>
                 <div className="text-[16px] font-bold text-[#1a2236] mb-[3px]">New Certificate Application</div>
                 <div className="text-[11.5px] text-[#6a7a9a] mb-5">Step 1 of 4 — Select the certificate type</div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="flex  items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <div className="w-[24px] h-[24px] rounded-full border-2 border-[#1a4a8a] bg-[#1a4a8a] text-white text-[11px] font-bold flex items-center justify-center">1</div>
                     <span className="text-[13px] font-semibold text-[#1a4a8a]">Select Type</span>
                   </div>
                   <div className="h-[2px] flex-1 bg-[#3a7bd5]"></div>
-                  <div className="flex  items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <div className="w-[24px] h-[24px] rounded-full border-2 border-[#e2e8f0] bg-[#1a4a8a] text-white text-[11px] font-bold flex items-center justify-center">2</div>
                     <span className="text-[13px] font-semibold text-[#64748b]">Application Details</span>
                   </div>
                   <div className="h-[2px] flex-1 bg-[#1a4a8a]"></div>
-                  <div className="flex  items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <div className="w-[24px] h-[24px] rounded-full border-2 border-[#1a4a8a] bg-[#1a4a8a] text-white text-[11px] font-bold flex items-center justify-center">3</div>
                     <span className="text-[13px] font-semibold text-[#64748b]">Review & Submit</span>
                   </div>
                   <div className="h-[2px] flex-1 bg-[#1a4a8a]"></div>
-                  <div className="flex  items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <div className="w-[24px] h-[24px] rounded-full border-2 border-[#1a4a8a] bg-[#1a4a8a] text-white text-[11px] font-bold flex items-center justify-center">4</div>
                     <span className="text-[13px] font-semibold text-[#64748b]">Payment</span>
                   </div>
@@ -77,7 +77,7 @@ export default function NewApplication() {
                   ))}
                 </div>
                 <div className="flex justify-end gap-2">
-                  <button className="inline-flex items-center gap-1 px-[14px] rounded py-[10px] border-gray-200 border text-[12px] font-semibold cursor-pointer transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/exporter-dashboard')}>Cancel</button>
+                  <button className="inline-flex items-center gap-1 px-[14px] rounded py-[10px] border-gray-200 border text-[12px] font-semibold cursor-pointer transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/admin')}>Cancel</button>
                   <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => setStep(2)}>Continue with Certificate of Origin <FiArrowRight size={16} color="white"/></button>
                 </div>
               </>
@@ -111,7 +111,6 @@ export default function NewApplication() {
                   ★ NACCIMA Member — member rates apply to your application
                 </div>
 
-                {/* Section 1: Shipper/Exporter Details */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">1</div>
@@ -141,7 +140,6 @@ export default function NewApplication() {
                   </div>
                 </div>
 
-                {/* Section 2: Mode of Transport */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
@@ -161,13 +159,12 @@ export default function NewApplication() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[#11px] text-[#1e40af]">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[11px] text-[#1e40af]">
                     <span>ℹ️</span>
                     <span><strong>Sea selected:</strong> You must upload Bill of Lading, Commercial Invoice, and Packing List before submitting.</span>
                   </div>
                 </div>
 
-                {/* Section 3: Consignee & Shipment Details */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">3</div>
@@ -220,7 +217,6 @@ export default function NewApplication() {
                   </div>
                 </div>
 
-                {/* Section 4: HS Code Lookup */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
@@ -248,7 +244,6 @@ export default function NewApplication() {
                   </div>
                 </div>
 
-                {/* Section 5: Goods Line Items */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">5</div>
@@ -258,39 +253,18 @@ export default function NewApplication() {
                     <table className="w-full border-collapse text-[11px]">
                       <thead>
                         <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description <span className="text-[#e53e3e]">*</span></th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No.</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature <span className="text-[#e53e3e]">*</span></th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) <span className="text-[#e53e3e]">*</span></th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]"></th>
+                          <th className="px-[11px] py-[8px] text-left">Description</th>
+                          <th className="px-[11px] py-[8px] text-left">Qty</th>
+                          <th className="px-[11px] py-[8px] text-left">Unit</th>
+                          <th className="px-[11px] py-[8px] text-left">Value (USD)</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr className="hover:bg-[#f8faff]">
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">1</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" value="0901.11" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]" value="Arabica Coffee Beans" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" value="PKG-001" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]" value="500 KG" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" value="520.5" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]" value="Coffee, not roasted" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]" value="5,000.00" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]">✕</td>
-                        </tr>
-                        <tr className="hover:bg-[#f8faff]">
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">2</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" placeholder="Code" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]" placeholder="Description" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" placeholder="Marks" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]" placeholder="QTY" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" placeholder="KG" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]" placeholder="Nomenclature" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]" placeholder="0.00" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]">✕</td>
+                        <tr className="border-b border-[#edf0f5]">
+                          <td className="px-[11px] py-[8px] text-[#2a3a56]">Coffee Beans</td>
+                          <td className="px-[11px] py-[8px] text-[#2a3a56]">10</td>
+                          <td className="px-[11px] py-[8px] text-[#2a3a56]">MT</td>
+                          <td className="px-[11px] py-[8px] text-[#2a3a56]">$5,000</td>
                         </tr>
                       </tbody>
                     </table>
@@ -298,7 +272,6 @@ export default function NewApplication() {
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">➕ Add Line Item</button>
                 </div>
 
-                {/* Section 6: Supporting Documents */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
@@ -307,13 +280,13 @@ export default function NewApplication() {
                   </div>
                   <div className="flex flex-wrap gap-3 mb-3">
                     <div className="border-[1.5px] border-dashed border-[#3a7bd5] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#3a7bd5] bg-[#f0f7ff] text-center min-w-[140px]">
-                      ✅ Bill of Lading<br /><span className="text-[10px] text-[#6a7a9a]">BOL_2026.pdf — 1.2MB</span>
+                      ✅ Bill of Lading<br />Uploaded
                     </div>
                     <div className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                      📎 Commercial Invoice<br /><span className="text-[10px] text-[#e53e3e]">Required ✕</span>
+                      📎 Commercial Invoice<br />Pending
                     </div>
                     <div className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                      📎 Packing List<br /><span className="text-[10px] text-[#e53e3e]">Required ✕</span>
+                      📎 Packing List<br />Pending
                     </div>
                   </div>
                   <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
@@ -363,9 +336,8 @@ export default function NewApplication() {
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
                     <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Exporter</div>
                     <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Company</span><span className="text-[#1a2236]">Lagos Traders Ltd</span></div>
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">TIN</span><span className="text-[#1a2236] font-mono">12345678901</span></div>
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Membership</span><span className="text-[10px] font-bold px-2 py-[2px] rounded-[10px] bg-[#d1fae5] text-[#065f46]">★ MEMBER</span></div>
+                      <div className="text-[12px] text-[#1a2236] font-semibold">Lagos Traders Ltd</div>
+                      <div className="text-[11px] text-[#6a7a9a]">TIN: 12345678901</div>
                     </div>
                   </div>
                 </div>
@@ -373,12 +345,10 @@ export default function NewApplication() {
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4 mb-3">
                   <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Shipment Details</div>
                   <div className="grid grid-cols-4 gap-2">
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Consignee</span><br/><span className="text-[#1a2236]">UK Commodities PLC</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Destination</span><br/><span className="text-[#1a2236]">United Kingdom</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Mode of Transport</span><br/><span className="text-[#1a2236]">🚢 Sea</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Carrier</span><br/><span className="text-[#1a2236]">Maersk Line</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Country of Mfg</span><br/><span className="text-[#1a2236]">Nigeria</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Bulk Qty (MT)</span><br/><span className="text-[#1a2236]">500 MT</span></div>
+                    <div className="text-[11px] text-[#374151]">Mode of Transport<br/><span className="font-semibold">Sea</span></div>
+                    <div className="text-[11px] text-[#374151]">Destination<br/><span className="font-semibold">United Kingdom</span></div>
+                    <div className="text-[11px] text-[#374151]">Carrier<br/><span className="font-semibold">Maersk Line</span></div>
+                    <div className="text-[11px] text-[#374151]">FOB Value<br/><span className="font-semibold">$5,000.00</span></div>
                   </div>
                 </div>
 
@@ -387,24 +357,18 @@ export default function NewApplication() {
                   <table className="w-full border-collapse text-[11px]">
                     <thead>
                       <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD)</th>
+                        <th className="px-[11px] py-[8px] text-left">Description</th>
+                        <th className="px-[11px] py-[8px] text-left">Qty</th>
+                        <th className="px-[11px] py-[8px] text-left">Unit</th>
+                        <th className="px-[11px] py-[8px] text-left">Value (USD)</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="hover:bg-[#f8faff]">
-                        <td className="px-2 py-2 border-b border-[#edf0f5]">1</td>
-                        <td className="px-2 py-2 border-b border-[#edf0f5]"><span className="font-mono font-bold text-[#1a4a8a]">0901.11</span></td>
-                        <td className="px-2 py-2 border-b border-[#edf0f5]">Arabica Coffee Beans</td>
-                        <td className="px-2 py-2 border-b border-[#edf0f5]">500 KG</td>
-                        <td className="px-2 py-2 border-b border-[#edf0f5]">520.5 KG</td>
-                        <td className="px-2 py-2 border-b border-[#edf0f5]">Coffee, not roasted</td>
-                        <td className="px-2 py-2 border-b border-[#edf0f5]">$5,000.00</td>
+                      <tr className="border-b border-[#edf0f5]">
+                        <td className="px-[11px] py-[8px] text-[#2a3a56]">Coffee Beans</td>
+                        <td className="px-[11px] py-[8px] text-[#2a3a56]">10</td>
+                        <td className="px-[11px] py-[8px] text-[#2a3a56]">MT</td>
+                        <td className="px-[11px] py-[8px] text-[#2a3a56]">$5,000</td>
                       </tr>
                     </tbody>
                   </table>
@@ -414,25 +378,17 @@ export default function NewApplication() {
                   <div>
                     <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Supporting Documents</div>
                     <div className="space-y-1 mb-3">
-                      <div className="flex items-center gap-2 text-[11.5px] text-[#065f46]">✅ Bill of Lading — BOL_2026.pdf</div>
-                      <div className="flex items-center gap-2 text-[11.5px] text-[#e53e3e]">⚠️ Commercial Invoice — Not uploaded</div>
-                      <div className="flex items-center gap-2 text-[11.5px] text-[#e53e3e]">⚠️ Packing List — Not uploaded</div>
+                      <div className="text-[11px] text-[#374151]">✅ Bill of Lading</div>
+                      <div className="text-[11px] text-[#374151]">⚠️ Commercial Invoice</div>
+                      <div className="text-[11px] text-[#374151]">⚠️ Packing List</div>
                     </div>
                   </div>
                   <div>
                     <div className="bg-[#fef3c7] border border-[#fbbf24] rounded-[8px] p-4 mb-3">
-                      <div className="text-[11px] font-bold text-[#92400e] mb-2">💱 FOB Value Conversion (Certificate of Origin)</div>
-                      <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">$5,000.00</span></div>
-                      <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">₦1,580.00</span></div>
-                      <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>30 Jun 2026, 09:15 AM (cached ≤1hr)</span></div>
-                      <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 mt-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">₦7,900,000.00</span></div>
+                      <div className="text-[12px] font-semibold text-[#92400e]">Please upload pending documents before final submission.</div>
                     </div>
                     <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
-                      <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
-                      <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee (0.11% × ₦7,900,000)</span><span className="font-semibold text-[#1a2236]">₦8,690.00</span></div>
-                      <div className="flex justify-between text-[11px] mb-1"><span>Processing Fee</span><span className="font-semibold text-[#1a2236]">₦2,500.00</span></div>
-                      <div className="flex justify-between text-[11px] mb-1"><span>VAT (7.5%)</span><span className="font-semibold text-[#1a2236]">₦841.88</span></div>
-                      <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 mt-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">₦12,031.88</span></div>
+                      <div className="text-[12px] text-[#374151]">Processing fee will be calculated after document review.</div>
                     </div>
                   </div>
                 </div>
@@ -471,35 +427,13 @@ export default function NewApplication() {
                   </div>
                   <div className="bg-white border border-[#dde3ee] rounded-[10px] shadow-[0_2px_16px_rgba(0,0,0,0.1)] w-full max-w-[400px]">
                     <div className="px-5 py-4 border-b border-[#edf0f5]">
-                      <div className="text-[14px] font-bold text-[#0ba4db] mb-1">Paystack</div>
-                      <div className="text-[10.5px] text-[#6a7a9a] opacity-80">Lagos Traders Ltd — lagos@traders.ng</div>
-                      <div className="text-[24px] font-bold text-[#1a2236] mt-2">₦ 12,031.88</div>
-                      <div className="text-[10.5px] text-[#6a7a9a]">Ref: NACC-PAY-2026-00422 &nbsp;|&nbsp; NACCIMA Certificate Fee</div>
+                      <div className="text-[14px] font-bold text-[#1a2236]">Paystack Checkout</div>
+                      <div className="text-[12px] text-[#6a7a9a]">Secure payment for your application</div>
                     </div>
                     <div className="p-5">
-                      <div className="flex gap-2 mb-4">
-                        <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#0ba4db] text-white text-center">💳 Card</div>
-                        <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">🏦 Bank Transfer</div>
-                        <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">📱 USSD</div>
-                      </div>
-                      <div className="flex flex-col gap-3 mb-4">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[11px] font-semibold text-[#374151]">Card Number</label>
-                          <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="0000  0000  0000  0000" />
-                        </div>
-                        <div className="flex gap-3">
-                          <div className="flex-1 flex flex-col gap-1">
-                            <label className="text-[11px] font-semibold text-[#374151]">Expiry Date</label>
-                            <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="MM / YY" />
-                          </div>
-                          <div className="flex-1 flex flex-col gap-1">
-                            <label className="text-[11px] font-semibold text-[#374151]">CVV</label>
-                            <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="•••" />
-                          </div>
-                        </div>
-                      </div>
-                      <button className="w-full px-4 py-3 rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#0ba4db] text-white hover:bg-[#0984b8]">Pay ₦12,031.88</button>
-                      <div className="text-[10.5px] text-[#6a7a9a] text-center mt-3">🔒 Secured by Paystack — PCI DSS Compliant</div>
+                      <div className="text-[20px] font-bold text-[#1a2236] mb-2">₦48,000.00</div>
+                      <div className="text-[12px] text-[#6a7a9a] mb-4">Processing fee for CoO application</div>
+                      <button className="w-full rounded-[8px] bg-[#1a4a8a] px-[14px] py-[10px] text-[13px] font-semibold text-white">Pay Now</button>
                     </div>
                   </div>
                   <div className="text-[11px] text-[#9ca3af] text-center mt-3">

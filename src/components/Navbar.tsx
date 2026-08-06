@@ -12,6 +12,14 @@ export default function Navbar({ activeScreen, onScreenChange }: NavbarProps) {
     window.dispatchEvent(new CustomEvent('open-logout-modal'));
   };
 
+  const handleRoleNav = (role: string) => {
+    if (role === 'admin') {
+      window.location.href = '/admin';
+    } else if (role === 'exporter') {
+      window.location.href = '/exporter-dashboard';
+    }
+  };
+
   return (
     <aside id="meta-nav">
       <div className="logo">
@@ -56,6 +64,14 @@ export default function Navbar({ activeScreen, onScreenChange }: NavbarProps) {
       <div className="nav-group">
         <div className="nav-group-title">Public</div>
         <div className={`nav-item ${activeScreen === 's-cert-verify' ? 'active' : ''}`} onClick={() => onScreenChange('s-cert-verify')}>🔎 Certificate Verification</div>
+      </div>
+
+      <div className="nav-sep"></div>
+      <div className="nav-sep"></div>
+      <div className="nav-group">
+        <div className="nav-group-title">Quick Role</div>
+        <div className={`nav-item`} onClick={() => handleRoleNav('exporter')}>👤 Exporter View</div>
+        <div className={`nav-item`} onClick={() => handleRoleNav('admin')}>🛠 Admin View</div>
       </div>
 
       <div className="nav-sep"></div>

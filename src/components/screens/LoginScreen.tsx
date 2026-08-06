@@ -1,21 +1,20 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+
+type AuthRole = 'exporter' | 'admin' | 'vetting';
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onLoginAsRole: (role: AuthRole) => void;
   onNavigateToRegister: () => void;
 }
 
-export default function LoginScreen({ onLogin, onNavigateToRegister }: LoginScreenProps) {
-  const router = useRouter();
-
-  const handleLogin = () => {
-    onLogin();
+export default function LoginScreen({ onLoginAsRole, onNavigateToRegister }: LoginScreenProps) {
+  const handleLogin = (role: AuthRole = 'exporter') => {
+    onLoginAsRole(role);
     localStorage.setItem('showWelcomeToast', 'true');
-    router.push('/exporter-dashboard');
   };
+
   return (
     <div className="h-screen w-full">
       <div className="h-screen w-full grid grid-cols-2">
@@ -44,13 +43,16 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }: LoginScre
             <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]" type="password" placeholder="••••••••" />
           </div>
           <div className="text-right text-[11px] text-[#3a7bd5] mb-4 cursor-pointer">Forgot password?</div>
-          <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white w-full mb-[14px] hover:bg-[#153c70]" onClick={handleLogin}>Sign In</button>
-          <div className="text-center text-[11.5px] text-[#6a7a9a]">
+          <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white w-full mb-[14px] hover:bg-[#153c70]" onClick={() => handleLogin('exporter')}>Sign In as Exporter</button>
+          <div className="text-center text-[11.5px] text-[#6a7a9a] mb-4">
             New exporter? <span className="text-[#3a7bd5] font-semibold cursor-pointer" onClick={onNavigateToRegister}>Register your company →</span>
           </div>
           <div className="mt-[18px] pt-[14px] border-t border-[#f0f0f0]">
-            <div className="text-[10.5px] text-[#9ca3af] text-center mb-2">— NACCIMA Staff / Admin login —</div>
-            <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] w-full hover:bg-[#f1f4f9] text-[11.5px]">🏢 Login as NACCIMA Staff / Admin</button>
+            <div className="text-[10.5px] text-[#9ca3af] text-center mb-3">Quick login options</div>
+            <div className="grid gap-3">
+              <button className="inline-flex items-center justify-center gap-2 px-[14px] py-[10px] rounded-[6px] text-[12px] font-semibold cursor-pointer border border-[#e5e7eb] transition-all bg-[#f8fafc] text-[#1f2937] hover:bg-[#eef2ff]" onClick={() => handleLogin('admin')}>🏢 Login as Admin</button>
+              <button className="inline-flex items-center justify-center gap-2 px-[14px] py-[10px] rounded-[6px] text-[12px] font-semibold cursor-pointer border border-[#e5e7eb] transition-all bg-[#f8fafc] text-[#1f2937] hover:bg-[#eef2ff]" onClick={() => handleLogin('vetting')}>👩‍💼 Login as Vetting Staff</button>
+            </div>
           </div>
         </div>
       </div>

@@ -3,7 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 
-export default function Sidebar() {
+interface SidebarProps {
+  role?: 'exporter' | 'admin' | 'vetting';
+}
+
+export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -22,12 +26,17 @@ export default function Sidebar() {
     );
   }
 
+  const sidebarBg = role === 'admin' ? 'bg-[#f6f4fb]' : 'bg-[#f8fafd]';
+  const borderColor = role === 'admin' ? 'border-[#e6e0f2]' : 'border-[#dde3ee]';
+  const dashboardPath = role === 'admin' ? '/admin' : '/exporter-dashboard';
+  const newApplicationPath = role === 'admin' ? '/admin/new-application' : '/new-application';
+
   return (
-    <nav className="w-[200px] relative bg-[#f8fafd] border-r border-[#dde3ee] flex-shrink-0 py-[18px] overflow-y-auto opacity-100 transition-opacity duration-200">
-      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/exporter-dashboard' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/exporter-dashboard')}>
+    <nav className={`w-[200px] relative ${sidebarBg} border-r ${borderColor} flex-shrink-0 py-[18px] overflow-y-auto opacity-100 transition-opacity duration-200`}>
+      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === dashboardPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(dashboardPath)}>
         <span className=" w-[15px] text-center">🏠</span> Dashboard
       </div>
-      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/new-application' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/new-application')}>
+      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === newApplicationPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(newApplicationPath)}>
         <span className=" w-[15px] text-center">➕</span> New Application
       </div>
       <div className="px-[16px] py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px] mt-2">My Applications</div>
@@ -52,8 +61,8 @@ export default function Sidebar() {
         <span className="text-[13px] w-[15px] text-center">📁</span> My Documents
       </div>
       <div className="flex-1"></div>
-      <div className="px-[16px] py-[20px] flex items-center gap-2 text-[15px] text-[#e53e3e] cursor-pointer w-full transition-all bg-[#fef2f2] hover:text-[#dc2626] absolute bottom-30 border-t border-[#cdabab]" onClick={() => window.dispatchEvent(new CustomEvent('open-logout-modal'))}>
-        <span className="text-[15px] w-[15px] text-center">🚪</span> Log Out
+      <div className="px-[16px] py-[20px] flex items-center gap-2 text-[15px] text-[#e53e3e] cursor-pointer w-full transition-all hover:bg-[#fef2f2] hover:text-[#dc2626] absolute bottom-30 border-t-1 border-[#dc2626]" onClick={() => window.dispatchEvent(new CustomEvent('open-logout-modal'))}>
+        <span className="text-[15px] w-3.75 text-center">🚪</span> Log Out
       </div>
     </nav>
   );
