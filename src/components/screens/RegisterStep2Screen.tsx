@@ -1,16 +1,13 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
 
 interface RegisterStep2ScreenProps {
   onBack: () => void;
-  onComplete: () => void;
+  onContinue: () => void;
 }
 
-export default function RegisterStep2Screen({ onBack, onComplete }: RegisterStep2ScreenProps) {
-    const router = useRouter();
-  
+export default function RegisterStep2Screen({ onBack, onContinue }: RegisterStep2ScreenProps) {
   return (
     <div className="h-screen w-full">
       <div className="h-screen w-full grid grid-cols-2">
@@ -25,7 +22,7 @@ export default function RegisterStep2Screen({ onBack, onComplete }: RegisterStep
           <div className="text-[11px] text-[#5a7a9a] mt-3 leading-relaxed">Your TIN will be your username for all future logins. Keep it safe.</div>
         </div>
         <div className="px-[34px] flex flex-col justify-center bg-white">
-          <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Step 2 of 2 — Create Your Account</div>
+          <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Step 2 of 3 — Create Your Account</div>
           <div className="text-[11.5px] text-[#6a7a9a] mb-5">Set your contact email and password</div>
           <div className="flex flex-col gap-1 mb-3">
             <label className="text-[11px] font-semibold text-[#374151]">Contact Email Address <span className="text-[#e53e3e]">*</span></label>
@@ -46,7 +43,7 @@ export default function RegisterStep2Screen({ onBack, onComplete }: RegisterStep
           </div>
           <div className="flex gap-2">
             <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={onBack}>← Back</button>
-            <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white flex-1 hover:bg-[#153c70]" onClick={() => router.push('/exporter-dashboard')}>Create Account &amp; Verify Email</button>
+            <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white flex-1 hover:bg-[#153c70]" onClick={onContinue}>Continue to Contact Person</button>
           </div>
           <div className="text-[10.5px] text-[#9ca3af] mt-[10px] text-center">By registering, you confirm the company details are accurate and that you are authorised to act on behalf of this company.</div>
         </div>

@@ -6,12 +6,13 @@ import Navbar from '../components/Navbar';
 import LoginScreen from '../components/screens/LoginScreen';
 import RegisterStep1Screen from '../components/screens/RegisterStep1Screen';
 import RegisterStep2Screen from '../components/screens/RegisterStep2Screen';
+import RegisterStep3Screen from '../components/screens/RegisterStep3Screen';
 import DashboardScreen from '../components/screens/DashboardScreen';
 
 function AppContent() {
   const { isAuthenticated, login, logout } = useAuth();
   const [activeScreen, setActiveScreen] = useState('s-login');
-  const [authScreen, setAuthScreen] = useState('login'); // 'login', 'register-1', 'register-2'
+  const [authScreen, setAuthScreen] = useState('login'); // 'login', 'register-1', 'register-2', 'register-3'
 
   const handleLogin = () => {
     login();
@@ -26,13 +27,21 @@ function AppContent() {
     setAuthScreen('register-2');
   };
 
+  const handleRegisterContinueToStep3 = () => {
+    setAuthScreen('register-3');
+  };
+
   const handleRegisterComplete = () => {
     login();
     setActiveScreen('s-exporter-home');
   };
 
-  const handleRegisterBack = () => {
+  const handleRegisterBackToStep1 = () => {
     setAuthScreen('register-1');
+  };
+
+  const handleRegisterBackToStep2 = () => {
+    setAuthScreen('register-2');
   };
 
   const handleRegisterBackToLogin = () => {
@@ -63,7 +72,13 @@ function AppContent() {
         )}
         {authScreen === 'register-2' && (
           <RegisterStep2Screen 
-            onBack={handleRegisterBack} 
+            onBack={handleRegisterBackToStep1} 
+            onContinue={handleRegisterContinueToStep3} 
+          />
+        )}
+        {authScreen === 'register-3' && (
+          <RegisterStep3Screen 
+            onBack={handleRegisterBackToStep2} 
             onComplete={handleRegisterComplete} 
           />
         )}

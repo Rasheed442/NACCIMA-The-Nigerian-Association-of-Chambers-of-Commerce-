@@ -30,7 +30,7 @@ export default function RegisterStep1Screen({ onBackToLogin, onContinue }: Regis
           </div>
         </div>
         <div className="px-[34px] flex flex-col justify-center bg-white">
-          <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Step 1 of 2 — Verify your TIN</div>
+          <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Step 1 of 3 — Verify your TIN</div>
           <div className="text-[11.5px] text-[#6a7a9a] mb-5">We will retrieve your company details from the NRS</div>
           <div className="flex flex-col gap-1 mb-4">
             <label className="text-[11px] font-semibold text-[#374151]">Tax Identification Number (TIN) <span className="text-[#e53e3e]">*</span></label>
