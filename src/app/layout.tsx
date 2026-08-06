@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Solution Title",
-  description: "Solution Title web app",
+  title: "NACCIMA",
+  description: "",
   icons: {
     icon: "/favicon.svg",
   },
