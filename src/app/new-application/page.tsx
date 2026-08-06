@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
+import AppHeader from '@/components/AppHeader';
+import LogoutModal from '@/components/LogoutModal';
 import { FiArrowRight } from "react-icons/fi";
 
 export default function NewApplication() {
@@ -10,19 +12,23 @@ export default function NewApplication() {
   const [step, setStep] = React.useState(1);
   const [transportMode, setTransportMode] = React.useState('sea');
   const [selectedCert, setSelectedCert] = React.useState<number | null>(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  useEffect(() => {
+    const handleOpenLogoutModal = () => setShowLogoutModal(true);
+    window.addEventListener('open-logout-modal', handleOpenLogoutModal);
+    return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
+  }, []);
+
+  const handleLogout = () => {
+    setShowLogoutModal(false);
+    router.push('/');
+  };
 
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
-        <div className="h-[50px] bg-[#1a3a5c] flex items-center px-[20px] gap-3 flex-shrink-0">
-          <div className="text-[15px] font-extrabold text-white tracking-[0.3px]">NACCIMA <span className="text-[#7ec8e3] text-[11px] font-normal ml-1">E-Certificate Platform</span></div>
-          <div className="ml-auto flex items-center gap-[14px]">
-            <div className="flex items-center gap-2 cursor-pointer">
-              <div className="w-[30px] h-[30px] rounded-full bg-[#2c6ea3] flex items-center justify-center text-[11px] font-bold text-white">LT</div>
-              <span className="text-[12px] text-[#c8ddf0] font-medium">Lagos Traders Ltd</span>
-            </div>
-          </div>
-        </div>
+        <AppHeader />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
@@ -505,6 +511,7 @@ export default function NewApplication() {
           </div>
         </div>
       </div>
+      <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
     </div>
   );
 }

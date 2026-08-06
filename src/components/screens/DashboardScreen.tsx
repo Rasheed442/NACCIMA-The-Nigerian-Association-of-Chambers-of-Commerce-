@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import LogoutModal from '@/components/LogoutModal';
 
 interface DashboardScreenProps {
   activeScreen: string;
@@ -10,6 +11,18 @@ interface DashboardScreenProps {
 export default function DashboardScreen({ activeScreen, onScreenChange }: DashboardScreenProps) {
   const [selectedCert, setSelectedCert] = useState(0);
   const [selectedTransport, setSelectedTransport] = useState('sea');
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  useEffect(() => {
+    const handleOpenLogoutModal = () => setShowLogoutModal(true);
+    window.addEventListener('open-logout-modal', handleOpenLogoutModal);
+    return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
+  }, []);
+
+  const handleLogout = () => {
+    setShowLogoutModal(false);
+    window.dispatchEvent(new CustomEvent('confirm-logout'));
+  };
 
   const SCREENS = {
     's-exporter-home': { title: 'Exporter Dashboard', role: 'Exporter', desc: 'Shows membership status, active applications, pending payments, and issued certificates' },
@@ -38,6 +51,13 @@ export default function DashboardScreen({ activeScreen, onScreenChange }: Dashbo
         <div id="sh-title" className="sh-title">{currentScreen.title}</div>
         <div id="sh-role" className="sh-role">{currentScreen.role}</div>
         <div id="sh-desc" className="sh-desc">{currentScreen.desc}</div>
+        <button
+          className="btn btn-outline btn-sm"
+          style={{ marginTop: '8px', alignSelf: 'flex-start' }}
+          onClick={() => setShowLogoutModal(true)}
+        >
+          Log Out
+        </button>
       </div>
       <div id="wireframe-wrap">
         {/* SCREEN: EXPORTER DASHBOARD */}
@@ -239,6 +259,8 @@ export default function DashboardScreen({ activeScreen, onScreenChange }: Dashbo
           </div>
         )}
       </div>
+
+      <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
     </>
   );
 }

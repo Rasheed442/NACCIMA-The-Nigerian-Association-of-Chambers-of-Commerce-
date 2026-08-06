@@ -8,6 +8,10 @@ interface NavbarProps {
 }
 
 export default function Navbar({ activeScreen, onScreenChange }: NavbarProps) {
+  const handleLogoutClick = () => {
+    window.dispatchEvent(new CustomEvent('open-logout-modal'));
+  };
+
   return (
     <aside id="meta-nav">
       <div className="logo">
@@ -52,6 +56,12 @@ export default function Navbar({ activeScreen, onScreenChange }: NavbarProps) {
       <div className="nav-group">
         <div className="nav-group-title">Public</div>
         <div className={`nav-item ${activeScreen === 's-cert-verify' ? 'active' : ''}`} onClick={() => onScreenChange('s-cert-verify')}>🔎 Certificate Verification</div>
+      </div>
+
+      <div className="nav-sep"></div>
+      <div className="nav-group">
+        <div className="nav-group-title">Account</div>
+        <div className="nav-item" onClick={handleLogoutClick}>🚪 Log Out</div>
       </div>
     </aside>
   );

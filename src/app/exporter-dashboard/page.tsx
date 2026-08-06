@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
+import AppHeader from '@/components/AppHeader';
+import LogoutModal from '@/components/LogoutModal';
 import { FaPlus } from "react-icons/fa";
 import { useRouter } from 'next/navigation';
 
@@ -34,22 +36,7 @@ export default function ExporterDashboard() {
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white  overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)] ">
-        <div className="h-[50px] bg-[#1a3a5c] flex items-center px-[20px] gap-3 flex-shrink-0">
-          <div className="text-[15px] font-extrabold text-white tracking-[0.3px]">NACCIMA <span className="text-[#7ec8e3] text-[11px] font-normal ml-1">E-Certificate Platform</span></div>
-          <div className="ml-auto flex items-center gap-[14px]">
-            <div className="w-[30px] h-[30px] rounded-full bg-[rgba(255,255,255,0.12)] flex items-center justify-center cursor-pointer relative text-[#cde] text-[13px]">
-              🔔
-              <div className="absolute top-1 right-[5px] w-[7px] h-[7px] rounded-full bg-[#f59e0b] border-[1.5px] border-[#1a3a5c]"></div>
-            </div>
-            <div className="flex items-center gap-[6px]">
-              <span className="inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] bg-[#d1fae5] text-[#065f46]">★ MEMBER</span>
-            </div>
-            <div className="flex items-center gap-2 cursor-pointer">
-              <div className="w-[30px] h-[30px] rounded-full bg-[#2c6ea3] flex items-center justify-center text-[11px] font-bold text-white">LT</div>
-              <span className="text-[12px] text-[#c8ddf0] font-medium">Lagos Traders Ltd</span>
-            </div>
-          </div>
-        </div>
+        <AppHeader />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
@@ -142,19 +129,7 @@ export default function ExporterDashboard() {
         </div>
       </div>
 
-      {/* Logout Confirmation Modal */}
-      {showLogoutModal && (
-        <div className="fixed inset-0 bg-black/50 bg-opacity-2 flex items-center justify-center z-50">
-          <div className="bg-white rounded p-6 w-full max-w-[400px] shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
-            <div className="text-[16px] font-bold text-[#1a2236] mb-2">Confirm Logout</div>
-            <div className="text-[12px] text-[#6a7a9a] mb-5">Are you sure you want to log out of your account?</div>
-            <div className="flex justify-end gap-2">
-              <button className="inline-flex items-center gap-1 px-[14px] py-[7px]  text-[12px] font-semibold cursor-pointer border border-gray-200 transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setShowLogoutModal(false)}>Cancel</button>
-              <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px]  text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#e53e3e] text-white hover:bg-[#dc2626]" onClick={handleLogout}>Log Out</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
 
       {/* Welcome Toast */}
       {showWelcomeToast && (

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import Navbar from '../components/Navbar';
+import LogoutModal from '../components/LogoutModal';
 import LoginScreen from '../components/screens/LoginScreen';
 import RegisterStep1Screen from '../components/screens/RegisterStep1Screen';
 import RegisterStep2Screen from '../components/screens/RegisterStep2Screen';
@@ -13,6 +14,25 @@ function AppContent() {
   const { isAuthenticated, login, logout } = useAuth();
   const [activeScreen, setActiveScreen] = useState('s-login');
   const [authScreen, setAuthScreen] = useState('login'); // 'login', 'register-1', 'register-2', 'register-3'
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  useEffect(() => {
+    const handleOpenLogoutModal = () => setShowLogoutModal(true);
+    const handleConfirmLogout = () => {
+      logout();
+      setActiveScreen('s-login');
+      setAuthScreen('login');
+      setShowLogoutModal(false);
+    };
+
+    window.addEventListener('open-logout-modal', handleOpenLogoutModal);
+    window.addEventListener('confirm-logout', handleConfirmLogout);
+
+    return () => {
+      window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
+      window.removeEventListener('confirm-logout', handleConfirmLogout);
+    };
+  }, [logout]);
 
   const handleLogin = () => {
     login();
@@ -52,6 +72,7 @@ function AppContent() {
     logout();
     setActiveScreen('s-login');
     setAuthScreen('login');
+    setShowLogoutModal(false);
   };
 
   // If not authenticated, show auth screens full-screen without navbar
@@ -89,9 +110,10 @@ function AppContent() {
   // If authenticated, show navbar and dashboard screens
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100%' }}>
-      {/* <Navbar activeScreen={activeScreen} onScreenChange={setActiveScreen} /> */}
+      <Navbar activeScreen={activeScreen} onScreenChange={setActiveScreen} />
       <div id="main-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', overflow: 'auto' }}>
         <DashboardScreen activeScreen={activeScreen} onScreenChange={setActiveScreen} />
+        <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
       </div>
     </div>
   );

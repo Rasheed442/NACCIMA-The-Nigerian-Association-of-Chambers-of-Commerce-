@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
+import AppHeader from '@/components/AppHeader';
+import LogoutModal from '@/components/LogoutModal';
 import { FiPlus } from 'react-icons/fi';
 
 interface Application {
@@ -15,6 +17,18 @@ interface Application {
 
 export default function MyApplications() {
   const router = useRouter();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  useEffect(() => {
+    const handleOpenLogoutModal = () => setShowLogoutModal(true);
+    window.addEventListener('open-logout-modal', handleOpenLogoutModal);
+    return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
+  }, []);
+
+  const handleLogout = () => {
+    setShowLogoutModal(false);
+    router.push('/');
+  };
 
   const applications: Application[] = [
     { id: 'NACC-2026-00421', certificateType: 'Certificate of Origin', destination: 'United Kingdom', submitted: '26 Mar 2026', status: 'under_review' },
@@ -68,15 +82,7 @@ export default function MyApplications() {
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
-        <div className="h-[50px] bg-[#1a3a5c] flex items-center px-[20px] gap-3 flex-shrink-0">
-          <div className="text-[15px] font-extrabold text-white tracking-[0.3px]">NACCIMA <span className="text-[#7ec8e3] text-[11px] font-normal ml-1">E-Certificate Platform</span></div>
-          <div className="ml-auto flex items-center gap-[14px]">
-            <div className="flex items-center gap-2 cursor-pointer">
-              <div className="w-[30px] h-[30px] rounded-full bg-[#2c6ea3] flex items-center justify-center text-[11px] font-bold text-white">LT</div>
-              <span className="text-[12px] text-[#c8ddf0] font-medium">Lagos Traders Ltd</span>
-            </div>
-          </div>
-        </div>
+        <AppHeader />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
@@ -118,6 +124,8 @@ export default function MyApplications() {
           </div>
         </div>
       </div>
+
+      <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
     </div>
   );
 }
