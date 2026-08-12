@@ -67,7 +67,7 @@ export default function ApplicationDetail() {
       unapproved: 'Unapproved',
     };
     return (
-      <span className={`inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] whitespace-nowrap ${badges[status as keyof typeof badges]}`}>
+      <span className={`inline-block text-[12px] font-bold px-2 py-2 rounded whitespace-nowrap ${badges[status as keyof typeof badges]}`}>
         {labels[status as keyof typeof labels]}
       </span>
     );
@@ -98,7 +98,7 @@ export default function ApplicationDetail() {
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
-            <div className="flex items-center justify-between mb-[3px]">
+            <div className="flex items-center justify-between text-[18px] uppercase mb-[3px]">
               <div className="text-[16px] font-bold text-[#1a2236]">Application {application.id}</div>
               {getStatusBadge(application.status)}
             </div>
@@ -110,19 +110,19 @@ export default function ApplicationDetail() {
               <div>
                 <div className="flex border-b-2 border-[#e5e7eb] mb-[14px]">
                   <button 
-                    className={`px-[14px] py-[7px] text-[11.5px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'details' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
+                    className={`px-3.5 py-1.75 text-[13px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'details' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
                     onClick={() => setActiveTab('details')}
                   >
                     Application Details
                   </button>
                   <button 
-                    className={`px-[14px] py-[7px] text-[11.5px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'lineitems' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
+                    className={`px-3.5 py-1.75 text-[13px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'lineitems' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
                     onClick={() => setActiveTab('lineitems')}
                   >
                     Line Items (1)
                   </button>
                   <button 
-                    className={`px-[14px] py-[7px] text-[11.5px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'documents' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
+                    className={`px-3.5 py-1.75 text-[13px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'documents' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
                     onClick={() => setActiveTab('documents')}
                   >
                     Documents (1/3)
@@ -132,36 +132,36 @@ export default function ApplicationDetail() {
                 {activeTab === 'details' && (
                   <>
                     <div className="bg-[#f0f7ff] border border-[#bfdbfe] rounded-[6px] p-[10px] [12px] mb-[12px]">
-                      <div className="text-[10px] font-bold text-[#1e40af] uppercase tracking-[0.5px] mb-[6px]">Shipment Information</div>
-                      <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[11.5px]">
+                      <div className="text-[13px] font-bold text-[#1e40af] uppercase tracking-[0.5px] pb-2">Shipment Information</div>
+                      <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[13px]">
                         <span className="text-[#6a7a9a] font-medium">Consignee</span>
-                        <span className="text-[#1a2236] font-semibold">{application.consignee}</span>
+                        <span className="text-[#1a2236] font-medium">{application.consignee}</span>
                         <span className="text-[#6a7a9a] font-medium">Destination</span>
-                        <span className="text-[#1a2236] font-semibold">{application.destination}</span>
+                        <span className="text-[#1a2236] font-medium">{application.destination}</span>
                         <span className="text-[#6a7a9a] font-medium">Mode of Transport</span>
-                        <span className="text-[#1a2236] font-semibold">🚢 {application.transportMode}</span>
+                        <span className="text-[#1a2236] font-medium">🚢 {application.transportMode}</span>
                         <span className="text-[#6a7a9a] font-medium">Carrier</span>
-                        <span className="text-[#1a2236] font-semibold">{application.carrier}</span>
+                        <span className="text-[#1a2236] font-medium">{application.carrier}</span>
                         <span className="text-[#6a7a9a] font-medium">FOB Value (USD)</span>
-                        <span className="text-[#1a2236] font-semibold">{application.fobUsd}</span>
+                        <span className="text-[#1a2236] font-medium">{application.fobUsd}</span>
                         <span className="text-[#6a7a9a] font-medium">FOB Value (NGN)</span>
-                        <span className="text-[#1a2236] font-semibold">{application.fobNgn} @ {application.exchangeRate}</span>
+                        <span className="text-[#1a2236] font-medium">{application.fobNgn} @ {application.exchangeRate}</span>
                         <span className="text-[#6a7a9a] font-medium">HS Code</span>
-                        <span className="text-[#1a2236] font-semibold font-mono text-[#1a4a8a]">{application.hsCode} — {application.hsDescription}</span>
+                        <span className="text-[#1a2236] font-medium font-mono ">{application.hsCode} — {application.hsDescription}</span>
                       </div>
                     </div>
 
                     <div className="bg-[#f0f7ff] border border-[#bfdbfe] rounded-[6px] p-[10px] [12px] mb-[12px]">
-                      <div className="text-[10px] font-bold text-[#1e40af] uppercase tracking-[0.5px] mb-[6px]">Payment</div>
-                      <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[11.5px]">
+                      <div className="text-[13px] font-bold text-[#1e40af] uppercase tracking-[0.5px] pb-2">Payment</div>
+                      <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[13px]">
                         <span className="text-[#6a7a9a] font-medium">Amount Paid</span>
-                        <span className="text-[#065f46] font-semibold">{application.paymentAmount}</span>
+                        <span className="text-[#065f46] font-medium">{application.paymentAmount}</span>
                         <span className="text-[#6a7a9a] font-medium">Paystack Ref</span>
-                        <span className="text-[#1a2236] font-semibold font-mono">{application.paystackRef}</span>
+                        <span className="text-[#1a2236] font-medium font-mono">{application.paystackRef}</span>
                         <span className="text-[#6a7a9a] font-medium">Paid On</span>
-                        <span className="text-[#1a2236] font-semibold">{application.paidOn}</span>
+                        <span className="text-[#1a2236] font-medium">{application.paidOn}</span>
                         <span className="text-[#6a7a9a] font-medium">Rate Applied</span>
-                        <span className="text-[#1a2236] font-semibold">{application.rateApplied}</span>
+                        <span className="text-[#1a2236] font-medium">{application.rateApplied}</span>
                       </div>
                     </div>
                   </>
@@ -169,9 +169,9 @@ export default function ApplicationDetail() {
 
                 {activeTab === 'lineitems' && (
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5">
-                    <div className="text-[12.5px] font-bold text-[#1a2236] mb-4">Goods Line Items</div>
+                    <div className="text-[13px] font-medium text-[#1a2236] mb-4">Goods Line Items</div>
                     <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-[11px]">
+                      <table className="w-full border-collapse text-[13px]">
                         <thead>
                           <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
                             <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
@@ -201,16 +201,16 @@ export default function ApplicationDetail() {
 
                 {activeTab === 'documents' && (
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5">
-                    <div className="text-[12.5px] font-bold text-[#1a2236] mb-4">Supporting Documents</div>
+                    <div className="text-[14px] font-medium text-[#1a2236] mb-4">Supporting Documents</div>
                     <div className="flex flex-wrap gap-3 mb-3">
-                      <div className="border-[1.5px] border-dashed border-[#3a7bd5] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#3a7bd5] bg-[#f0f7ff] text-center min-w-[140px]">
-                        ✅ Bill of Lading<br /><span className="text-[10px] text-[#6a7a9a]">BOL_2026.pdf — 1.2MB</span>
+                      <div className="border-[1.5px] flex flex-col gap-2 border-dashed  border-[#3a7bd5] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#3a7bd5] bg-[#f0f7ff] text-center min-w-[140px]">
+                        ✅ Bill of Lading <span className="text-[12px] text-[#6a7a9a]">BOL_2026.pdf — 1.2MB</span>
                       </div>
-                      <div className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                        📎 Commercial Invoice<br /><span className="text-[10px] text-[#e53e3e]">Required ✕</span>
+                      <div className="border-[1.5px] flex flex-col gap-2 border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
+                        📎 Commercial Invoice <span className="text-[12px] text-[#e53e3e]">Required ✕</span>
                       </div>
-                      <div className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                        📎 Packing List<br /><span className="text-[10px] text-[#e53e3e]">Required ✕</span>
+                      <div className="border-[1.5px] flex flex-col gap-2 border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
+                        📎 Packing List <span className="text-[12px] text-[#e53e3e]">Required ✕</span>
                       </div>
                     </div>
                   </div>
@@ -218,7 +218,7 @@ export default function ApplicationDetail() {
               </div>
 
               <div>
-                <div className="text-[12.5px] font-bold text-[#1a2236] mb-[10px]">Application Status</div>
+                <div className="text-[13x] font-medium text-[#1a2236] mb-[10px]">Application Status</div>
                 <div className="flex flex-col gap-0">
                   {timeline.map((item, index) => (
                     <div key={index} className="flex gap-[12px] relative">
@@ -227,8 +227,8 @@ export default function ApplicationDetail() {
                       )}
                       {getTimelineDot(item.status)}
                       <div className="pb-[16px]">
-                        <div className="text-[12px] font-semibold text-[#1a2236]">{item.title}</div>
-                        <div className="text-[10px] text-[#6a7a9a] mt-[1px]">{item.date}</div>
+                        <div className="text-[13px] font-medium text-[#1a2236]">{item.title}</div>
+                        <div className="text-[13px] text-[#6a7a9a] mt-[1px]">{item.date}</div>
                         {item.note && (
                           <div className="text-[11px] text-[#4a5a7a] mt-[3px] bg-[#f8faff] border-l-3 border-[#3a7bd5] p-[4px_7px] rounded-[0_4px_4px_0]">
                             {item.note}
@@ -242,7 +242,7 @@ export default function ApplicationDetail() {
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
-              <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/my-applications')}>
+              <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/my-applications')}>
                 ← Back to Applications
               </button>
             </div>
