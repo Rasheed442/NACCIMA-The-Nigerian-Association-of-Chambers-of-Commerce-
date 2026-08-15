@@ -34,26 +34,26 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister }: Log
           <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Sign in to your account</div>
           <div className="text-[11.5px] text-[#6a7a9a] mb-[22px]">Use your company TIN as your username</div>
           <div className="flex flex-col gap-1 mb-3">
-            <label className="text-[11px] font-semibold text-[#374151]">TIN (Tax Identification Number) <span className="text-[#e53e3e]">*</span></label>
+            <label className="text-[13px] font-semibold text-[#374151]">TIN (Tax Identification Number) <span className="text-[#e53e3e]">*</span></label>
             <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white tracking-widest font-mono text-[13px] focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]" type="text" placeholder="e.g. 12345678901" maxLength={11} />
             <div className="text-[10px] text-[#6b7280] mt-[2px]">Your 11-digit NRS-issued Tax Identification Number</div>
           </div>
           <div className="flex flex-col gap-1 mb-[6px]">
-            <label className="text-[11px] font-semibold text-[#374151]">Password <span className="text-[#e53e3e]">*</span></label>
+            <label className="text-[13px] font-semibold text-[#374151]">Password <span className="text-[#e53e3e]">*</span></label>
             <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]" type="password" placeholder="••••••••" />
           </div>
-          <div className="text-right text-[11px] text-[#3a7bd5] mb-4 cursor-pointer">Forgot password?</div>
-          <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white w-full mb-[14px] hover:bg-[#153c70]" onClick={() => handleLogin('exporter')}>Sign In as Exporter</button>
-          <div className="text-center text-[11.5px] text-[#6a7a9a] mb-4">
-            New exporter? <span className="text-[#3a7bd5] font-semibold cursor-pointer" onClick={onNavigateToRegister}>Register your company →</span>
+          <div className="text-right text-[14px] font-medium text-[#3a7bd5] mb-4 cursor-pointer">Forgot password?</div>
+          <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white w-full mb-[14px] hover:bg-[#153c70]" onClick={() => handleLogin('exporter')}>Sign In as Exporter</button>
+          <div className="text-center text-[14px] text-[#6a7a9a] mb-4">
+            New exporter? <span className="text-[#3a7bd5] font-medium cursor-pointer" onClick={onNavigateToRegister}>Register your company →</span>
           </div>
-          <div className="mt-[18px] pt-[14px] border-t border-[#f0f0f0]">
+          {/* <div className="mt-[18px] pt-[14px] border-t border-[#f0f0f0]">
             <div className="text-[10.5px] text-[#9ca3af] text-center mb-3">Quick login options</div>
             <div className="grid gap-3">
               <button className="inline-flex items-center justify-center gap-2 px-[14px] py-[10px] rounded-[6px] text-[12px] font-semibold cursor-pointer border border-[#e5e7eb] transition-all bg-[#f8fafc] text-[#1f2937] hover:bg-[#eef2ff]" onClick={() => handleLogin('admin')}>🏢 Login as Admin</button>
               <button className="inline-flex items-center justify-center gap-2 px-[14px] py-[10px] rounded-[6px] text-[12px] font-semibold cursor-pointer border border-[#e5e7eb] transition-all bg-[#f8fafc] text-[#1f2937] hover:bg-[#eef2ff]" onClick={() => handleLogin('vetting')}>👩‍💼 Login as Vetting Staff</button>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

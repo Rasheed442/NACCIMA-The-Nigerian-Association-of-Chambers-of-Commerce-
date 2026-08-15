@@ -1,4 +1,5 @@
 'use client';
+import { FaArrowLeft } from "react-icons/fa6";
 
 import React from 'react';
 
@@ -54,8 +55,10 @@ export default function RegisterStep1Screen({ onBackToLogin, onContinue }: Regis
           </div>
 
           <div className="flex gap-2">
-            <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={onBackToLogin}>← Back to Login</button>
-            <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white flex-1 hover:bg-[#153c70]" onClick={onContinue}>Confirm &amp; Continue →</button>
+            <button className="inline-flex items-center gap-2 px-3.5 py-1.75 rounded text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={onBackToLogin}>
+              <FaArrowLeft color="#1a4a8a" /> Back to Login
+            </button>
+            <button className="inline-flex items-center justify-center gap-1 px-3.5 py-1.75 rounded text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white flex-1 hover:bg-[#153c70]" onClick={onContinue}>Confirm &amp; Continue →</button>
           </div>
         </div>
       </div>
