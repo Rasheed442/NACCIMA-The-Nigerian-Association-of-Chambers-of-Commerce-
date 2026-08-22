@@ -29,6 +29,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const sidebarBg = role === 'admin' ? 'bg-[#f6f4fb]' : 'bg-[#f8fafd]';
   const borderColor = role === 'admin' ? 'border-[#e6e0f2]' : 'border-[#dde3ee]';
   const dashboardPath = role === 'admin' ? '/admin' : '/exporter-dashboard';
+  const companyProfilePath = role === 'admin' ? '/admin/company-profile' : '/exporter/company-profile';
   const newApplicationPath = role === 'admin' ? '/admin/new-application' : '/new-application';
 
   return (
@@ -54,7 +55,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
         <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">23</span>
       </div>
       <div className="px-[16px] py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px]">Account</div>
-      <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+      <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push(companyProfilePath)}>
         <span className="text-[13px] w-[15px] text-center">🏢</span> Company Profile
       </div>
       <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">

@@ -53,6 +53,9 @@ function AppContent() {
       }
     }
 
+    // Clear all localStorage items
+    localStorage.clear();
+    
     // Clear auth data and redirect
     logout();
     setActiveScreen('s-login');

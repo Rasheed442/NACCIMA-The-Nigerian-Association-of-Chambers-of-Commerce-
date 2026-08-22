@@ -6,6 +6,8 @@ import RegisterStep1Screen from '../../components/screens/RegisterStep1Screen';
 import RegisterStep2Screen from '../../components/screens/RegisterStep2Screen';
 import RegisterStep3Screen from '../../components/screens/RegisterStep3Screen';
 
+export const dynamic = 'force-dynamic';
+
 export default function RegisterPage() {
   const router = useRouter();
   const [authScreen, setAuthScreen] = useState('register-1');

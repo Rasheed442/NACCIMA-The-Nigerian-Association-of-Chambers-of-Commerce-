@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 function getBaseApiUrl(): string {
   const rawBaseUrl = process.env.NEXT_PUBLIC_API || '';
   if (!rawBaseUrl) {
