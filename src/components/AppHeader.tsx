@@ -1,6 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+
+interface UserData {
+  firstName: string;
+  lastName: string;
+  roles: string[];
+  permissions: string[];
+}
 
 interface AppHeaderProps {
   showMemberBadge?: boolean;
@@ -17,8 +24,26 @@ export default function AppHeader({
   companyInitials = 'LT',
   role = 'exporter',
 }: AppHeaderProps) {
+  const [userData, setUserData] = useState<UserData | null>(null);
+
+  useEffect(() => {
+    const storedUserData = localStorage.getItem('userData');
+    if (storedUserData) {
+      try {
+        setUserData(JSON.parse(storedUserData));
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }, []);
+
   const headerBg = role === 'admin' ? 'bg-[#2d1b69]' : 'bg-[#1a3a5c]';
   const roleTag = role === 'admin' ? 'Admin Panel' : role === 'vetting' ? 'Vetting' : 'E-Certificate Platform';
+  const userName = userData ? `${userData.firstName} ${userData.lastName}` : companyName;
+  const userInitials = userData 
+    ? `${userData.firstName.charAt(0)}${userData.lastName.charAt(0)}` 
+    : companyInitials;
+  const userRole = userData?.roles?.[0] || '';
 
   return (
     <div className={`h-13.75 ${headerBg} flex items-center px-7.5 gap-3 shrink-0`}>
@@ -37,8 +62,13 @@ export default function AppHeader({
         {showMemberBadge && (
           <div className="flex items-center gap-[6px]">
             <span className="inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] bg-[#d1fae5] text-[#065f46]">
-              {memberLabel}
+             ★ {userRole}
             </span>
+            {/* {userRole && (
+              <span className="inline-block text-[10px] font-semibold px-2 py-[2px] rounded-[10px] bg-[#e0e7ff] text-[#4338ca]">
+                {userRole}
+              </span>
+            )} */}
           </div>
         )} 
         </div>}
@@ -46,9 +76,9 @@ export default function AppHeader({
 
         <div className="flex items-center gap-2 cursor-pointer">
           <div className={`w-8.75 h-8.75 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${role === 'admin' ? 'bg-[#7b4fb1]' : 'bg-[#2c6ea3]'}`}>
-            {companyInitials}
+            {userInitials}
           </div>
-          <span className="text-[13px] text-[#c8ddf0]">{companyName}</span>
+          <span className="text-[13px] text-[#c8ddf0]">{userName}</span>
         </div>
       </div>
     </div>

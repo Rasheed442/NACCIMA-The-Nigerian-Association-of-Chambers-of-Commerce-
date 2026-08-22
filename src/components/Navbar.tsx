@@ -73,7 +73,7 @@ export default function Navbar({ activeScreen, onScreenChange }: NavbarProps) {
         <div className={`nav-item`} onClick={() => handleRoleNav('exporter')}>👤 Exporter View</div>
         <div className={`nav-item`} onClick={() => handleRoleNav('admin')}>🛠 Admin View</div>
       </div>
-
+e
       <div className="nav-sep"></div>
       <div className="nav-group">
         <div className="nav-group-title">Account</div>
