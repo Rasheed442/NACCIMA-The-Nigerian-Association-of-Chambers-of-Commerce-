@@ -1,12 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import LoginScreen from '../../components/screens/LoginScreen';
 
 export const dynamic = 'force-dynamic';
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
 
   const handleLoginAsRole = (role: 'admin' | 'exporter' | 'vetting') => {
@@ -33,5 +33,13 @@ export default function LoginPage() {
       onNavigateToRegister={handleNavigateToRegister} 
       onNavigateToForgotPassword={handleNavigateToForgotPassword}
     />
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
