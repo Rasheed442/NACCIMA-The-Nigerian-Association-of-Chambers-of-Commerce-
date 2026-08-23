@@ -7,18 +7,97 @@ import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { FiArrowRight } from "react-icons/fi";
 
+interface CertificateType {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  active: boolean;
+}
+
+function getBaseApiUrl(): string {
+  const rawBaseUrl = process.env.NEXT_PUBLIC_API || '';
+  if (!rawBaseUrl) {
+    return '';
+  }
+  return rawBaseUrl.replace(/\/+$/, '');
+}
+
 export default function NewApplication() {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
   const [transportMode, setTransportMode] = React.useState('sea');
-  const [selectedCert, setSelectedCert] = React.useState<number | null>(null);
+  const [selectedCert, setSelectedCert] = React.useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
+  const [isLoadingCerts, setIsLoadingCerts] = useState(true);
+  const [certError, setCertError] = useState('');
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
+
+  useEffect(() => {
+    fetchCertificateTypes();
+  }, []);
+
+  const fetchCertificateTypes = async () => {
+    setIsLoadingCerts(true);
+    setCertError('');
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/types`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to fetch certificate types.');
+      }
+
+      setCertificateTypes(result);
+    } catch (err) {
+      setCertError(err instanceof Error ? err.message : 'Failed to fetch certificate types. Please try again.');
+    } finally {
+      setIsLoadingCerts(false);
+    }
+  };
+
+  const getCertificateDisplay = (cert: CertificateType) => {
+    // Map certificate codes to display data
+    const certMap: Record<string, { icon: string; tag: string }> = {
+      'NACCIMA': { icon: '📜', tag: 'Most Common · Member: 0.11% FOB' },
+      'GSP': { icon: '🌍', tag: 'Member: ₦25,000' },
+      'ECOWAS': { icon: '🤝', tag: 'Needs ECOWAS No. · Member: ₦40,000' },
+      'MOVEMENT': { icon: '🚚', tag: 'No HS Code · Member: ₦40,000' },
+      'MINERAL': { icon: '⛏️', tag: 'Minerals Only · Member: ₦150,000' },
+    };
+
+    const display = certMap[cert.code] || { icon: '📜', tag: 'Standard Certificate' };
+    return {
+      icon: display.icon,
+      name: cert.name,
+      desc: cert.description,
+      tag: display.tag,
+    };
+  };
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -60,25 +139,46 @@ export default function NewApplication() {
                 <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
                   ★ NACCIMA Member — member rates apply to your application
                 </div>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  {[
-                    {icon:'📜',name:'NACCIMA Certificate of Origin',desc:'Confirms Nigerian origin of exported goods. FOB entered in USD and converted to NGN for fee calculation.',tag:'Most Common · Member: 0.11% FOB'},
-                    {icon:'🌍',name:'GSP Certificate',desc:'Enables preferential tariff rates under the Generalised System of Preferences scheme.',tag:'Member: ₦25,000'},
-                    {icon:'🤝',name:'ECOWAS Free Trade Certificate',desc:'Facilitates tariff-free movement under ETLS. Requires ECOWAS Number and Criteria fields.',tag:'Needs ECOWAS No. · Member: ₦40,000'},
-                    {icon:'🚚',name:'Movement Certificate',desc:'Accompanies goods in transit. HS Code classification not required for this type.',tag:'No HS Code · Member: ₦40,000'},
-                    {icon:'⛏️',name:'Solid Mineral Certificate',desc:'For solid mineral exports. Includes Unit of Measurement, ECOWAS Number, and Criteria fields.',tag:'Minerals Only · Member: ₦150,000'},
-                  ].map((cert, index) => (
-                    <div key={index} className={`p-4 rounded-[8px] border cursor-pointer transition-all ${selectedCert === index ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`} onClick={() => setSelectedCert(index)}>
-                      <div className="text-[24px] mb-2">{cert.icon}</div>
-                      <div className="text-[13px] font-bold text-[#1a2236] mb-1">{cert.name}</div>
-                      <div className="text-[11px] text-[#6a7a9a] mb-2">{cert.desc}</div>
-                      <div className="text-[10px] text-[#3a7bd5] font-semibold">{cert.tag}</div>
-                    </div>
-                  ))}
-                </div>
+                
+                {certError && (
+                  <div className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">
+                    <span>⚠️</span>
+                    <span>{certError}</span>
+                  </div>
+                )}
+
+                {isLoadingCerts ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-[14px] text-[#6a7a9a]">Loading certificate types...</div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    {certificateTypes.filter(cert => cert.active).map((cert) => {
+                      const display = getCertificateDisplay(cert);
+                      return (
+                        <div 
+                          key={cert.id} 
+                          className={`p-4 rounded-[8px] border cursor-pointer transition-all ${selectedCert === cert.id ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`} 
+                          onClick={() => setSelectedCert(cert.id)}
+                        >
+                          <div className="text-[24px] mb-2">{display.icon}</div>
+                          <div className="text-[13px] font-bold text-[#1a2236] mb-1">{display.name}</div>
+                          <div className="text-[11px] text-[#6a7a9a] mb-2">{display.desc}</div>
+                          <div className="text-[10px] text-[#3a7bd5] font-semibold">{display.tag}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] rounded py-[10px] border-gray-200 border text-[12px] font-semibold cursor-pointer transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/exporter-dashboard')}>Cancel</button>
-                  <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => setStep(2)}>Continue with Certificate of Origin <FiArrowRight size={16} color="white"/></button>
+                  <button 
+                    className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60" 
+                    onClick={() => setStep(2)}
+                    disabled={!selectedCert}
+                  >
+                    Continue with {selectedCert ? certificateTypes.find(c => c.id === selectedCert)?.name : 'Certificate'} <FiArrowRight size={16} color="white"/>
+                  </button>
                 </div>
               </>
             )}
