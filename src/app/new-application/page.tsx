@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { FiArrowRight } from "react-icons/fi";
+import { ChevronDown, Check } from "lucide-react";
 
 interface CertificateType {
   id: string;
@@ -13,6 +14,55 @@ interface CertificateType {
   name: string;
   description: string;
   active: boolean;
+}
+
+interface CertificateField {
+  code: string;
+  name: string;
+  category: 'APPLICATION' | 'LINE_ITEM';
+  applicable: boolean;
+  required: boolean;
+  readOnly: boolean;
+}
+
+interface CertificateTypeFields {
+  certificateTypeId: string;
+  certificateTypeCode: string;
+  certificateTypeName: string;
+  fields: CertificateField[];
+}
+
+interface TransportMode {
+  code: string;
+  name: string;
+  documents: Array<{
+    code: string;
+    name: string;
+    required: boolean;
+  }>;
+}
+
+interface HSCode {
+  id: string;
+  cetCode: string;
+  description: string;
+}
+
+interface Country {
+  code: string;
+  name: string;
+}
+
+interface GoodsLineItem {
+  id: string;
+  hsCode: string;
+  description: string;
+  marksNo: string;
+  quantity: string;
+  grossWeight: string;
+  nomenclature: string;
+  unit: string;
+  value: string;
 }
 
 function getBaseApiUrl(): string {
@@ -26,12 +76,53 @@ function getBaseApiUrl(): string {
 export default function NewApplication() {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
-  const [transportMode, setTransportMode] = React.useState('sea');
+  const [transportMode, setTransportMode] = React.useState('SEA');
   const [selectedCert, setSelectedCert] = React.useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoadingCerts, setIsLoadingCerts] = useState(true);
   const [certError, setCertError] = useState('');
+  const [certificateFields, setCertificateFields] = useState<CertificateTypeFields | null>(null);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
+  const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
+  const [hsCodes, setHsCodes] = useState<HSCode[]>([]);
+  const [hsSearchQuery, setHsSearchQuery] = useState('');
+  const [isSearchingHs, setIsSearchingHs] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [isLoadingCountries, setIsLoadingCountries] = useState(false);
+  const [destinationDropdownOpen, setDestinationDropdownOpen] = useState(false);
+  const [manufacturingDropdownOpen, setManufacturingDropdownOpen] = useState(false);
+  const destinationRef = useRef<HTMLDivElement>(null);
+  const manufacturingRef = useRef<HTMLDivElement>(null);
+  const [goodsLineItems, setGoodsLineItems] = useState<GoodsLineItem[]>([
+    {
+      id: '1',
+      hsCode: '',
+      description: '',
+      marksNo: '',
+      quantity: '',
+      grossWeight: '',
+      nomenclature: '',
+      unit: '',
+      value: '',
+    }
+  ]);
+
+  // Application form fields
+  const [formData, setFormData] = useState({
+    importerEmail: '',
+    consigneeName: '',
+    consigneeAddress: '',
+    carrier: '',
+    destinationCountry: '',
+    countryOfManufacturing: 'Nigeria',
+    totalValueFOB: '',
+    bulkProductQty: '',
+    marksNo: '',
+    ecowasNumber: '',
+    criteria: '',
+  });
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -39,9 +130,32 @@ export default function NewApplication() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (destinationRef.current && !destinationRef.current.contains(event.target as Node)) {
+        setDestinationDropdownOpen(false);
+      }
+      if (manufacturingRef.current && !manufacturingRef.current.contains(event.target as Node)) {
+        setManufacturingDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   useEffect(() => {
     fetchCertificateTypes();
+    fetchTransportModes();
+    fetchCountries();
   }, []);
+
+  useEffect(() => {
+    if (selectedCert) {
+      fetchCertificateFields(selectedCert);
+    }
+  }, [selectedCert]);
 
   const fetchCertificateTypes = async () => {
     setIsLoadingCerts(true);
@@ -80,13 +194,165 @@ export default function NewApplication() {
     }
   };
 
+  const fetchCertificateFields = async (certificateId: string) => {
+    setIsLoadingFields(true);
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      // Get the certificate type code from the selected certificate
+      const selectedCert = certificateTypes.find(c => c.id === certificateId);
+      if (!selectedCert) {
+        throw new Error('Certificate type not found.');
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/reference/types/${selectedCert.code}/fields`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to fetch certificate fields.');
+      }
+
+      setCertificateFields(result);
+    } catch (err) {
+      console.error('Failed to fetch certificate fields:', err);
+    } finally {
+      setIsLoadingFields(false);
+    }
+  };
+
+  const fetchTransportModes = async () => {
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        return;
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/reference/transport-modes`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setTransportModes(result.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch transport modes:', err);
+    }
+  };
+
+  const fetchCountries = async () => {
+    setIsLoadingCountries(true);
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        return;
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/reference/countries`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setCountries(result.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch countries:', err);
+    } finally {
+      setIsLoadingCountries(false);
+    }
+  };
+
+  const searchHsCodes = async (query: string) => {
+    if (!query || query.length < 2) {
+      setHsCodes([]);
+      return;
+    }
+
+    setIsSearchingHs(true);
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        return;
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/hs-codes?query=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setHsCodes(result);
+      }
+    } catch (err) {
+      console.error('Failed to search HS codes:', err);
+    } finally {
+      setIsSearchingHs(false);
+    }
+  };
+
+  const handleHsSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setHsSearchQuery(query);
+    searchHsCodes(query);
+  };
+
   const getCertificateDisplay = (cert: CertificateType) => {
     // Map certificate codes to display data
     const certMap: Record<string, { icon: string; tag: string }> = {
       'NACCIMA': { icon: '📜', tag: 'Most Common · Member: 0.11% FOB' },
       'GSP': { icon: '🌍', tag: 'Member: ₦25,000' },
+      'ECOWAS_FRE': { icon: '🤝', tag: 'Needs ECOWAS No. · Member: ₦40,000' },
       'ECOWAS': { icon: '🤝', tag: 'Needs ECOWAS No. · Member: ₦40,000' },
       'MOVEMENT': { icon: '🚚', tag: 'No HS Code · Member: ₦40,000' },
+      'SOLID_MINERAL': { icon: '⛏️', tag: 'Minerals Only · Member: ₦150,000' },
       'MINERAL': { icon: '⛏️', tag: 'Minerals Only · Member: ₦150,000' },
     };
 
@@ -97,6 +363,178 @@ export default function NewApplication() {
       desc: cert.description,
       tag: display.tag,
     };
+  };
+
+  const getTransportModeIcon = (code: string) => {
+    const iconMap: Record<string, string> = {
+      'LAND': '🚛',
+      'AIR': '✈️',
+      'SEA': '🚢',
+    };
+    return iconMap[code] || '📦';
+  };
+
+  const isFieldApplicable = (fieldCode: string) => {
+    if (!certificateFields) return true;
+    const field = certificateFields?.fields?.find(f => f.code === fieldCode);
+    return field ? field.applicable : false;
+  };
+
+  const isFieldRequired = (fieldCode: string) => {
+    if (!certificateFields) return false;
+    const field = certificateFields?.fields?.find(f => f.code === fieldCode);
+    return field ? field.required : false;
+  };
+
+  const isFieldReadOnly = (fieldCode: string) => {
+    if (!certificateFields) return false;
+    const field = certificateFields?.fields?.find(f => f.code === fieldCode);
+    return field ? field.readOnly : false;
+  };
+
+  const getSelectedTransportMode = () => {
+    return transportModes.find(tm => tm.code === transportMode);
+  };
+
+  const validateStep2 = () => {
+    const errors: Record<string, string> = {};
+
+    // If certificate fields aren't loaded yet, validate all fields as required
+    const fieldsLoaded = certificateFields && certificateFields.fields;
+
+    // Validate required fields based on certificate type configuration
+    if (!fieldsLoaded || isFieldRequired('IMPORTER_EMAIL')) {
+      if (!formData.importerEmail.trim()) {
+        errors.importerEmail = 'Importer Email is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('CONSIGNEE')) {
+      if (!formData.consigneeName.trim()) {
+        errors.consigneeName = 'Consignee Name is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('CONSIGNEE_ADDRESS')) {
+      if (!formData.consigneeAddress.trim()) {
+        errors.consigneeAddress = 'Consignee Address is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('CARRIER')) {
+      if (!formData.carrier.trim()) {
+        errors.carrier = 'Carrier is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('DESTINATION')) {
+      if (!formData.destinationCountry.trim()) {
+        errors.destinationCountry = 'Destination Country is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('COUNTRY_OF_MANUFACTURING')) {
+      if (!formData.countryOfManufacturing.trim()) {
+        errors.countryOfManufacturing = 'Country of Manufacturing is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('TOTAL_VALUE_FOB')) {
+      if (!formData.totalValueFOB.trim()) {
+        errors.totalValueFOB = 'Total Value (FOB) is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('BULK_PRODUCT_QTY_MT')) {
+      if (!formData.bulkProductQty.trim()) {
+        errors.bulkProductQty = 'Bulk Product Qty is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('MARKS_NO')) {
+      if (isFieldApplicable('MARKS_NO') && !formData.marksNo.trim()) {
+        errors.marksNo = 'Marks / No. is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('ECOWAS_NUMBER')) {
+      if (isFieldApplicable('ECOWAS_NUMBER') && !formData.ecowasNumber.trim()) {
+        errors.ecowasNumber = 'ECOWAS Number is required';
+      }
+    }
+    if (!fieldsLoaded || isFieldRequired('CRITERIA')) {
+      if (isFieldApplicable('CRITERIA') && !formData.criteria.trim()) {
+        errors.criteria = 'Criteria is required';
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleContinueToStep2 = () => {
+    if (!selectedCert) {
+      setCertError('Please select a certificate type');
+      return;
+    }
+    setCertError('');
+    setStep(2);
+  };
+
+  const handleContinueToStep3 = () => {
+    if (!validateStep2()) {
+      return;
+    }
+    setStep(3);
+  };
+
+  const addLineItem = () => {
+    const newItem: GoodsLineItem = {
+      id: Date.now().toString(),
+      hsCode: '',
+      description: '',
+      marksNo: '',
+      quantity: '',
+      grossWeight: '',
+      nomenclature: '',
+      unit: '',
+      value: '',
+    };
+    setGoodsLineItems([...goodsLineItems, newItem]);
+  };
+
+  const removeLineItem = (id: string) => {
+    if (goodsLineItems.length === 1) {
+      // Keep at least one empty row
+      setGoodsLineItems([{
+        id: '1',
+        hsCode: '',
+        description: '',
+        marksNo: '',
+        quantity: '',
+        grossWeight: '',
+        nomenclature: '',
+        unit: '',
+        value: '',
+      }]);
+    } else {
+      setGoodsLineItems(goodsLineItems.filter(item => item.id !== id));
+    }
+  };
+
+  const updateLineItem = (id: string, field: keyof GoodsLineItem, value: string) => {
+    setGoodsLineItems(goodsLineItems.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const handleHsCodeSelect = (hs: HSCode) => {
+    // Add new line item with selected HS code
+    const newItem: GoodsLineItem = {
+      id: Date.now().toString(),
+      hsCode: hs.cetCode,
+      description: hs.description,
+      marksNo: '',
+      quantity: '',
+      grossWeight: '',
+      nomenclature: hs.description,
+      unit: '',
+      value: '',
+    };
+    setGoodsLineItems([...goodsLineItems, newItem]);
+    setHsSearchQuery('');
+    setHsCodes([]);
   };
 
   const handleLogout = () => {
@@ -174,7 +612,7 @@ export default function NewApplication() {
                   <button className="inline-flex items-center gap-1 px-[14px] rounded py-[10px] border-gray-200 border text-[12px] font-semibold cursor-pointer transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/exporter-dashboard')}>Cancel</button>
                   <button 
                     className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60" 
-                    onClick={() => setStep(2)}
+                    onClick={handleContinueToStep2}
                     disabled={!selectedCert}
                   >
                     Continue with {selectedCert ? certificateTypes.find(c => c.id === selectedCert)?.name : 'Certificate'} <FiArrowRight size={16} color="white"/>
@@ -225,8 +663,17 @@ export default function NewApplication() {
                       <div className="text-[10px] text-[#6b7280]">🔒 From your company profile — cannot be changed</div>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Importer Email</label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="importer@overseas.com" />
+                      <label className="text-[11px] font-semibold text-[#374151]">Importer Email {isFieldRequired('IMPORTER_EMAIL') && <span className="text-[#e53e3e]">*</span>}</label>
+                      <input 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.importerEmail ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                        placeholder="importer@overseas.com" 
+                        value={formData.importerEmail}
+                        onChange={(e) => {
+                          setFormData({...formData, importerEmail: e.target.value});
+                          if (formErrors.importerEmail) setFormErrors({...formErrors, importerEmail: ''});
+                        }}
+                      />
+                      {formErrors.importerEmail && <div className="text-[10px] text-[#e53e3e]">{formErrors.importerEmail}</div>}
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Name <span className="text-[#e53e3e]">*</span></label>
@@ -249,22 +696,28 @@ export default function NewApplication() {
                     <span className="text-[10px] bg-[#dbeafe] text-[#1e40af] px-2 py-[2px] rounded-[10px] font-semibold">New in v2.2</span>
                   </div>
                   <div className="grid grid-cols-3 gap-4 mb-4">
-                    {[
-                      {mode:'land',icon:'🚛',name:'Land',docs:'Required docs: Invoice + Packing List'},
-                      {mode:'air',icon:'✈️',name:'Air',docs:'Required docs: Airway Bill + Invoice + Packing List'},
-                      {mode:'sea',icon:'🚢',name:'Sea',docs:'Required docs: Bill of Lading + Invoice + Packing List'},
-                    ].map((t) => (
-                      <div key={t.mode} className={`p-4 rounded-[8px] border cursor-pointer transition-all text-center ${transportMode === t.mode ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`} onClick={() => setTransportMode(t.mode)}>
-                        <div className="text-[24px] mb-2">{t.icon}</div>
-                        <div className="text-[12px] font-bold text-[#1a2236] mb-1">{t.name}</div>
-                        <div className="text-[10px] text-[#6a7a9a]">{t.docs}</div>
-                      </div>
-                    ))}
+                    {transportModes.map((t) => {
+                      const icon = getTransportModeIcon(t.code);
+                      const docs = t.documents.map(d => d.name).join(' + ');
+                      return (
+                        <div 
+                          key={t.code} 
+                          className={`p-4 rounded-[8px] border cursor-pointer transition-all text-center ${transportMode === t.code ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`} 
+                          onClick={() => setTransportMode(t.code)}
+                        >
+                          <div className="text-[24px] mb-2">{icon}</div>
+                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">{t.name}</div>
+                          <div className="text-[10px] text-[#6a7a9a]">Required docs: {docs}</div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[#11px] text-[#1e40af]">
-                    <span>ℹ️</span>
-                    <span><strong>Sea selected:</strong> You must upload Bill of Lading, Commercial Invoice, and Packing List before submitting.</span>
-                  </div>
+                  {getSelectedTransportMode() && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[#11px] text-[#1e40af]">
+                      <span>ℹ️</span>
+                      <span><strong>{getSelectedTransportMode()?.name} selected:</strong> You must upload {getSelectedTransportMode()?.documents.map(d => d.name).join(', ')} before submitting.</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 3: Consignee & Shipment Details */}
@@ -275,78 +728,223 @@ export default function NewApplication() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Consignee Name <span className="text-[#e53e3e]">*</span></label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="Receiving company or person" />
+                      <label className="text-[11px] font-semibold text-[#374151]">Consignee Name {isFieldRequired('CONSIGNEE') && <span className="text-[#e53e3e]">*</span>}</label>
+                      <input 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeName ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                        placeholder="Receiving company or person" 
+                        value={formData.consigneeName}
+                        onChange={(e) => {
+                          setFormData({...formData, consigneeName: e.target.value});
+                          if (formErrors.consigneeName) setFormErrors({...formErrors, consigneeName: ''});
+                        }}
+                      />
+                      {formErrors.consigneeName && <div className="text-[10px] text-[#e53e3e]">{formErrors.consigneeName}</div>}
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Carrier <span className="text-[#e53e3e]">*</span></label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="e.g. Maersk Line" />
+                      <label className="text-[11px] font-semibold text-[#374151]">Carrier {isFieldRequired('CARRIER') && <span className="text-[#e53e3e]">*</span>}</label>
+                      <input 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.carrier ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                        placeholder="e.g. Maersk Line" 
+                        value={formData.carrier}
+                        onChange={(e) => {
+                          setFormData({...formData, carrier: e.target.value});
+                          if (formErrors.carrier) setFormErrors({...formErrors, carrier: ''});
+                        }}
+                      />
+                      {formErrors.carrier && <div className="text-[10px] text-[#e53e3e]">{formErrors.carrier}</div>}
                     </div>
                     <div className="flex flex-col gap-1 col-span-2">
-                      <label className="text-[11px] font-semibold text-[#374151]">Consignee Address <span className="text-[#e53e3e]">*</span></label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="Full address of consignee at destination" />
+                      <label className="text-[11px] font-semibold text-[#374151]">Consignee Address {isFieldRequired('CONSIGNEE_ADDRESS') && <span className="text-[#e53e3e]">*</span>}</label>
+                      <input 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeAddress ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                        placeholder="Full address of consignee at destination" 
+                        value={formData.consigneeAddress}
+                        onChange={(e) => {
+                          setFormData({...formData, consigneeAddress: e.target.value});
+                          if (formErrors.consigneeAddress) setFormErrors({...formErrors, consigneeAddress: ''});
+                        }}
+                      />
+                      {formErrors.consigneeAddress && <div className="text-[10px] text-[#e53e3e]">{formErrors.consigneeAddress}</div>}
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Destination Country <span className="text-[#e53e3e]">*</span></label>
-                      <select className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]">
-                        <option>-- Select Country --</option>
-                        <option selected>United Kingdom</option>
-                        <option>Germany</option>
-                        <option>United States</option>
-                      </select>
+                      <label className="text-[11px] font-semibold text-[#374151]">Destination Country {isFieldRequired('DESTINATION') && <span className="text-[#e53e3e]">*</span>}</label>
+                      <div ref={destinationRef} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setDestinationDropdownOpen(!destinationDropdownOpen)}
+                          className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors.destinationCountry ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          disabled={isLoadingCountries}
+                        >
+                          <span>{formData.destinationCountry || '-- Select Country --'}</span>
+                          <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${destinationDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {destinationDropdownOpen && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg max-h-60 overflow-auto">
+                            {countries.map((country) => (
+                              <button
+                                key={country.code}
+                                type="button"
+                                onClick={() => {
+                                  setFormData({...formData, destinationCountry: country.name});
+                                  setDestinationDropdownOpen(false);
+                                  if (formErrors.destinationCountry) setFormErrors({...formErrors, destinationCountry: ''});
+                                }}
+                                className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
+                              >
+                                <span>{country.name}</span>
+                                {formData.destinationCountry === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {formErrors.destinationCountry && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationCountry}</div>}
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Country of Manufacturing <span className="text-[#e53e3e]">*</span></label>
-                      <select className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]">
-                        <option selected>Nigeria</option>
-                      </select>
+                      <label className="text-[11px] font-semibold text-[#374151]">Country of Manufacturing {isFieldRequired('COUNTRY_OF_MANUFACTURING') && <span className="text-[#e53e3e]">*</span>}</label>
+                      <div ref={manufacturingRef} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setManufacturingDropdownOpen(!manufacturingDropdownOpen)}
+                          className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.countryOfManufacturing ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          disabled={isLoadingCountries}
+                        >
+                          <span>{formData.countryOfManufacturing || '-- Select Country --'}</span>
+                          <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${manufacturingDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {manufacturingDropdownOpen && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg max-h-60 overflow-auto">
+                            {countries.map((country) => (
+                              <button
+                                key={country.code}
+                                type="button"
+                                onClick={() => {
+                                  setFormData({...formData, countryOfManufacturing: country.name});
+                                  setManufacturingDropdownOpen(false);
+                                  if (formErrors.countryOfManufacturing) setFormErrors({...formErrors, countryOfManufacturing: ''});
+                                }}
+                                className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
+                              >
+                                <span>{country.name}</span>
+                                {formData.countryOfManufacturing === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {formErrors.countryOfManufacturing && <div className="text-[10px] text-[#e53e3e]">{formErrors.countryOfManufacturing}</div>}
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Total Value (FOB) in USD <span className="text-[#e53e3e]">*</span> <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">USD for CoO</span></label>
+                      <label className="text-[11px] font-semibold text-[#374151]">Total Value (FOB) in USD {isFieldRequired('TOTAL_VALUE_FOB') && <span className="text-[#e53e3e]">*</span>} <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">USD for CoO</span></label>
                       <div className="flex items-center gap-1">
                         <span className="text-[13px] font-bold text-[#92400e]">$</span>
-                        <input className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="0.00" value="5,000.00" />
+                        <input 
+                          className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.totalValueFOB ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                          placeholder="0.00" 
+                          value={formData.totalValueFOB}
+                          onChange={(e) => {
+                            setFormData({...formData, totalValueFOB: e.target.value});
+                            if (formErrors.totalValueFOB) setFormErrors({...formErrors, totalValueFOB: ''});
+                          }}
+                        />
                       </div>
                       <div className="text-[10px] text-[#6b7280]">FOB value in US Dollars. Converted to NGN at prevailing rate for fee calculation.</div>
+                      {formErrors.totalValueFOB && <div className="text-[10px] text-[#e53e3e]">{formErrors.totalValueFOB}</div>}
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Bulk Product Qty (MT)</label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="Metric tonnes" />
+                      <label className="text-[11px] font-semibold text-[#374151]">Bulk Product Qty (MT) {isFieldRequired('BULK_PRODUCT_QTY_MT') && <span className="text-[#e53e3e]">*</span>}</label>
+                      <input 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.bulkProductQty ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                        placeholder="Metric tonnes" 
+                        value={formData.bulkProductQty}
+                        onChange={(e) => {
+                          setFormData({...formData, bulkProductQty: e.target.value});
+                          if (formErrors.bulkProductQty) setFormErrors({...formErrors, bulkProductQty: ''});
+                        }}
+                      />
+                      {formErrors.bulkProductQty && <div className="text-[10px] text-[#e53e3e]">{formErrors.bulkProductQty}</div>}
                     </div>
-                    <div className="flex flex-col gap-1 col-span-2">
-                      <label className="text-[11px] font-semibold text-[#374151]">Marks / No.</label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="Shipping marks & package numbers" />
-                    </div>
+                    {isFieldApplicable('MARKS_NO') && (
+                      <div className="flex flex-col gap-1 col-span-2">
+                        <label className="text-[11px] font-semibold text-[#374151]">Marks / No. {isFieldRequired('MARKS_NO') && <span className="text-[#e53e3e]">*</span>}</label>
+                        <input 
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.marksNo ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                          placeholder="Shipping marks & package numbers" 
+                          value={formData.marksNo}
+                          onChange={(e) => {
+                            setFormData({...formData, marksNo: e.target.value});
+                            if (formErrors.marksNo) setFormErrors({...formErrors, marksNo: ''});
+                          }}
+                        />
+                        {formErrors.marksNo && <div className="text-[10px] text-[#e53e3e]">{formErrors.marksNo}</div>}
+                      </div>
+                    )}
+                    {isFieldApplicable('ECOWAS_NUMBER') && (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-semibold text-[#374151]">ECOWAS Number {isFieldRequired('ECOWAS_NUMBER') && <span className="text-[#e53e3e]">*</span>}</label>
+                        <input 
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.ecowasNumber ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                          placeholder="ECOWAS Number" 
+                          value={formData.ecowasNumber}
+                          onChange={(e) => {
+                            setFormData({...formData, ecowasNumber: e.target.value});
+                            if (formErrors.ecowasNumber) setFormErrors({...formErrors, ecowasNumber: ''});
+                          }}
+                        />
+                        {formErrors.ecowasNumber && <div className="text-[10px] text-[#e53e3e]">{formErrors.ecowasNumber}</div>}
+                      </div>
+                    )}
+                    {isFieldApplicable('CRITERIA') && (
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-semibold text-[#374151]">Criteria {isFieldRequired('CRITERIA') && <span className="text-[#e53e3e]">*</span>}</label>
+                        <input 
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.criteria ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
+                          placeholder="Criteria" 
+                          value={formData.criteria}
+                          onChange={(e) => {
+                            setFormData({...formData, criteria: e.target.value});
+                            if (formErrors.criteria) setFormErrors({...formErrors, criteria: ''});
+                          }}
+                        />
+                        {formErrors.criteria && <div className="text-[10px] text-[#e53e3e]">{formErrors.criteria}</div>}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Section 4: HS Code Lookup */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
-                    <div className="text-[13px] font-bold text-[#1a2236]">HS Code Lookup</div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
+                      <div className="text-[13px] font-bold text-[#1a2236]">HS Code Lookup</div>
+                    </div>
+                    <div className="flex gap-2 mb-3">
+                      <input 
+                        className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
+                        placeholder="🔍 Search by HS code or description…" 
+                        value={hsSearchQuery}
+                        onChange={handleHsSearchChange}
+                      />
+                    </div>
+                    {isSearchingHs && (
+                      <div className="text-[11px] text-[#6a7a9a] py-2">Searching...</div>
+                    )}
+                    <div className="space-y-1 max-h-[200px] oveflow-hidden overflow-scroll">
+                      {hsCodes.map((hs) => (
+                        <div 
+                          key={hs.id} 
+                          className="flex items-center gap-2 px-3 py-2 rounded-[6px] hover:bg-[#edf2ff] cursor-pointer"
+                          onClick={() => handleHsCodeSelect(hs)}
+                        >
+                          <span className="text-[13px] font-bold text-[#1a4a8a]">{hs.cetCode}</span>
+                          <span className="text-[13px] text-[#374151] capitalize">{hs.description}</span>
+                        </div>
+                      ))}
+                      {hsCodes.length === 0 && hsSearchQuery.length >= 2 && !isSearchingHs && (
+                        <div className="text-[11px] text-[#6a7a9a] py-2">No results found</div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between px-3 py-2 rounded-[6px] bg-[#e8f0fe] border border-[#3a7bd5] mb-3">
-                    <div><span className="text-[12px] font-bold text-[#1a4a8a]">0901.11</span>&nbsp;&nbsp;<span className="text-[11px] text-[#374151]">Coffee, not roasted, not decaffeinated</span></div>
-                    <span className="text-[10px] text-[#3a7bd5] cursor-pointer font-semibold">Change</span>
-                  </div>
-                  <div className="flex gap-2 mb-3">
-                    <input className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="🔍 Search by HS code or description…" />
-                    <button className="px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]">Search</button>
-                  </div>
-                  <div className="space-y-1">
-                    {[
-                      {code:'0901.11',desc:'Coffee, not roasted, not decaffeinated'},
-                      {code:'0901.12',desc:'Coffee, not roasted, decaffeinated'},
-                      {code:'0901.21',desc:'Coffee, roasted, not decaffeinated'},
-                    ].map((hs, index) => (
-                      <div key={index} className="flex items-center gap-2 px-3 py-2 rounded-[6px] hover:bg-[#edf2ff] cursor-pointer">
-                        <span className="text-[12px] font-bold text-[#1a4a8a]">{hs.code}</span>
-                        <span className="text-[11px] text-[#374151]">{hs.desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
                 {/* Section 5: Goods Line Items */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
@@ -359,43 +957,98 @@ export default function NewApplication() {
                       <thead>
                         <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description <span className="text-[#e53e3e]">*</span></th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No.</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature <span className="text-[#e53e3e]">*</span></th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) <span className="text-[#e53e3e]">*</span></th>
+                          {isFieldApplicable('HS_CODE') && <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code {isFieldRequired('HS_CODE') && <span className="text-[#e53e3e]">*</span>}</th>}
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description {isFieldRequired('DESCRIPTION') && <span className="text-[#e53e3e]">*</span>}</th>
+                          {isFieldApplicable('MARKS_NO') && <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No. {isFieldRequired('MARKS_NO') && <span className="text-[#e53e3e]">*</span>}</th>}
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY {isFieldRequired('QUANTITY') && <span className="text-[#e53e3e]">*</span>}</th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt. {isFieldRequired('GROSS_WEIGHT') && <span className="text-[#e53e3e]">*</span>}</th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature {isFieldRequired('NOMENCLATURE') && <span className="text-[#e53e3e]">*</span>}</th>
+                          {isFieldApplicable('UNIT') && <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Unit {isFieldRequired('UNIT') && <span className="text-[#e53e3e]">*</span>}</th>}
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) {isFieldRequired('VALUE') && <span className="text-[#e53e3e]">*</span>}</th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]"></th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr className="hover:bg-[#f8faff]">
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">1</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" value="0901.11" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]" value="Arabica Coffee Beans" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" value="PKG-001" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]" value="500 KG" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" value="520.5" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]" value="Coffee, not roasted" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]" value="5,000.00" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]">✕</td>
-                        </tr>
-                        <tr className="hover:bg-[#f8faff]">
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">2</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" placeholder="Code" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]" placeholder="Description" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" placeholder="Marks" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]" placeholder="QTY" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" placeholder="KG" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]" placeholder="Nomenclature" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><input className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]" placeholder="0.00" /></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]">✕</td>
-                        </tr>
+                        {goodsLineItems.map((item, index) => (
+                          <tr key={item.id} className="hover:bg-[#f8faff]">
+                            <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
+                            {isFieldApplicable('HS_CODE') && (
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input 
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" 
+                                  value={item.hsCode}
+                                  onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
+                                  placeholder="Code"
+                                />
+                              </td>
+                            )}
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input 
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]" 
+                                value={item.description}
+                                onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                                placeholder="Description"
+                              />
+                            </td>
+                            {isFieldApplicable('MARKS_NO') && (
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input 
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" 
+                                  value={item.marksNo}
+                                  onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
+                                  placeholder="Marks"
+                                />
+                              </td>
+                            )}
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input 
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]" 
+                                value={item.quantity}
+                                onChange={(e) => updateLineItem(item.id, 'quantity', e.target.value)}
+                                placeholder="QTY"
+                              />
+                            </td>
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input 
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" 
+                                value={item.grossWeight}
+                                onChange={(e) => updateLineItem(item.id, 'grossWeight', e.target.value)}
+                                placeholder="KG"
+                              />
+                            </td>
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input 
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]" 
+                                value={item.nomenclature}
+                                onChange={(e) => updateLineItem(item.id, 'nomenclature', e.target.value)}
+                                placeholder="Nomenclature"
+                              />
+                            </td>
+                            {isFieldApplicable('UNIT') && (
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input 
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]" 
+                                  value={item.unit}
+                                  onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
+                                  placeholder="Unit"
+                                />
+                              </td>
+                            )}
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input 
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]" 
+                                value={item.value}
+                                onChange={(e) => updateLineItem(item.id, 'value', e.target.value)}
+                                placeholder="0.00"
+                              />
+                            </td>
+                            <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => removeLineItem(item.id)}>✕</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
-                  <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">➕ Add Line Item</button>
+                  <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem}>➕ Add Line Item</button>
                 </div>
 
                 {/* Section 6: Supporting Documents */}
@@ -403,29 +1056,27 @@ export default function NewApplication() {
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
-                    <span className="text-[10px] text-[#9ca3af]">Sea transport — 3 documents required</span>
+                    <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
                   </div>
                   <div className="flex flex-wrap gap-3 mb-3">
-                    <div className="border-[1.5px] border-dashed border-[#3a7bd5] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#3a7bd5] bg-[#f0f7ff] text-center min-w-[140px]">
-                      ✅ Bill of Lading<br /><span className="text-[10px] text-[#6a7a9a]">BOL_2026.pdf — 1.2MB</span>
-                    </div>
-                    <div className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                      📎 Commercial Invoice<br /><span className="text-[10px] text-[#e53e3e]">Required ✕</span>
-                    </div>
-                    <div className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                      📎 Packing List<br /><span className="text-[10px] text-[#e53e3e]">Required ✕</span>
-                    </div>
+                    {getSelectedTransportMode()?.documents.map((doc) => (
+                      <div key={doc.code} className="border-[1.5px] border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[11px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
+                        📎 {doc.name}<br /><span className="text-[10px] text-[#e53e3e]">Required {doc.required ? '✓' : '✕'}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
-                    <span>⚠️</span>
-                    <span>Commercial Invoice and Packing List are required for Sea transport. Upload before submitting.</span>
-                  </div>
+                  {getSelectedTransportMode() && getSelectedTransportMode().documents.filter(d => d.required).length > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
+                      <span>⚠️</span>
+                      <span>{getSelectedTransportMode().documents.filter(d => d.required).map(d => d.name).join(', ')} are required for {getSelectedTransportMode().name} transport. Upload before submitting.</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(1)}>← Back</button>
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
-                  <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => setStep(3)}>Continue →</button>
+                  <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={handleContinueToStep3}>Continue →</button>
                 </div>
               </>
             )}

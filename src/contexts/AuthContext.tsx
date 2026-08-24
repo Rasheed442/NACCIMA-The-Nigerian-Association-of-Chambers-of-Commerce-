@@ -53,6 +53,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Periodically check if token has expired
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const checkTokenExpiration = () => {
+      const expiresAt = localStorage.getItem('accessTokenExpiresAt');
+      if (expiresAt && new Date(expiresAt) <= new Date()) {
+        // Token expired, log out
+        clearAuthData();
+      }
+    };
+
+    // Check immediately
+    checkTokenExpiration();
+
+    // Check every 30 seconds
+    const interval = setInterval(checkTokenExpiration, 30000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
   const clearAuthData = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
