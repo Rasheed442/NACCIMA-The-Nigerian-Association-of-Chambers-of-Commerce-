@@ -6,6 +6,40 @@ import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 
+interface TimelineEvent {
+  event: string;
+  status: string;
+  comment: string | null;
+  reviewerId?: string;
+  occurredAt: string;
+}
+
+interface TrackingData {
+  application: {
+    id: string;
+    certificateType: string;
+    status: string;
+    submittedAt: string;
+    modeOfTransport: string;
+    destinationCountry: string;
+  };
+  shipment: {
+    consignee: string;
+    consigneeAddress: string;
+    carrier: string;
+    destinationPort: string;
+    totalValueFob: number;
+    valueCurrency: string;
+    exchangeRate: number;
+  };
+  payment: {
+    paymentReference: string;
+    amount: number;
+    currency: string;
+  };
+  timeline: TimelineEvent[];
+}
+
 export default function ApplicationDetail() {
   const router = useRouter();
   const params = useParams();
@@ -13,6 +47,9 @@ export default function ApplicationDetail() {
 
   const [activeTab, setActiveTab] = React.useState('details');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -20,57 +57,96 @@ export default function ApplicationDetail() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
+  useEffect(() => {
+    fetchTrackingData();
+  }, [applicationId]);
+
+  const getBaseApiUrl = () => {
+    const rawBaseUrl = process.env.NEXT_PUBLIC_API;
+    if (!rawBaseUrl) {
+      return '';
+    }
+    return rawBaseUrl.replace(/\/$/, '');
+  };
+
+  const fetchTrackingData = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        router.push('/');
+        return;
+      }
+
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        setError('API URL not configured');
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/tracking`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setTrackingData(result.data);
+      } else {
+        setError(result.message || 'Failed to fetch tracking data');
+      }
+    } catch (err) {
+      console.error('Failed to fetch tracking data:', err);
+      setError('Failed to fetch tracking data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     setShowLogoutModal(false);
     router.push('/');
   };
 
-  const application = {
-    id: 'NACC-2026-00421',
-    certificateType: 'Certificate of Origin',
-    transportMode: 'Sea',
-    submitted: '26 Mar 2026',
-    destination: 'United Kingdom',
-    status: 'under_review',
-    consignee: 'UK Commodities PLC',
-    carrier: 'Maersk Line',
-    fobUsd: '$5,000.00',
-    fobNgn: '₦7,900,000.00',
-    exchangeRate: '₦1,580/$',
-    hsCode: '0901.11',
-    hsDescription: 'Coffee, not roasted',
-    paymentAmount: '₦12,031.88',
-    paystackRef: 'NACC-PAY-2026-00422',
-    paidOn: '26 Mar 2026, 11:42 AM',
-    rateApplied: 'Member rate (0.11% FOB)',
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const timeline = [
-    { status: 'done', title: 'Application Submitted', date: '26 Mar 2026, 10:15 AM', note: null },
-    { status: 'done', title: 'Payment Confirmed', date: '26 Mar 2026, 11:42 AM', note: '₦12,031.88 — Paystack' },
-    { status: 'active', title: 'Under Review', date: '27 Mar 2026 (Current)', note: 'Assigned: Mrs. Adaobi Nwosu' },
-    { status: 'todo', title: 'Approved / Rejected', date: 'Pending', note: null },
-    { status: 'todo', title: 'Certificate Issued', date: 'Pending', note: null },
-  ];
-
   const getStatusBadge = (status: string) => {
-    const badges = {
-      under_review: 'bg-[#fef3c7] text-[#92400e]',
-      issued: 'bg-[#e0e7ff] text-[#3730a3]',
-      pending_payment: 'bg-[#dbeafe] text-[#1e40af]',
-      unapproved: 'bg-[#fdf2f8] text-[#9d174d]',
+    const badges: Record<string, string> = {
+      SUBMITTED: 'bg-[#dbeafe] text-[#1e40af]',
+      PENDING_PAYMENT: 'bg-[#dbeafe] text-[#1e40af]',
+      UNDER_REVIEW: 'bg-[#fef3c7] text-[#92400e]',
+      APPROVED: 'bg-[#d1fae5] text-[#065f46]',
+      REJECTED: 'bg-[#fee2e2] text-[#9b1c1c]',
+      ISSUED: 'bg-[#e0e7ff] text-[#3730a3]',
+      UNAPPROVED: 'bg-[#fdf2f8] text-[#9d174d]',
     };
-    const labels = {
-      under_review: 'Under Review',
-      issued: 'Issued',
-      pending_payment: 'Pending Payment',
-      unapproved: 'Unapproved',
+    const labels: Record<string, string> = {
+      SUBMITTED: 'Submitted',
+      PENDING_PAYMENT: 'Pending Payment',
+      UNDER_REVIEW: 'Under Review',
+      APPROVED: 'Approved',
+      REJECTED: 'Rejected',
+      ISSUED: 'Issued',
+      UNAPPROVED: 'Unapproved',
     };
     return (
-      <span className={`inline-block text-[12px] font-bold px-2 py-2 rounded whitespace-nowrap ${badges[status as keyof typeof badges]}`}>
-        {labels[status as keyof typeof labels]}
+      <span className={`inline-block text-[12px] font-bold px-2 py-2 rounded whitespace-nowrap ${badges[status] || 'bg-[#f3f4f6] text-[#6b7280]'}`}>
+        {labels[status] || status}
       </span>
     );
+  };
+
+  const getTimelineStatus = (event: string, currentIndex: number, totalEvents: number) => {
+    if (currentIndex === totalEvents - 1) return 'active';
+    return 'done';
   };
 
   const getTimelineDot = (status: string) => {
@@ -91,6 +167,44 @@ export default function ApplicationDetail() {
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col">
+        <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
+          <AppHeader role="exporter" />
+          <div className="flex-1 flex overflow-hidden min-h-[560px]">
+            <Sidebar />
+            <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
+              <div className="text-center py-8 text-[#6a7a9a]">Loading tracking data...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !trackingData) {
+    return (
+      <div className="h-screen flex flex-col">
+        <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
+          <AppHeader role="exporter" />
+          <div className="flex-1 flex overflow-hidden min-h-[560px]">
+            <Sidebar />
+            <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
+              <div className="text-center py-8 text-[#e53e3e]">{error || 'Failed to load tracking data'}</div>
+              <div className="flex justify-center mt-4">
+                <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/my-applications')}>
+                  ← Back to Applications
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
@@ -99,11 +213,11 @@ export default function ApplicationDetail() {
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             <div className="flex items-center justify-between text-[18px] uppercase mb-[3px]">
-              <div className="text-[16px] font-bold text-[#1a2236]">Application {application.id}</div>
-              {getStatusBadge(application.status)}
+              <div className="text-[16px] font-bold text-[#1a2236]">Application {trackingData.application.id}</div>
+              {getStatusBadge(trackingData.application.status)}
             </div>
             <div className="text-[11.5px] text-[#6a7a9a] mb-5">
-              {application.certificateType} &nbsp;|&nbsp; 🚢 {application.transportMode} &nbsp;|&nbsp; Submitted {application.submitted} &nbsp;|&nbsp; Destination: {application.destination}
+              {trackingData.application.certificateType} &nbsp;|&nbsp; 🚢 {trackingData.application.modeOfTransport} &nbsp;|&nbsp; Submitted {formatDate(trackingData.application.submittedAt)} &nbsp;|&nbsp; Destination: {trackingData.application.destinationCountry}
             </div>
             
             <div className="grid grid-cols-[1fr_300px] gap-[18px]">
@@ -135,19 +249,21 @@ export default function ApplicationDetail() {
                       <div className="text-[13px] font-bold text-[#1e40af] uppercase tracking-[0.5px] pb-2">Shipment Information</div>
                       <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[13px]">
                         <span className="text-[#6a7a9a] font-medium">Consignee</span>
-                        <span className="text-[#1a2236] font-medium">{application.consignee}</span>
+                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.consignee}</span>
+                        <span className="text-[#6a7a9a] font-medium">Consignee Address</span>
+                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.consigneeAddress}</span>
                         <span className="text-[#6a7a9a] font-medium">Destination</span>
-                        <span className="text-[#1a2236] font-medium">{application.destination}</span>
+                        <span className="text-[#1a2236] font-medium">{trackingData.application.destinationCountry}</span>
                         <span className="text-[#6a7a9a] font-medium">Mode of Transport</span>
-                        <span className="text-[#1a2236] font-medium">🚢 {application.transportMode}</span>
+                        <span className="text-[#1a2236] font-medium">🚢 {trackingData.application.modeOfTransport}</span>
                         <span className="text-[#6a7a9a] font-medium">Carrier</span>
-                        <span className="text-[#1a2236] font-medium">{application.carrier}</span>
+                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.carrier}</span>
+                        <span className="text-[#6a7a9a] font-medium">Destination Port</span>
+                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.destinationPort}</span>
                         <span className="text-[#6a7a9a] font-medium">FOB Value (USD)</span>
-                        <span className="text-[#1a2236] font-medium">{application.fobUsd}</span>
-                        <span className="text-[#6a7a9a] font-medium">FOB Value (NGN)</span>
-                        <span className="text-[#1a2236] font-medium">{application.fobNgn} @ {application.exchangeRate}</span>
-                        <span className="text-[#6a7a9a] font-medium">HS Code</span>
-                        <span className="text-[#1a2236] font-medium font-mono ">{application.hsCode} — {application.hsDescription}</span>
+                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.valueCurrency} {trackingData.shipment.totalValueFob.toLocaleString()}</span>
+                        <span className="text-[#6a7a9a] font-medium">Exchange Rate</span>
+                        <span className="text-[#1a2236] font-medium">₦{trackingData.shipment.exchangeRate.toLocaleString()}/USD</span>
                       </div>
                     </div>
 
@@ -155,13 +271,9 @@ export default function ApplicationDetail() {
                       <div className="text-[13px] font-bold text-[#1e40af] uppercase tracking-[0.5px] pb-2">Payment</div>
                       <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[13px]">
                         <span className="text-[#6a7a9a] font-medium">Amount Paid</span>
-                        <span className="text-[#065f46] font-medium">{application.paymentAmount}</span>
-                        <span className="text-[#6a7a9a] font-medium">Paystack Ref</span>
-                        <span className="text-[#1a2236] font-medium font-mono">{application.paystackRef}</span>
-                        <span className="text-[#6a7a9a] font-medium">Paid On</span>
-                        <span className="text-[#1a2236] font-medium">{application.paidOn}</span>
-                        <span className="text-[#6a7a9a] font-medium">Rate Applied</span>
-                        <span className="text-[#1a2236] font-medium">{application.rateApplied}</span>
+                        <span className="text-[#065f46] font-medium">{trackingData.payment.currency} {trackingData.payment.amount.toLocaleString()}</span>
+                        <span className="text-[#6a7a9a] font-medium">Payment Reference</span>
+                        <span className="text-[#1a2236] font-medium font-mono">{trackingData.payment.paymentReference}</span>
                       </div>
                     </div>
                   </>
@@ -170,32 +282,7 @@ export default function ApplicationDetail() {
                 {activeTab === 'lineitems' && (
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5">
                     <div className="text-[13px] font-medium text-[#1a2236] mb-4">Goods Line Items</div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-[13px]">
-                        <thead>
-                          <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
-                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
-                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description</th>
-                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY</th>
-                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
-                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature</th>
-                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="hover:bg-[#f8faff]">
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">1</td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]"><span className="font-mono font-bold text-[#1a4a8a]">{application.hsCode}</span></td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">Arabica Coffee Beans</td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">500 KG</td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">520.5 KG</td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">{application.hsDescription}</td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">{application.fobUsd}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                    <div className="text-center py-8 text-[#6a7a9a]">Line items data not available in tracking response</div>
                   </div>
                 )}
 
@@ -218,25 +305,28 @@ export default function ApplicationDetail() {
               </div>
 
               <div>
-                <div className="text-[13x] font-medium text-[#1a2236] mb-[10px]">Application Status</div>
+                <div className="text-[13px] font-medium text-[#1a2236] mb-[10px]">Application Status</div>
                 <div className="flex flex-col gap-0">
-                  {timeline.map((item, index) => (
-                    <div key={index} className="flex gap-[12px] relative">
-                      {index !== timeline.length - 1 && (
-                        <div className="absolute left-[10px] top-[24px] bottom-[-4px] w-[2px] bg-[#e5e7eb]"></div>
-                      )}
-                      {getTimelineDot(item.status)}
-                      <div className="pb-[16px]">
-                        <div className="text-[13px] font-medium text-[#1a2236]">{item.title}</div>
-                        <div className="text-[13px] text-[#6a7a9a] mt-[1px]">{item.date}</div>
-                        {item.note && (
-                          <div className="text-[11px] text-[#4a5a7a] mt-[3px] bg-[#f8faff] border-l-3 border-[#3a7bd5] p-[4px_7px] rounded-[0_4px_4px_0]">
-                            {item.note}
-                          </div>
+                  {trackingData.timeline.map((item, index) => {
+                    const timelineStatus = getTimelineStatus(item.event, index, trackingData.timeline.length);
+                    return (
+                      <div key={index} className="flex gap-[12px] relative">
+                        {index !== trackingData.timeline.length - 1 && (
+                          <div className="absolute left-[10px] top-[24px] bottom-[-4px] w-[2px] bg-[#e5e7eb]"></div>
                         )}
+                        {getTimelineDot(timelineStatus)}
+                        <div className="pb-[16px]">
+                          <div className="text-[13px] font-medium text-[#1a2236]">{item.status.replace(/_/g, ' ')}</div>
+                          <div className="text-[13px] text-[#6a7a9a] mt-[1px]">{formatDate(item.occurredAt)}</div>
+                          {item.comment && (
+                            <div className="text-[11px] text-[#4a5a7a] mt-[3px] bg-[#f8faff] border-l-3 border-[#3a7bd5] p-[4px_7px] rounded-[0_4px_4px_0]">
+                              {item.comment}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

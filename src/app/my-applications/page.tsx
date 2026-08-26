@@ -35,6 +35,7 @@ export default function MyApplications() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resubmittingId, setResubmittingId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -129,6 +130,45 @@ export default function MyApplications() {
     );
   };
 
+  const handleResubmit = async (id: string) => {
+    setResubmittingId(id);
+    
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        router.push('/');
+        return;
+      }
+
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        setError('API URL not configured');
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${id}/resubmit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        router.push(`/new-application?resubmit=${id}`);
+      } else {
+        setError(result.message || 'Failed to resubmit application');
+      }
+    } catch (err) {
+      console.error('Failed to resubmit application:', err);
+      setError('Failed to resubmit application');
+    } finally {
+      setResubmittingId(null);
+    }
+  };
+
   const getActionButton = (status: Application['status'], id: string) => {
     if (status === 'ISSUED') {
       return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]">Download</button>;
@@ -137,7 +177,15 @@ export default function MyApplications() {
       return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
     }
     if (status === 'UNAPPROVED') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Edit & Resubmit</button>;
+      return (
+        <button 
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f] disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => handleResubmit(id)}
+          disabled={resubmittingId === id}
+        >
+          {resubmittingId === id ? 'Resubmitting...' : 'Edit & Resubmit'}
+        </button>
+      );
     }
     return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
   };

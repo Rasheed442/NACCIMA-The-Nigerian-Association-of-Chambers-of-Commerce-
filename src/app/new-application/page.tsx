@@ -493,7 +493,7 @@ export default function NewApplication() {
 
     // Scroll to first error if validation fails
     if (Object.keys(errors).length > 0) {
-      const errorFieldMap: Record<string, React.RefObject<HTMLInputElement | HTMLDivElement>> = {
+      const errorFieldMap: Record<string, React.RefObject<HTMLInputElement | HTMLDivElement | null>> = {
         importerEmail: importerEmailRef,
         consigneeName: consigneeNameRef,
         consigneeAddress: consigneeAddressRef,
@@ -510,11 +510,12 @@ export default function NewApplication() {
       const firstErrorField = Object.keys(errors)[0];
       const ref = errorFieldMap[firstErrorField];
       if (ref?.current) {
-        smoothScrollToElement(ref.current, 800);
+        const element = ref.current;
+        smoothScrollToElement(element, 800);
         // Focus after scroll completes
         setTimeout(() => {
-          if ('focus' in ref.current) {
-            ref.current.focus();
+          if ('focus' in element) {
+            element.focus();
           }
         }, 800);
       }
@@ -1349,12 +1350,18 @@ export default function NewApplication() {
                       <span>{uploadError}</span>
                     </div>
                   )}
-                  {getSelectedTransportMode() && getSelectedTransportMode().documents.filter(d => d.required).filter(d => !uploadedDocuments[d.code]).length > 0 && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
-                      <span>⚠️</span>
-                      <span>{getSelectedTransportMode().documents.filter(d => d.required && !uploadedDocuments[d.code]).map(d => d.name).join(', ')} are required for {getSelectedTransportMode().name} transport. Upload before submitting.</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const transportMode = getSelectedTransportMode();
+                    if (!transportMode) return null;
+                    const missingDocs = transportMode.documents.filter(d => d.required && !uploadedDocuments[d.code]);
+                    if (missingDocs.length === 0) return null;
+                    return (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
+                        <span>⚠️</span>
+                        <span>{missingDocs.map(d => d.name).join(', ')} are required for {transportMode.name} transport. Upload before submitting.</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="flex justify-end gap-2">
