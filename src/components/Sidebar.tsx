@@ -7,14 +7,73 @@ interface SidebarProps {
   role?: 'exporter' | 'admin' | 'vetting';
 }
 
+interface Application {
+  id: string;
+  status: string;
+}
+
 export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (mounted) {
+      fetchApplications();
+    }
+  }, [mounted]);
+
+  const getBaseApiUrl = () => {
+    const rawBaseUrl = process.env.NEXT_PUBLIC_API;
+    if (!rawBaseUrl) {
+      return '';
+    }
+    return rawBaseUrl.replace(/\/+$/, '');
+  };
+
+  const fetchApplications = async () => {
+    setIsLoading(true);
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        return;
+      }
+
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        const apps = Array.isArray(result.data) ? result.data : [result.data];
+        setApplications(apps);
+      }
+    } catch (err) {
+      console.error('Failed to fetch applications:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const allCount = applications.length;
+  const pendingPaymentCount = applications.filter(app => app.status === 'PENDING_PAYMENT').length;
+  const issuedCount = applications.filter(app => app.status === 'ISSUED').length;
 
   if (!mounted) {
     return (
@@ -42,17 +101,17 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       </div>
       <div className="px-[16px] py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px] mt-2">My Applications</div>
       <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/my-applications' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/my-applications')}>
-        <span className="text-[13px] w-[15px] text-center">📄</span> All Applications <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">3</span>
+        <span className="text-[13px] w-[15px] text-center">📄</span> All Applications {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{allCount}</span>}
       </div>
       <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
-        <span className="text-[13px] w-[15px] text-center">🕐</span> Pending Payment <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">1</span>
+        <span className="text-[13px] w-[15px] text-center">🕐</span> Pending Payment {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{pendingPaymentCount}</span>}
       </div>
       <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
         <span className="text-[13px] w-[15px] text-center">🔍</span> Under Review
       </div>
       <div className="px-[16px] py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
       <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
-        <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">23</span>
+        <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{issuedCount}</span>}
       </div>
       <div className="px-[16px] py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px]">Account</div>
       <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push(companyProfilePath)}>

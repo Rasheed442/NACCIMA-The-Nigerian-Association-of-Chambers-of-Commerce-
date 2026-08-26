@@ -2,6 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+function getBaseApiUrl(): string {
+  const rawBaseUrl = process.env.NEXT_PUBLIC_API || '';
+  if (!rawBaseUrl) {
+    return '';
+  }
+  return rawBaseUrl.replace(/\/+$/, '');
+}
+
 interface UserData {
   userId: string;
   companyId: string;
@@ -29,39 +37,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserData | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    // Check for existing tokens on mount
-    const storedToken = localStorage.getItem('accessToken');
-    const storedUserData = localStorage.getItem('userData');
-    
-    if (storedToken && storedUserData) {
-      try {
-        // Check if token is expired
-        const expiresAt = localStorage.getItem('accessTokenExpiresAt');
-        if (expiresAt && new Date(expiresAt) > new Date()) {
-          setAccessToken(storedToken);
-          setUser(JSON.parse(storedUserData));
-          setIsAuthenticated(true);
-        } else {
-          // Token expired, clear storage
+    const checkAuth = async () => {
+      // Check for existing tokens on mount
+      const storedToken = localStorage.getItem('accessToken');
+      const storedUserData = localStorage.getItem('userData');
+
+      if (storedToken && storedUserData) {
+        try {
+          // Check if token is expired
+          const expiresAt = localStorage.getItem('accessTokenExpiresAt');
+          if (expiresAt && new Date(expiresAt) > new Date()) {
+            setAccessToken(storedToken);
+            setUser(JSON.parse(storedUserData));
+            setIsAuthenticated(true);
+          } else {
+            // Token expired, try to refresh
+            const refreshSuccess = await refreshAccessToken();
+            if (refreshSuccess) {
+              const newToken = localStorage.getItem('accessToken');
+              const newUserData = localStorage.getItem('userData');
+              if (newToken && newUserData) {
+                setAccessToken(newToken);
+                setUser(JSON.parse(newUserData));
+                setIsAuthenticated(true);
+              }
+            }
+          }
+        } catch {
           clearAuthData();
         }
-      } catch {
-        clearAuthData();
       }
-    }
+    };
+
+    checkAuth();
   }, []);
 
   // Periodically check if token has expired
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const checkTokenExpiration = () => {
+    const checkTokenExpiration = async () => {
       const expiresAt = localStorage.getItem('accessTokenExpiresAt');
       if (expiresAt && new Date(expiresAt) <= new Date()) {
-        // Token expired, log out
-        clearAuthData();
+        // Token expired, try to refresh
+        const refreshSuccess = await refreshAccessToken();
+        if (!refreshSuccess) {
+          // Refresh failed, redirect to login
+          clearAuthData(true);
+        }
       }
     };
 
@@ -74,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  const clearAuthData = () => {
+  const clearAuthData = (redirectToLogin = false) => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('accessTokenExpiresAt');
@@ -85,6 +111,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
     setUser(null);
     setIsAuthenticated(false);
+
+    if (redirectToLogin) {
+      window.location.href = '/login';
+    }
+  };
+
+  const refreshAccessToken = async (): Promise<boolean> => {
+    if (isRefreshing) return false;
+
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      clearAuthData(true);
+      return false;
+    }
+
+    setIsRefreshing(true);
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        clearAuthData(true);
+        return false;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        // Store new tokens
+        localStorage.setItem('accessToken', result.data.accessToken);
+        localStorage.setItem('refreshToken', result.data.refreshToken);
+        localStorage.setItem('accessTokenExpiresAt', result.data.accessTokenExpiresAt);
+        localStorage.setItem('refreshTokenExpiresAt', result.data.refreshTokenExpiresAt);
+        
+        setAccessToken(result.data.accessToken);
+        return true;
+      } else {
+        // Refresh failed, clear auth and redirect
+        clearAuthData(true);
+        return false;
+      }
+    } catch (err) {
+      console.error('Failed to refresh token:', err);
+      clearAuthData(true);
+      return false;
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const login = () => {
