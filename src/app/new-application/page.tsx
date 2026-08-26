@@ -944,7 +944,7 @@ export default function NewApplication() {
                   {getSelectedTransportMode() && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[#11px] text-[#1e40af]">
                       <span>ℹ️</span>
-                      <span><strong>{getSelectedTransportMode()?.name} selected:</strong> You must upload {getSelectedTransportMode()?.documents.map(d => d.name).join(', ')} before submitting.</span>
+                      <span className='text-[14px]'><strong>{getSelectedTransportMode()?.name} selected:</strong> You must upload {getSelectedTransportMode()?.documents.map(d => d.name).join(', ')} before submitting.</span>
                     </div>
                   )}
                 </div>

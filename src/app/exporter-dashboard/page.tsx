@@ -7,10 +7,20 @@ import LogoutModal from '@/components/LogoutModal';
 import { FaPlus } from "react-icons/fa";
 import { useRouter } from 'next/navigation';
 
+interface Application {
+  id: string;
+  certificateType: string;
+  destinationCountry: string;
+  submittedAt: string;
+  status: 'DRAFT' | 'SUBMITTED' | 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ISSUED' | 'UNAPPROVED';
+}
+
 export default function ExporterDashboard() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showWelcomeToast, setShowWelcomeToast] = useState(false);
+  const [recentApplications, setRecentApplications] = useState<Application[]>([]);
+  const [isLoadingApps, setIsLoadingApps] = useState(true);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -28,9 +38,107 @@ export default function ExporterDashboard() {
     }
   }, []);
 
+  useEffect(() => {
+    fetchRecentApplications();
+  }, []);
+
+  const getBaseApiUrl = () => {
+    const rawBaseUrl = process.env.NEXT_PUBLIC_API;
+    if (!rawBaseUrl) {
+      return '';
+    }
+    return rawBaseUrl.replace(/\/$/, '');
+  };
+
+  const fetchRecentApplications = async () => {
+    setIsLoadingApps(true);
+    
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        router.push('/');
+        return;
+      }
+
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        console.error('API URL not configured');
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        const apps = Array.isArray(result.data) ? result.data : [result.data];
+        const sortedApps = apps.sort((a: Application, b: Application) => 
+          new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+        ).slice(0, 10);
+        setRecentApplications(sortedApps);
+      }
+    } catch (err) {
+      console.error('Failed to fetch recent applications:', err);
+    } finally {
+      setIsLoadingApps(false);
+    }
+  };
+
   const handleLogout = () => {
     setShowLogoutModal(false);
     router.push('/');
+  };
+
+  const getStatusBadge = (status: Application['status']) => {
+    const badges: Record<Application['status'], { bg: string; text: string }> = {
+      DRAFT: { bg: 'bg-[#f3f4f6]', text: 'text-[#6b7280]' },
+      SUBMITTED: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
+      PENDING_PAYMENT: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
+      UNDER_REVIEW: { bg: 'bg-[#fef3c7]', text: 'text-[#92400e]' },
+      APPROVED: { bg: 'bg-[#d1fae5]', text: 'text-[#065f46]' },
+      REJECTED: { bg: 'bg-[#fee2e2]', text: 'text-[#9b1c1c]' },
+      ISSUED: { bg: 'bg-[#e0e7ff]', text: 'text-[#3730a3]' },
+      UNAPPROVED: { bg: 'bg-[#fdf2f8]', text: 'text-[#9d174d]' },
+    };
+    const labels: Record<Application['status'], string> = {
+      DRAFT: 'Draft',
+      SUBMITTED: 'Submitted',
+      PENDING_PAYMENT: 'Pending Payment',
+      UNDER_REVIEW: 'Under Review',
+      APPROVED: 'Approved',
+      REJECTED: 'Rejected',
+      ISSUED: 'Issued',
+      UNAPPROVED: 'Unapproved',
+    };
+    const badge = badges[status] || { bg: 'bg-[#f3f4f6]', text: 'text-[#6b7280]' };
+    return (
+      <span className={`inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] whitespace-nowrap ${badge.bg} ${badge.text}`}>
+        {labels[status] || status}
+      </span>
+    );
+  };
+
+  const getActionButton = (status: Application['status'], id: string) => {
+    if (status === 'ISSUED') {
+      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]">Download</button>;
+    }
+    if (status === 'PENDING_PAYMENT') {
+      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
+    }
+    if (status === 'UNAPPROVED') {
+      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Edit & Resubmit</button>;
+    }
+    return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
   return (
@@ -84,46 +192,45 @@ export default function ExporterDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    {id:'NACC-2026-00421', type:'Certificate of Origin', dest:'United Kingdom', date:'26 Mar 2026', status:'Under Review', statusBg:'bg-[#fef3c7]', statusText:'text-[#92400e]', action:'View', actionStyle:'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]'},
-                    {id:'NACC-2026-00398', type:'GSP Certificate', dest:'Germany', date:'20 Mar 2026', status:'Issued', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Download', actionStyle:'bg-[#065f46] text-white hover:bg-[#047857]'},
-                    {id:'NACC-2026-00380', type:'ECOWAS Free Trade', dest:'Ghana', date:'15 Mar 2026', status:'Unapproved', statusBg:'bg-[#fdf2f8]', statusText:'text-[#9d174d]', action:'Edit & Resubmit', actionStyle:'bg-[#92400e] text-white hover:bg-[#78350f]'},
-                    {id:'NACC-2026-00341', type:'Solid Mineral', dest:'China', date:'10 Mar 2026', status:'Pending Payment', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Pay Now', actionStyle:'bg-[#92400e] text-white hover:bg-[#78350f]'},
-                    {id:'NACC-2026-00290', type:'Movement Certificate', dest:'France', date:'01 Mar 2026', status:'Issued', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Download', actionStyle:'bg-[#065f46] text-white hover:bg-[#047857]'},
-                    {id:'NACC-2026-00421', type:'Certificate of Origin', dest:'United Kingdom', date:'26 Mar 2026', status:'Under Review', statusBg:'bg-[#fef3c7]', statusText:'text-[#92400e]', action:'View', actionStyle:'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]'},
-                    {id:'NACC-2026-00398', type:'GSP Certificate', dest:'Germany', date:'20 Mar 2026', status:'Issued', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Download', actionStyle:'bg-[#065f46] text-white hover:bg-[#047857]'},
-                    {id:'NACC-2026-00380', type:'ECOWAS Free Trade', dest:'Ghana', date:'15 Mar 2026', status:'Unapproved', statusBg:'bg-[#fdf2f8]', statusText:'text-[#9d174d]', action:'Edit & Resubmit', actionStyle:'bg-[#92400e] text-white hover:bg-[#78350f]'},
-                    {id:'NACC-2026-00341', type:'Solid Mineral', dest:'China', date:'10 Mar 2026', status:'Pending Payment', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Pay Now', actionStyle:'bg-[#92400e] text-white hover:bg-[#78350f]'},
-                    {id:'NACC-2026-00290', type:'Movement Certificate', dest:'France', date:'01 Mar 2026', status:'Issued', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Download', actionStyle:'bg-[#065f46] text-white hover:bg-[#047857]'},
-                    {id:'NACC-2026-00421', type:'Certificate of Origin', dest:'United Kingdom', date:'26 Mar 2026', status:'Under Review', statusBg:'bg-[#fef3c7]', statusText:'text-[#92400e]', action:'View', actionStyle:'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]'},
-                    {id:'NACC-2026-00398', type:'GSP Certificate', dest:'Germany', date:'20 Mar 2026', status:'Issued', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Download', actionStyle:'bg-[#065f46] text-white hover:bg-[#047857]'},
-                    {id:'NACC-2026-00380', type:'ECOWAS Free Trade', dest:'Ghana', date:'15 Mar 2026', status:'Unapproved', statusBg:'bg-[#fdf2f8]', statusText:'text-[#9d174d]', action:'Edit & Resubmit', actionStyle:'bg-[#92400e] text-white hover:bg-[#78350f]'},
-                    {id:'NACC-2026-00341', type:'Solid Mineral', dest:'China', date:'10 Mar 2026', status:'Pending Payment', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Pay Now', actionStyle:'bg-[#92400e] text-white hover:bg-[#78350f]'},
-                    {id:'NACC-2026-00290', type:'Movement Certificate', dest:'France', date:'01 Mar 2026', status:'Issued', statusBg:'bg-[#d1fae5]', statusText:'text-[#065f46]', action:'Download', actionStyle:'bg-[#065f46] text-white hover:bg-[#047857]'},
-                  ].map((app, index) => (
-                    <tr key={index} className="hover:bg-[#f8faff] uppercase">
-                      <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.id}</td>
-                      <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.type}</td>
-                      <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.dest}</td>
-                      <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.date}</td>
-                      <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle"><span className={`inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] whitespace-nowrap ${app.statusBg} ${app.statusText}`}>{app.status}</span></td>
-                      <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle"><div className="flex gap-1"><button className={`inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all ${app.actionStyle}`}>{app.action}</button></div></td>
+                  {isLoadingApps ? (
+                    <tr>
+                      <td colSpan={6} className="px-[11px] py-[8px] border-b border-[#edf0f5] text-center text-[#6a7a9a]">
+                        Loading recent applications...
+                      </td>
                     </tr>
-                  ))}
+                  ) : recentApplications.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-[11px] py-[8px] border-b border-[#edf0f5] text-center text-[#6a7a9a]">
+                        No applications found
+                      </td>
+                    </tr>
+                  ) : (
+                    recentApplications.map((app) => (
+                      <tr key={app.id} className="hover:bg-[#f8faff] uppercase">
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.id}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.certificateType}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.destinationCountry}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{formatDate(app.submittedAt)}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{getStatusBadge(app.status)}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
+                          <div className="flex gap-1">{getActionButton(app.status, app.id)}</div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
             <div className="flex items-center justify-between mt-4">
-              <div className="text-[11px] text-[#6a7a9a]">Showing 1-5 of 25 applications</div>
-              <div className="flex items-center gap-1">
-                <button className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" disabled>← Previous</button>
-                <button className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white">1</button>
-                <button className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">2</button>
-                <button className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">3</button>
-                <button className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">...</button>
-                <button className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">5</button>
-                <button className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">Next →</button>
+              <div className="text-[11px] text-[#6a7a9a]">
+                {!isLoadingApps && `Showing ${Math.min(recentApplications.length, 10)} of ${recentApplications.length} recent applications`}
               </div>
+              <button 
+                className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded text-[13px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" 
+                onClick={() => router.push('/my-applications')}
+              >
+                View All →
+              </button>
             </div>
           </div>
         </div>

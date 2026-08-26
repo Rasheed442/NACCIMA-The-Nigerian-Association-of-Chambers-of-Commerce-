@@ -99,7 +99,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       <div className={`px-[16px] text-[14px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === newApplicationPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(newApplicationPath)}>
         <span className=" w-[15px] text-center">➕</span> New Application
       </div>
-      <div className="px-[16px] text-[13px] pb-1 py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px] mt-2">My Applications</div>
+      <div className="px-[16px] text-[12px] pb-1 py-[3px_16px_6px] font-medium text-[#8a9aba] uppercase tracking-[0.8px] mt-2">My Applications</div>
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/my-applications' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/my-applications')}>
         <span className="text-[13px] w-[15px] text-center">📄</span> All Applications {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{allCount}</span>}
       </div>
@@ -109,11 +109,11 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
         <span className="text-[13px] w-[15px] text-center">🔍</span> Under Review
       </div>
-      <div className="px-[16px] text-[13px] py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
+      <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
       <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
         <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{issuedCount}</span>}
       </div>
-      <div className="px-[16px] text-[13px] py-[3px_16px_6px] text-[9px] font-bold text-[#8a9aba] uppercase tracking-[0.8px]">Account</div>
+      <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium text-[#8a9aba] uppercase tracking-[0.8px] pt-3">Account</div>
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push(companyProfilePath)}>
         <span className="text-[13px] w-[15px] text-center">🏢</span> Company Profile
       </div>

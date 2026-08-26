@@ -36,6 +36,8 @@ export default function MyApplications() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resubmittingId, setResubmittingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -195,6 +197,15 @@ export default function MyApplications() {
     return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
+  const totalPages = Math.ceil(applications.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = applications.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
@@ -238,7 +249,7 @@ export default function MyApplications() {
                     </tr>
                   </thead>
                   <tbody>
-                    {applications.map((app) => (
+                    {currentItems.map((app) => (
                       <tr key={app.id} className="hover:bg-[#f8faff] text-[14px] transition-colors">
                         <td className="px-[11px] py-[12px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.id}</td>
                         <td className="px-[11px] py-[12px] border-b border-[#edf0f5] whitespace-nowrap">{app.tin || '—'}</td>
@@ -266,6 +277,42 @@ export default function MyApplications() {
                 </table>
               )}
             </div>
+            {applications.length > 0 && (
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-[11px] text-[#6a7a9a]">
+                  Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, applications.length)} of {applications.length} applications
+                </div>
+                <div className="flex items-center gap-1">
+                  <button 
+                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    ← Previous
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      className={`px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all ${
+                        currentPage === page 
+                          ? 'bg-[#1a4a8a] text-white' 
+                          : 'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]'
+                      }`}
+                      onClick={() => handlePageChange(page)}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button 
+                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
