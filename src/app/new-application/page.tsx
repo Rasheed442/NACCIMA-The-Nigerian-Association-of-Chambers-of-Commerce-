@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
+import SuccessModal from '@/components/SuccessModal';
 import { FiArrowRight } from "react-icons/fi";
 import { ChevronDown, Check } from "lucide-react";
 
@@ -85,9 +86,14 @@ function getBaseApiUrl(): string {
 export default function NewApplication() {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
-  const [transportMode, setTransportMode] = React.useState('SEA');
+  const [transportMode, setTransportMode] = React.useState<string | null>(null);
+  const [isSavingTransportMode, setIsSavingTransportMode] = useState(false);
   const [selectedCert, setSelectedCert] = React.useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [reviewData, setReviewData] = useState<any>(null);
+  const [isLoadingReview, setIsLoadingReview] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoadingCerts, setIsLoadingCerts] = useState(true);
   const [certError, setCertError] = useState('');
@@ -135,6 +141,11 @@ export default function NewApplication() {
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [isCreatingApplication, setIsCreatingApplication] = useState(false);
+  const [isSavingApplication, setIsSavingApplication] = useState(false);
+  const [isSavingGoods, setIsSavingGoods] = useState(false);
+  const [selectedTransportModeDetails, setSelectedTransportModeDetails] = useState<TransportMode | null>(null);
 
   // Application form fields
   const [formData, setFormData] = useState({
@@ -143,6 +154,7 @@ export default function NewApplication() {
     consigneeAddress: '',
     carrier: '',
     destinationCountry: '',
+    destinationPort: '',
     countryOfManufacturing: 'Nigeria',
     totalValueFOB: '',
     bulkProductQty: '',
@@ -420,7 +432,97 @@ export default function NewApplication() {
   };
 
   const getSelectedTransportMode = () => {
-    return transportModes.find(tm => tm.code === transportMode);
+    return selectedTransportModeDetails || transportModes.find(tm => tm.code === transportMode);
+  };
+
+  const fetchTransportModeDetails = async (code: string) => {
+    setIsSavingTransportMode(true);
+    setValidationError(null);
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/reference/transport-modes/${code}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setSelectedTransportModeDetails(result.data);
+      } else {
+        setValidationError(result.message || 'Failed to fetch transport mode details');
+      }
+    } catch (err) {
+      console.error('Failed to fetch transport mode details:', err);
+      setValidationError('Failed to fetch transport mode details');
+    } finally {
+      setIsSavingTransportMode(false);
+    }
+  };
+
+  const saveTransportModeToApplication = async (code: string) => {
+    if (!applicationId) {
+      console.error('Application ID not found');
+      return false;
+    }
+
+    setIsSavingTransportMode(true);
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      const payload = {
+        modeOfTransport: code,
+      };
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        return true;
+      } else {
+        console.error('Failed to save transport mode:', result.message);
+        return false;
+      }
+    } catch (err) {
+      console.error('Failed to save transport mode:', err);
+      return false;
+    } finally {
+      setIsSavingTransportMode(false);
+    }
+  };
+
+  const handleSelectTransportMode = async (code: string) => {
+    setTransportMode(code);
+    await fetchTransportModeDetails(code);
   };
 
   const validateStep2 = () => {
@@ -524,27 +626,69 @@ export default function NewApplication() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleContinueToStep2 = () => {
+  const handleContinueToStep2 = async () => {
     if (!selectedCert) {
       setCertError('Please select a certificate type');
       return;
     }
     setCertError('');
-    setStep(2);
+    setIsCreatingApplication(true);
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      const selectedCertificateType = certificateTypes.find(c => c.id === selectedCert);
+      if (!selectedCertificateType) {
+        throw new Error('Selected certificate type not found.');
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          certificateType: selectedCertificateType.code,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setApplicationId(result.data.id);
+        setStep(2);
+      } else {
+        setCertError(result.message || 'Failed to create application');
+      }
+    } catch (err) {
+      console.error('Failed to create application:', err);
+      setCertError('Failed to create application. Please try again.');
+    } finally {
+      setIsCreatingApplication(false);
+    }
   };
 
   const formatNumberWithCommas = (value: string): string => {
     // Remove existing commas and non-numeric characters except decimal point
     const cleanValue = value.replace(/[^0-9.]/g, '');
     if (!cleanValue) return '';
-    
+
     const parts = cleanValue.split('.');
     const integerPart = parts[0];
     const decimalPart = parts.length > 1 ? '.' + parts[1] : '';
-    
+
     // Add commas to integer part
     const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    
+
     return formattedInteger + decimalPart;
   };
 
@@ -558,9 +702,9 @@ export default function NewApplication() {
       if (startTime === null) startTime = currentTime;
       const timeElapsed = currentTime - startTime;
       const run = easeInOutQuad(timeElapsed, startPosition, distance, duration);
-      
+
       window.scrollTo(0, run);
-      
+
       if (timeElapsed < duration) {
         requestAnimationFrame(animation);
       }
@@ -576,19 +720,146 @@ export default function NewApplication() {
     requestAnimationFrame(animation);
   };
 
-  const handleContinueToStep3 = () => {
+  const saveApplicationDetails = async () => {
+    if (!applicationId) {
+      setValidationError('Application ID not found');
+      return false;
+    }
+
+    setIsSavingApplication(true);
     setValidationError(null);
-    
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      const payload = {
+        importerEmail: formData.importerEmail,
+        consignee: formData.consigneeName,
+        consigneeAddress: formData.consigneeAddress,
+        carrier: formData.carrier,
+        modeOfTransport: transportMode,
+        destinationCountry: formData.destinationCountry,
+        destinationPort: formData.destinationPort,
+        countryOfMfg: formData.countryOfManufacturing,
+        bulkQtyMt: formData.bulkProductQty ? parseFloat(formData.bulkProductQty) : 0,
+      };
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSuccessMessage('Shipment details saved successfully');
+        setShowSuccessModal(true);
+        return true;
+      } else {
+        setValidationError(result.message || 'Failed to save application details');
+        return false;
+      }
+    } catch (err) {
+      console.error('Failed to save application details:', err);
+      setValidationError('Failed to save application details. Please try again.');
+      return false;
+    } finally {
+      setIsSavingApplication(false);
+    }
+  };
+
+  const saveGoodsItems = async () => {
+    if (!applicationId) {
+      setValidationError('Application ID not found');
+      return false;
+    }
+
+    setIsSavingGoods(true);
+    setValidationError(null);
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      const itemsPayload = {
+        items: goodsLineItems.map(item => ({
+          hsCode: item.hsCode,
+          marksNo: item.marksNo,
+          description: item.description,
+          unit: item.unit,
+          quantity: parseFloat(item.quantity) || 0,
+          grossWeight: parseFloat(item.grossWeight) || 0,
+          nomenclature: item.nomenclature,
+          value: parseFloat(item.value) || 0,
+        })),
+      };
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(itemsPayload),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSuccessMessage('Goods line items saved successfully');
+        setShowSuccessModal(true);
+        return true;
+      } else {
+        setValidationError(result.message || 'Failed to save goods items');
+        return false;
+      }
+    } catch (err) {
+      console.error('Failed to save goods items:', err);
+      setValidationError('Failed to save goods items. Please try again.');
+      return false;
+    } finally {
+      setIsSavingGoods(false);
+    }
+  };
+
+  const handleContinueToStep3 = async () => {
+    setValidationError(null);
+
     if (!validateStep2()) {
       return;
     }
 
+    // Validate transport mode selection
+    if (!transportMode) {
+      setValidationError('Please select a mode of transport');
+      return;
+    }
+
     // Validate Goods Line Items
-    const hasEmptyLineItems = goodsLineItems.some(item => 
+    const hasEmptyLineItems = goodsLineItems.some(item =>
       !item.hsCode || !item.description || !item.quantity || !item.grossWeight
     );
     if (hasEmptyLineItems) {
-      setValidationError('Please fill in all required fields in Goods Line Items (HS Code, Description, QTY, Gross Weight)');
+      setValidationError('Please fill in all required fields in the Goods/Items section (HS Code, Description, Quantity, Gross Weight)');
       return;
     }
 
@@ -602,6 +873,7 @@ export default function NewApplication() {
 
     fetchExchangeRate();
     setStep(3);
+    fetchReviewData();
   };
 
   const fetchExchangeRate = async () => {
@@ -634,6 +906,48 @@ export default function NewApplication() {
       console.error('Failed to fetch exchange rate:', err);
     } finally {
       setIsLoadingRate(false);
+    }
+  };
+
+  const fetchReviewData = async () => {
+    if (!applicationId) {
+      console.error('Application ID not found');
+      return;
+    }
+
+    setIsLoadingReview(true);
+    setValidationError(null);
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        throw new Error('Access token not found. Please log in again.');
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setReviewData(result.data);
+      } else {
+        setValidationError(result.message || 'Failed to fetch review data');
+      }
+    } catch (err) {
+      console.error('Failed to fetch review data:', err);
+      setValidationError('Failed to fetch review data. Please try again.');
+    } finally {
+      setIsLoadingReview(false);
     }
   };
 
@@ -672,6 +986,16 @@ export default function NewApplication() {
   };
 
   const handleDocumentUpload = async (docCode: string, file: File) => {
+    if (!applicationId) {
+      setUploadError('Application ID not found. Please select a certificate type first.');
+      return;
+    }
+
+    if (!transportMode) {
+      setUploadError('Please select a mode of transport before uploading documents.');
+      return;
+    }
+
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
       setUploadError('Please log in to upload documents');
@@ -694,22 +1018,42 @@ export default function NewApplication() {
 
       console.log('Uploading document:', { docCode, fileName: file.name, fileSize: file.size });
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/68ffe86d-cef2-4eb6-81c9-587c9c7b2081/documents/upload`, {
+      const uploadResponse = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
-          // Don't set Content-Type when sending FormData - browser sets it automatically with boundary
         },
         body: formData,
       });
 
-      const result = await response.json();
-      console.log('Upload response:', response.status, result);
+      const uploadResult = await uploadResponse.json();
+      console.log('Upload response:', uploadResponse.status, uploadResult);
 
-      if (response.ok) {
-        setUploadedDocuments(prev => ({ ...prev, [docCode]: file }));
+      if (uploadResponse.ok && uploadResult.data) {
+        // After successful upload, save the document via PUT endpoint
+        const saveResponse = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            documentType: uploadResult.data.documentType,
+            fileName: uploadResult.data.fileName,
+            fileUrl: uploadResult.data.fileUrl,
+          }),
+        });
+
+        const saveResult = await saveResponse.json();
+        console.log('Save document response:', saveResponse.status, saveResult);
+
+        if (saveResponse.ok) {
+          setUploadedDocuments(prev => ({ ...prev, [docCode]: file }));
+        } else {
+          setUploadError(`Failed to save document: ${saveResult.message || 'Unknown error'} (${saveResponse.status})`);
+        }
       } else {
-        setUploadError(`Failed to upload document: ${result.message || result.error || 'Unknown error'} (${response.status})`);
+        setUploadError(`Failed to upload document: ${uploadResult.message || uploadResult.error || 'Unknown error'} (${uploadResponse.status})`);
       }
     } catch (err) {
       console.error('Upload error:', err);
@@ -720,6 +1064,10 @@ export default function NewApplication() {
   };
 
   const handleFileSelect = (docCode: string) => {
+    if (!transportMode) {
+      setUploadError('Please select a mode of transport before uploading documents.');
+      return;
+    }
     if (fileInputRef.current) {
       fileInputRef.current.onchange = (e) => {
         const target = e.target as HTMLInputElement;
@@ -742,7 +1090,7 @@ export default function NewApplication() {
   };
 
   const updateLineItem = (id: string, field: keyof GoodsLineItem, value: string) => {
-    setGoodsLineItems(goodsLineItems.map(item => 
+    setGoodsLineItems(goodsLineItems.map(item =>
       item.id === id ? { ...item, [field]: value } : item
     ));
   };
@@ -805,7 +1153,7 @@ export default function NewApplication() {
                 <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
                   ★ NACCIMA Member — member rates apply to your application
                 </div>
-                
+
                 {certError && (
                   <div className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">
                     <span>⚠️</span>
@@ -822,9 +1170,9 @@ export default function NewApplication() {
                     {certificateTypes.filter(cert => cert.active).map((cert) => {
                       const display = getCertificateDisplay(cert);
                       return (
-                        <div 
-                          key={cert.id} 
-                          className={`p-4 rounded-[8px] border cursor-pointer transition-all ${selectedCert === cert.id ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`} 
+                        <div
+                          key={cert.id}
+                          className={`p-4 rounded-[8px] border cursor-pointer transition-all ${selectedCert === cert.id ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`}
                           onClick={() => setSelectedCert(cert.id)}
                         >
                           <div className="text-[24px] mb-2">{display.icon}</div>
@@ -838,12 +1186,12 @@ export default function NewApplication() {
                 )}
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] rounded py-[10px] border-gray-200 border text-[12px] font-semibold cursor-pointer transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/exporter-dashboard')}>Cancel</button>
-                  <button 
-                    className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60" 
+                  <button
+                    className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleContinueToStep2}
-                    disabled={!selectedCert}
+                    disabled={!selectedCert || isCreatingApplication}
                   >
-                    Continue with {selectedCert ? certificateTypes.find(c => c.id === selectedCert)?.name : 'Certificate'} <FiArrowRight size={16} color="white"/>
+                    {isCreatingApplication ? 'Creating...' : `Continue with ${selectedCert ? certificateTypes.find(c => c.id === selectedCert)?.name : 'Certificate'}`} {!isCreatingApplication && <FiArrowRight size={16} color="white"/>}
                   </button>
                 </div>
               </>
@@ -892,10 +1240,10 @@ export default function NewApplication() {
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-[11px] font-semibold text-[#374151]">Importer Email {isFieldRequired('IMPORTER_EMAIL') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input 
+                      <input
                         ref={importerEmailRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.importerEmail ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                        placeholder="importer@overseas.com" 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.importerEmail ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                        placeholder="importer@overseas.com"
                         value={formData.importerEmail}
                         onChange={(e) => {
                           setFormData({...formData, importerEmail: e.target.value});
@@ -922,6 +1270,7 @@ export default function NewApplication() {
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Mode of Transport <span className="text-[#e53e3e]">*</span></div>
+                    {isSavingTransportMode && <span className="text-[10px] text-[#6a7a9a]">Saving…</span>}
                     <span className="text-[10px] bg-[#dbeafe] text-[#1e40af] px-2 py-[2px] rounded-[10px] font-semibold">New in v2.2</span>
                   </div>
                   <div className="grid grid-cols-3 gap-4 mb-4">
@@ -929,10 +1278,10 @@ export default function NewApplication() {
                       const icon = getTransportModeIcon(t.code);
                       const docs = t.documents.map(d => d.name).join(' + ');
                       return (
-                        <div 
-                          key={t.code} 
-                          className={`p-4 rounded-[8px] border cursor-pointer transition-all text-center ${transportMode === t.code ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`} 
-                          onClick={() => setTransportMode(t.code)}
+                        <div
+                          key={t.code}
+                          className={`p-4 rounded-[8px] border cursor-pointer transition-all text-center ${transportMode === t.code ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`}
+                          onClick={() => handleSelectTransportMode(t.code)}
                         >
                           <div className="text-[24px] mb-2">{icon}</div>
                           <div className="text-[12px] font-bold text-[#1a2236] mb-1">{t.name}</div>
@@ -958,10 +1307,10 @@ export default function NewApplication() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1">
                       <label className="text-[11px] font-semibold text-[#374151]">Consignee Name {isFieldRequired('CONSIGNEE') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input 
+                      <input
                         ref={consigneeNameRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeName ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                        placeholder="Receiving company or person" 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeName ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                        placeholder="Receiving company or person"
                         value={formData.consigneeName}
                         onChange={(e) => {
                           setFormData({...formData, consigneeName: e.target.value});
@@ -972,10 +1321,10 @@ export default function NewApplication() {
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-[11px] font-semibold text-[#374151]">Carrier {isFieldRequired('CARRIER') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input 
+                      <input
                         ref={carrierRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.carrier ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                        placeholder="e.g. Maersk Line" 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.carrier ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                        placeholder="e.g. Maersk Line"
                         value={formData.carrier}
                         onChange={(e) => {
                           setFormData({...formData, carrier: e.target.value});
@@ -986,10 +1335,10 @@ export default function NewApplication() {
                     </div>
                     <div className="flex flex-col gap-1 col-span-2">
                       <label className="text-[11px] font-semibold text-[#374151]">Consignee Address {isFieldRequired('CONSIGNEE_ADDRESS') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input 
+                      <input
                         ref={consigneeAddressRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeAddress ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                        placeholder="Full address of consignee at destination" 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeAddress ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                        placeholder="Full address of consignee at destination"
                         value={formData.consigneeAddress}
                         onChange={(e) => {
                           setFormData({...formData, consigneeAddress: e.target.value});
@@ -1070,10 +1419,10 @@ export default function NewApplication() {
                       <label className="text-[11px] font-semibold text-[#374151]">Total Value (FOB) in USD {isFieldRequired('TOTAL_VALUE_FOB') && <span className="text-[#e53e3e]">*</span>} <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">USD for CoO</span></label>
                       <div className="flex items-center gap-1">
                         <span className="text-[13px] font-bold text-[#92400e]">$</span>
-                        <input 
+                        <input
                           ref={totalValueFOBRef}
-                          className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.totalValueFOB ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                          placeholder="0.00" 
+                          className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.totalValueFOB ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          placeholder="0.00"
                           value={formData.totalValueFOB}
                           onChange={(e) => {
                             const formatted = formatNumberWithCommas(e.target.value);
@@ -1087,10 +1436,10 @@ export default function NewApplication() {
                     </div>
                     <div className="flex flex-col gap-1">
                       <label className="text-[11px] font-semibold text-[#374151]">Bulk Product Qty (MT) {isFieldRequired('BULK_PRODUCT_QTY_MT') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input 
+                      <input
                         ref={bulkProductQtyRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.bulkProductQty ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                        placeholder="Metric tonnes" 
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.bulkProductQty ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                        placeholder="Metric tonnes"
                         value={formData.bulkProductQty}
                         onChange={(e) => {
                           setFormData({...formData, bulkProductQty: e.target.value});
@@ -1102,10 +1451,10 @@ export default function NewApplication() {
                     {isFieldApplicable('MARKS_NO') && (
                       <div className="flex flex-col gap-1 col-span-2">
                         <label className="text-[11px] font-semibold text-[#374151]">Marks / No. {isFieldRequired('MARKS_NO') && <span className="text-[#e53e3e]">*</span>}</label>
-                        <input 
+                        <input
                           ref={marksNoRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.marksNo ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                          placeholder="Shipping marks & package numbers" 
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.marksNo ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          placeholder="Shipping marks & package numbers"
                           value={formData.marksNo}
                           onChange={(e) => {
                             setFormData({...formData, marksNo: e.target.value});
@@ -1118,10 +1467,10 @@ export default function NewApplication() {
                     {isFieldApplicable('ECOWAS_NUMBER') && (
                       <div className="flex flex-col gap-1">
                         <label className="text-[11px] font-semibold text-[#374151]">ECOWAS Number {isFieldRequired('ECOWAS_NUMBER') && <span className="text-[#e53e3e]">*</span>}</label>
-                        <input 
+                        <input
                           ref={ecowasNumberRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.ecowasNumber ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                          placeholder="ECOWAS Number" 
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.ecowasNumber ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          placeholder="ECOWAS Number"
                           value={formData.ecowasNumber}
                           onChange={(e) => {
                             setFormData({...formData, ecowasNumber: e.target.value});
@@ -1134,10 +1483,10 @@ export default function NewApplication() {
                     {isFieldApplicable('CRITERIA') && (
                       <div className="flex flex-col gap-1">
                         <label className="text-[11px] font-semibold text-[#374151]">Criteria {isFieldRequired('CRITERIA') && <span className="text-[#e53e3e]">*</span>}</label>
-                        <input 
+                        <input
                           ref={criteriaRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.criteria ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`} 
-                          placeholder="Criteria" 
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.criteria ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          placeholder="Criteria"
                           value={formData.criteria}
                           onChange={(e) => {
                             setFormData({...formData, criteria: e.target.value});
@@ -1148,6 +1497,15 @@ export default function NewApplication() {
                       </div>
                     )}
                   </div>
+                  <div className="flex justify-end mt-4">
+                    <button
+                      className="inline-flex items-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={saveApplicationDetails}
+                      disabled={isSavingApplication}
+                    >
+                      {isSavingApplication ? 'Saving...' : 'Save Shipment Details'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Section 4: HS Code Lookup */}
@@ -1157,9 +1515,9 @@ export default function NewApplication() {
                       <div className="text-[13px] font-bold text-[#1a2236]">HS Code Lookup</div>
                     </div>
                     <div className="flex gap-2 mb-3">
-                      <input 
-                        className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
-                        placeholder="🔍 Search by HS code or description…" 
+                      <input
+                        className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
+                        placeholder="🔍 Search by HS code or description…"
                         value={hsSearchQuery}
                         onChange={handleHsSearchChange}
                       />
@@ -1169,8 +1527,8 @@ export default function NewApplication() {
                     )}
                     <div className="space-y-1 max-h-[200px] oveflow-hidden overflow-scroll">
                       {hsCodes.map((hs) => (
-                        <div 
-                          key={hs.id} 
+                        <div
+                          key={hs.id}
                           className="flex items-center gap-2 px-3 py-2 rounded-[6px] hover:bg-[#edf2ff] cursor-pointer"
                           onClick={() => handleHsCodeSelect(hs)}
                         >
@@ -1212,8 +1570,8 @@ export default function NewApplication() {
                             <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
                             {isFieldApplicable('HS_CODE') && (
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input 
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" 
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
                                   value={item.hsCode}
                                   onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
                                   placeholder="Code"
@@ -1221,8 +1579,8 @@ export default function NewApplication() {
                               </td>
                             )}
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input 
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]" 
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
                                 value={item.description}
                                 onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
                                 placeholder="Description"
@@ -1230,8 +1588,8 @@ export default function NewApplication() {
                             </td>
                             {isFieldApplicable('MARKS_NO') && (
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input 
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" 
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
                                   value={item.marksNo}
                                   onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
                                   placeholder="Marks"
@@ -1239,24 +1597,24 @@ export default function NewApplication() {
                               </td>
                             )}
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input 
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]" 
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
                                 value={item.quantity}
                                 onChange={(e) => updateLineItem(item.id, 'quantity', e.target.value)}
                                 placeholder="QTY"
                               />
                             </td>
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input 
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]" 
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
                                 value={item.grossWeight}
                                 onChange={(e) => updateLineItem(item.id, 'grossWeight', e.target.value)}
                                 placeholder="KG"
                               />
                             </td>
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input 
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]" 
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
                                 value={item.nomenclature}
                                 onChange={(e) => updateLineItem(item.id, 'nomenclature', e.target.value)}
                                 placeholder="Nomenclature"
@@ -1264,8 +1622,8 @@ export default function NewApplication() {
                             </td>
                             {isFieldApplicable('UNIT') && (
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input 
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]" 
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
                                   value={item.unit}
                                   onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
                                   placeholder="Unit"
@@ -1273,8 +1631,8 @@ export default function NewApplication() {
                               </td>
                             )}
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input 
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]" 
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
                                 value={item.value}
                                 onChange={(e) => updateLineItem(item.id, 'value', e.target.value)}
                                 placeholder="0.00"
@@ -1286,7 +1644,16 @@ export default function NewApplication() {
                       </tbody>
                     </table>
                   </div>
-                  <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem}>➕ Add Line Item</button>
+                  <div className="flex justify-between items-center mt-4">
+                    <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem}>➕ Add Line Item</button>
+                    <button
+                      className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={saveGoodsItems}
+                      disabled={isSavingGoods}
+                    >
+                      {isSavingGoods ? 'Saving...' : 'Save Goods Items'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Section 6: Supporting Documents */}
@@ -1296,16 +1663,22 @@ export default function NewApplication() {
                     <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
                     <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
                   </div>
-                  <div className="flex flex-wrap gap-3 mb-3">
-                    {getSelectedTransportMode()?.documents.map((doc) => {
-                      const isUploaded = uploadedDocuments[doc.code];
-                      const isUploading = uploadingDoc === doc.code;
-                      return (
-                        <div 
-                          key={doc.code} 
+                  {!transportMode ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
+                      <span>⚠️</span>
+                      <span>Please select a mode of transport above to see required documents</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-3 mb-3">
+                      {getSelectedTransportMode()?.documents.map((doc) => {
+                        const isUploaded = uploadedDocuments[doc.code];
+                        const isUploading = uploadingDoc === doc.code;
+                        return (
+                        <div
+                          key={doc.code}
                           className={`border-[1.5px] border-dashed rounded-[6px] px-[14px] py-[10px] text-[11px] cursor-pointer text-center min-w-[140px] relative ${
-                            isUploaded 
-                              ? 'border-[#059669] bg-[#d1fae5] text-[#065f46]' 
+                            isUploaded
+                              ? 'border-[#059669] bg-[#d1fae5] text-[#065f46]'
                               : 'border-[#d1d5db] text-[#6a7a9a] hover:border-[#3a7bd5] hover:text-[#3a7bd5]'
                           } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                           onClick={() => !isUploaded && !isUploading && handleFileSelect(doc.code)}
@@ -1320,7 +1693,7 @@ export default function NewApplication() {
                               <span className="block mb-1">✅</span>
                               <span className="block font-semibold">{doc.name}</span>
                               <span className="block text-[10px]">{uploadedDocuments[doc.code].name}</span>
-                              <button 
+                              <button
                                 className="absolute top-1 right-1 text-[#e53e3e] hover:text-[#dc2626] text-[10px]"
                                 onClick={(e) => { e.stopPropagation(); removeDocument(doc.code); }}
                               >
@@ -1338,7 +1711,8 @@ export default function NewApplication() {
                       );
                     })}
                   </div>
-                  <input 
+                  )}
+                  <input
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
@@ -1403,177 +1777,201 @@ export default function NewApplication() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
-                    <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Certificate Type</div>
-                    <div className="text-[13.5px] font-bold text-[#1a2236]">{selectedCert ? `${getCertificateDisplay(certificateTypes.find(c => c.id === selectedCert)!).icon} ${certificateTypes.find(c => c.id === selectedCert)?.name}` : 'Not selected'}</div>
+                {isLoadingReview ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-[14px] text-[#6a7a9a]">Loading review data...</div>
                   </div>
-                  <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
-                    <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Exporter</div>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Company</span><span className="text-[#1a2236]">Lagos Traders Ltd</span></div>
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">TIN</span><span className="text-[#1a2236] font-mono">12345678901</span></div>
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Membership</span><span className="text-[10px] font-bold px-2 py-[2px] rounded-[10px] bg-[#d1fae5] text-[#065f46]">★ MEMBER</span></div>
+                ) : reviewData ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
+                        <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Certificate Type</div>
+                        <div className="text-[13.5px] font-bold text-[#1a2236]">{reviewData.application?.certificateType || 'NACCIMA'}</div>
+                      </div>
+                      <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
+                        <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Exporter</div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Company</span><span className="text-[#1a2236]">{reviewData.application?.shipperName || '—'}</span></div>
+                          <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">TIN</span><span className="text-[#1a2236] font-mono">{reviewData.application?.tin || '—'}</span></div>
+                          <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Membership</span><span className={`text-[10px] font-bold px-2 py-[2px] rounded-[10px] ${reviewData.membershipStatus === 'MEMBER' ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fef3c7] text-[#92400e]'}`}>{reviewData.membershipStatus === 'MEMBER' ? '★ MEMBER' : 'NON-MEMBER'}</span></div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4 mb-3">
-                  <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Shipment Details</div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Consignee</span><br/><span className="text-[#1a2236]">{formData.consigneeName || '—'}</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Destination</span><br/><span className="text-[#1a2236]">{formData.destinationCountry || '—'}</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Mode of Transport</span><br/><span className="text-[#1a2236]">{getTransportModeIcon(transportMode)} {getSelectedTransportMode()?.name || '—'}</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Carrier</span><br/><span className="text-[#1a2236]">{formData.carrier || '—'}</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Country of Mfg</span><br/><span className="text-[#1a2236]">{formData.countryOfManufacturing || '—'}</span></div>
-                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Bulk Qty (MT)</span><br/><span className="text-[#1a2236]">{formData.bulkProductQty || '—'} MT</span></div>
-                  </div>
-                </div>
-
-                <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Goods Line Items</div>
-                <div className="overflow-x-auto mb-4">
-                  <table className="w-full border-collapse text-[11px]">
-                    <thead>
-                      <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature</th>
-                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {goodsLineItems.map((item, index) => (
-                        <tr key={item.id} className="hover:bg-[#f8faff]">
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">{index + 1}</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]"><span className="font-mono font-bold text-[#1a4a8a]">{item.hsCode || '—'}</span></td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.description || '—'}</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.quantity || '—'}</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.grossWeight || '—'}</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.nomenclature || '—'}</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.value ? `$${item.value}` : '—'}</td>
-                        </tr>
-                      ))}
-                      {goodsLineItems.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="px-2 py-4 text-center text-[#6a7a9a]">No line items added</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Supporting Documents</div>
-                    <div className="space-y-1 mb-3">
-                      <div className="flex items-center gap-2 text-[11.5px] text-[#065f46]">✅ Bill of Lading — BOL_2026.pdf</div>
-                      <div className="flex items-center gap-2 text-[11.5px] text-[#e53e3e]">⚠️ Commercial Invoice — Not uploaded</div>
-                      <div className="flex items-center gap-2 text-[11.5px] text-[#e53e3e]">⚠️ Packing List — Not uploaded</div>
+                    <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4 mb-3">
+                      <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Shipment Details</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Consignee</span><br/><span className="text-[#1a2236]">{reviewData.application?.consignee || '—'}</span></div>
+                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Destination</span><br/><span className="text-[#1a2236]">{reviewData.application?.destinationCountry || '—'}</span></div>
+                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Mode of Transport</span><br/><span className="text-[#1a2236]">{getTransportModeIcon(reviewData.application?.modeOfTransport)} {reviewData.application?.modeOfTransport || '—'}</span></div>
+                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Carrier</span><br/><span className="text-[#1a2236]">{reviewData.application?.carrier || '—'}</span></div>
+                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Country of Mfg</span><br/><span className="text-[#1a2236]">{reviewData.application?.countryOfMfg || '—'}</span></div>
+                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Bulk Qty (MT)</span><br/><span className="text-[#1a2236]">{reviewData.application?.bulkQtyMt || '—'} MT</span></div>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <div className="bg-[#fef3c7] border border-[#fbbf24] rounded-[8px] p-4 mb-3">
-                      <div className="text-[11px] font-bold text-[#92400e] mb-2">💱 FOB Value Conversion (Certificate of Origin)</div>
-                      <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">${formData.totalValueFOB || '0.00'}</span></div>
-                      {isLoadingRate ? (
-                        <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="text-[#9ca3af]">Loading...</span></div>
-                      ) : exchangeRate ? (
-                        <>
-                          <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">₦{exchangeRate.rate.toFixed(2)}</span></div>
-                          <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>{new Date(exchangeRate.retrievedAt).toLocaleDateString()} (Source: {exchangeRate.source})</span></div>
-                          <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 mt-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">₦{((parseFloat(formData.totalValueFOB.replace(/,/g, '')) || 0) * exchangeRate.rate).toFixed(2)}</span></div>
-                        </>
-                      ) : (
-                        <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="text-[#e53e3e]">Failed to load</span></div>
-                      )}
-                    </div>
-                    <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
-                      <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
-                      {exchangeRate ? (
-                        <>
-                          <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee (0.11% × ₦{((parseFloat(formData.totalValueFOB.replace(/,/g, '')) || 0) * exchangeRate.rate).toFixed(2)})</span><span className="font-semibold text-[#1a2236]">₦{(((parseFloat(formData.totalValueFOB.replace(/,/g, '')) || 0) * exchangeRate.rate) * 0.0011).toFixed(2)}</span></div>
-                          <div className="flex justify-between text-[11px] mb-1"><span>Processing Fee</span><span className="font-semibold text-[#1a2236]">₦2,500.00</span></div>
-                          <div className="flex justify-between text-[11px] mb-1"><span>VAT (7.5%)</span><span className="font-semibold text-[#1a2236]">₦{(((((parseFloat(formData.totalValueFOB.replace(/,/g, '')) || 0) * exchangeRate.rate) * 0.0011) + 2500) * 0.075).toFixed(2)}</span></div>
-                          <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 mt-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">₦{(((((parseFloat(formData.totalValueFOB.replace(/,/g, '')) || 0) * exchangeRate.rate) * 0.0011) + 2500) * 1.075).toFixed(2)}</span></div>
-                        </>
-                      ) : (
-                        <div className="text-[11px] text-[#e53e3e]">Exchange rate not loaded</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
 
-                <div className="flex justify-end gap-2 pt-4 border-t border-[#edf0f5]">
-                  <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(2)}>← Back to Edit</button>
-                  <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => setStep(4)}>Submit & Proceed to Payment →</button>
-                </div>
+                    <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Goods Line Items</div>
+                    <div className="overflow-x-auto mb-4">
+                      <table className="w-full border-collapse text-[11px]">
+                        <thead>
+                          <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description</th>
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY</th>
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature</th>
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reviewData.application?.goods?.map((item: any, index: number) => (
+                            <tr key={item.id} className="hover:bg-[#f8faff]">
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">{index + 1}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]"><span className="font-mono font-bold text-[#1a4a8a]">{item.hsCode || '—'}</span></td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">{item.description || '—'}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">{item.quantity || '—'}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">{item.grossWeight || '—'}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">{item.nomenclature || '—'}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">{item.value ? `$${item.value}` : '—'}</td>
+                            </tr>
+                          ))}
+                          {(!reviewData.application?.goods || reviewData.application.goods.length === 0) && (
+                            <tr>
+                              <td colSpan={7} className="px-2 py-4 text-center text-[#6a7a9a]">No line items added</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Supporting Documents</div>
+                        <div className="space-y-1 mb-3">
+                          {reviewData.documents?.map((doc: any) => (
+                            <div key={doc.id} className="flex items-center gap-2 text-[11.5px] text-[#065f46]">✅ {doc.documentType} — {doc.fileName}</div>
+                          ))}
+                          {(!reviewData.documents || reviewData.documents.length === 0) && (
+                            <div className="text-[11.5px] text-[#6a7a9a]">No documents uploaded</div>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="bg-[#fef3c7] border border-[#fbbf24] rounded-[8px] p-4 mb-3">
+                          <div className="text-[11px] font-bold text-[#92400e] mb-2">💱 FOB Value Conversion (Certificate of Origin)</div>
+                          <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">${reviewData.application?.totalValueFob || '0.00'}</span></div>
+                          {isLoadingRate ? (
+                            <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="text-[#9ca3af]">Loading...</span></div>
+                          ) : exchangeRate ? (
+                            <>
+                              <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">₦{exchangeRate.rate.toFixed(2)}</span></div>
+                              <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>{new Date(exchangeRate.retrievedAt).toLocaleDateString()} (Source: {exchangeRate.source})</span></div>
+                              <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 mt-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">₦{((reviewData.application?.totalValueFob || 0) * exchangeRate.rate).toFixed(2)}</span></div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="text-[#e53e3e]">Failed to load</span></div>
+                          )}
+                        </div>
+                        <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
+                          <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
+                          {exchangeRate ? (
+                            <>
+                              <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee (0.11% × ₦{((reviewData.application?.totalValueFob || 0) * exchangeRate.rate).toFixed(2)})</span><span className="font-semibold text-[#1a2236]">₦{(((reviewData.application?.totalValueFob || 0) * exchangeRate.rate) * 0.0011).toFixed(2)}</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>Processing Fee</span><span className="font-semibold text-[#1a2236]">₦2,500.00</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>VAT (7.5%)</span><span className="font-semibold text-[#1a2236]">₦{(((((reviewData.application?.totalValueFob || 0) * exchangeRate.rate) * 0.0011) + 2500) * 0.075).toFixed(2)}</span></div>
+                              <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 mt-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">₦{(((((reviewData.application?.totalValueFob || 0) * exchangeRate.rate) * 0.0011) + 2500) * 1.075).toFixed(2)}</span></div>
+                            </>
+                          ) : (
+                            <div className="text-[11px] text-[#e53e3e]">Exchange rate not loaded</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {reviewData.validationErrors && reviewData.validationErrors.length > 0 && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mb-4">
+                        <span>⚠️</span>
+                        <span>{reviewData.validationErrors.join(', ')}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-4 border-t border-[#edf0f5]">
+                      <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(2)}>← Back to Edit</button>
+                      <button
+                        className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => setStep(4)}
+                        disabled={!reviewData.canSubmit}
+                      >
+                        {reviewData.canSubmit ? 'Submit & Proceed to Payment →' : 'Cannot Submit'}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
               </>
             )}
             {step === 4 && (
-              <>
-                <div className="flex flex-col items-center pt-6">
-                  <div className="text-[16px] font-bold text-[#1a2236] mb-1 text-center">Secure Payment</div>
-                  <div className="text-[11.5px] text-[#6a7a9a] mb-5 text-center">Step 4 of 4 — Application NACC-2026-00422 submitted. Complete payment to begin processing.</div>
-                  <div className="flex items-center gap-2 mb-3 max-w-[620px] w-full">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
-                      <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>
-                    </div>
-                    <div className="h-[2px] flex-1 bg-[#059669]"></div>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
-                      <span className="text-[10px] font-semibold text-[#059669]">Application Details</span>
-                    </div>
-                    <div className="h-[2px] flex-1 bg-[#059669]"></div>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
-                      <span className="text-[10px] font-semibold text-[#059669]">Review & Submit</span>
-                    </div>
-                    <div className="h-[2px] flex-1 bg-[#059669]"></div>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="w-[24px] h-[24px] rounded-full border-2 border-[#3a7bd5] bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
-                      <span className="text-[10px] font-semibold text-[#3a7bd5]">Payment</span>
-                    </div>
-                  </div>
-                  <div className="bg-white border border-[#dde3ee] rounded-[10px] shadow-[0_2px_16px_rgba(0,0,0,0.1)] w-full max-w-[400px]">
-                    <div className="px-5 py-4 border-b border-[#edf0f5]">
-                      <div className="text-[14px] font-bold text-[#0ba4db] mb-1">Paystack</div>
-                      <div className="text-[10.5px] text-[#6a7a9a] opacity-80">Lagos Traders Ltd — lagos@traders.ng</div>
-                      <div className="text-[24px] font-bold text-[#1a2236] mt-2">₦ 12,031.88</div>
-                      <div className="text-[10.5px] text-[#6a7a9a]">Ref: NACC-PAY-2026-00422 &nbsp;|&nbsp; NACCIMA Certificate Fee</div>
-                    </div>
-                    <div className="p-5">
-                      <div className="flex gap-2 mb-4">
-                        <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#0ba4db] text-white text-center">💳 Card</div>
-                        <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">🏦 Bank Transfer</div>
-                        <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">📱 USSD</div>
-                      </div>
-                      <div className="flex flex-col gap-3 mb-4">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[11px] font-semibold text-[#374151]">Card Number</label>
-                          <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="0000  0000  0000  0000" />
+                  <>
+                    <div className="flex flex-col items-center pt-6">
+                      <div className="text-[16px] font-bold text-[#1a2236] mb-1 text-center">Secure Payment</div>
+                      <div className="text-[11.5px] text-[#6a7a9a] mb-5 text-center">Step 4 of 4 — Application NACC-2026-00422 submitted. Complete payment to begin processing.</div>
+                      <div className="flex items-center gap-2 mb-3 max-w-[620px] w-full">
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                          <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>
                         </div>
-                        <div className="flex gap-3">
-                          <div className="flex-1 flex flex-col gap-1">
-                            <label className="text-[11px] font-semibold text-[#374151]">Expiry Date</label>
-                            <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="MM / YY" />
-                          </div>
-                          <div className="flex-1 flex flex-col gap-1">
-                            <label className="text-[11px] font-semibold text-[#374151]">CVV</label>
-                            <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="•••" />
-                          </div>
+                        <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                          <span className="text-[10px] font-semibold text-[#059669]">Application Details</span>
+                        </div>
+                        <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                          <span className="text-[10px] font-semibold text-[#059669]">Review & Submit</span>
+                        </div>
+                        <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#3a7bd5] bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
+                          <span className="text-[10px] font-semibold text-[#3a7bd5]">Payment</span>
                         </div>
                       </div>
-                      <button className="w-full px-4 py-3 rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#0ba4db] text-white hover:bg-[#0984b8]">Pay ₦12,031.88</button>
-                      <div className="text-[10.5px] text-[#6a7a9a] text-center mt-3">🔒 Secured by Paystack — PCI DSS Compliant</div>
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-[#9ca3af] text-center mt-3">
-                    Having trouble? <span className="text-[#3a7bd5] cursor-pointer">Return to application</span> — your data is saved as PAYMENT PENDING.
-                  </div>
+                      <div className="bg-white border border-[#dde3ee] rounded-[10px] shadow-[0_2px_16px_rgba(0,0,0,0.1)] w-full max-w-[400px]">
+                        <div className="px-5 py-4 border-b border-[#edf0f5]">
+                          <div className="text-[14px] font-bold text-[#0ba4db] mb-1">Paystack</div>
+                          <div className="text-[10.5px] text-[#6a7a9a] opacity-80">Lagos Traders Ltd — lagos@traders.ng</div>
+                          <div className="text-[24px] font-bold text-[#1a2236] mt-2">₦ 12,031.88</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">Ref: NACC-PAY-2026-00422 &nbsp;|&nbsp; NACCIMA Certificate Fee</div>
+                        </div>
+                        <div className="p-5">
+                          <div className="flex gap-2 mb-4">
+                            <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#0ba4db] text-white text-center">💳 Card</div>
+                            <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">🏦 Bank Transfer</div>
+                            <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">📱 USSD</div>
+                          </div>
+                          <div className="flex flex-col gap-3 mb-4">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[11px] font-semibold text-[#374151]">Card Number</label>
+                              <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="0000  0000  0000  0000" />
+                            </div>
+                            <div className="flex gap-3">
+                                <div className="flex-1 flex flex-col gap-1">
+                                  <label className="text-[11px] font-semibold text-[#374151]">Expiry Date</label>
+                                  <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="MM / YY" />
+                                </div>
+                                <div className="flex-1 flex flex-col gap-1">
+                                  <label className="text-[11px] font-semibold text-[#374151]">CVV</label>
+                                  <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="•••" />
+                                </div>
+                              </div>
+                            </div>
+                            <button className="w-full px-4 py-3 rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#0ba4db] text-white hover:bg-[#0984b8]">Pay ₦12,031.88</button>
+                            <div className="text-[10.5px] text-[#6a7a9a] text-center mt-3">🔒 Secured by Paystack — PCI DSS Compliant</div>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-[#9ca3af] text-center mt-3">
+                        Having trouble? <span className="text-[#3a7bd5] cursor-pointer">Return to application</span> — your data is saved as PAYMENT PENDING.
+                      </div>
                 </div>
               </>
             )}
@@ -1581,6 +1979,7 @@ export default function NewApplication() {
         </div>
       </div>
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
+      <SuccessModal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)} message={successMessage} />
     </div>
   );
 }
