@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
+import { apiFetch, getBaseUrl } from '@/utils/api';
 
 interface TimelineEvent {
   event: string;
@@ -74,23 +75,16 @@ export default function ApplicationDetail() {
     setError(null);
     
     try {
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        router.push('/');
-        return;
-      }
-
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         setError('API URL not configured');
         return;
       }
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/tracking`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/tracking`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -261,9 +255,9 @@ export default function ApplicationDetail() {
                         <span className="text-[#6a7a9a] font-medium">Destination Port</span>
                         <span className="text-[#1a2236] font-medium">{trackingData.shipment.destinationPort}</span>
                         <span className="text-[#6a7a9a] font-medium">FOB Value (USD)</span>
-                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.valueCurrency} {trackingData.shipment.totalValueFob.toLocaleString()}</span>
+                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.valueCurrency} {trackingData?.shipment?.totalValueFob?.toLocaleString()}</span>
                         <span className="text-[#6a7a9a] font-medium">Exchange Rate</span>
-                        <span className="text-[#1a2236] font-medium">₦{trackingData.shipment.exchangeRate.toLocaleString()}/USD</span>
+                        <span className="text-[#1a2236] font-medium">₦{trackingData?.shipment?.exchangeRate?.toLocaleString()}/USD</span>
                       </div>
                     </div>
 
@@ -271,7 +265,7 @@ export default function ApplicationDetail() {
                       <div className="text-[13px] font-bold text-[#1e40af] uppercase tracking-[0.5px] pb-2">Payment</div>
                       <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[13px]">
                         <span className="text-[#6a7a9a] font-medium">Amount Paid</span>
-                        <span className="text-[#065f46] font-medium">{trackingData.payment.currency} {trackingData.payment.amount.toLocaleString()}</span>
+                        <span className="text-[#065f46] font-medium">{trackingData.payment.currency} {trackingData?.payment?.amount?.toLocaleString()}</span>
                         <span className="text-[#6a7a9a] font-medium">Payment Reference</span>
                         <span className="text-[#1a2236] font-medium font-mono">{trackingData.payment.paymentReference}</span>
                       </div>

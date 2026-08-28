@@ -6,6 +6,7 @@ import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { FaPlus } from "react-icons/fa";
 import { useRouter } from 'next/navigation';
+import { apiFetch, getBaseUrl } from '@/utils/api';
 
 interface Application {
   id: string;
@@ -54,23 +55,16 @@ export default function ExporterDashboard() {
     setIsLoadingApps(true);
     
     try {
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        router.push('/');
-        return;
-      }
-
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         console.error('API URL not configured');
         return;
       }
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 

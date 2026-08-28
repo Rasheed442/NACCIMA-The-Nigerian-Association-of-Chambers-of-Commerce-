@@ -29,6 +29,7 @@ interface AuthContextType {
   accessToken: string | null;
   login: () => void;
   logout: () => void;
+  refreshAccessToken: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -187,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, accessToken, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, accessToken, login, logout, refreshAccessToken }}>
       {children}
     </AuthContext.Provider>
   );

@@ -8,6 +8,7 @@ import LogoutModal from '@/components/LogoutModal';
 import SuccessModal from '@/components/SuccessModal';
 import { FiArrowRight } from "react-icons/fi";
 import { ChevronDown, Check } from "lucide-react";
+import { apiFetch, getBaseUrl } from '@/utils/api';
 
 interface CertificateType {
   id: string;
@@ -116,6 +117,7 @@ export default function NewApplication() {
   const consigneeAddressRef = useRef<HTMLInputElement>(null);
   const carrierRef = useRef<HTMLInputElement>(null);
   const destinationCountryRef = useRef<HTMLInputElement>(null);
+  const destinationPortRef = useRef<HTMLInputElement>(null);
   const countryOfManufacturingRef = useRef<HTMLInputElement>(null);
   const totalValueFOBRef = useRef<HTMLInputElement>(null);
   const bulkProductQtyRef = useRef<HTMLInputElement>(null);
@@ -145,6 +147,7 @@ export default function NewApplication() {
   const [isCreatingApplication, setIsCreatingApplication] = useState(false);
   const [isSavingApplication, setIsSavingApplication] = useState(false);
   const [isSavingGoods, setIsSavingGoods] = useState(false);
+  const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
   const [selectedTransportModeDetails, setSelectedTransportModeDetails] = useState<TransportMode | null>(null);
 
   // Application form fields
@@ -201,21 +204,15 @@ export default function NewApplication() {
     setCertError('');
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
-      }
-
-      const response = await fetch(`${baseUrl}/api/v1/certificates/types`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/types`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -237,14 +234,9 @@ export default function NewApplication() {
     setIsLoadingFields(true);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
-      }
-
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
       }
 
       // Get the certificate type code from the selected certificate
@@ -253,11 +245,10 @@ export default function NewApplication() {
         throw new Error('Certificate type not found.');
       }
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/reference/types/${selectedCert.code}/fields`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/types/${selectedCert.code}/fields`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -277,21 +268,15 @@ export default function NewApplication() {
 
   const fetchTransportModes = async () => {
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         return;
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        return;
-      }
-
-      const response = await fetch(`${baseUrl}/api/v1/certificates/reference/transport-modes`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/transport-modes`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -308,21 +293,15 @@ export default function NewApplication() {
   const fetchCountries = async () => {
     setIsLoadingCountries(true);
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         return;
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        return;
-      }
-
-      const response = await fetch(`${baseUrl}/api/v1/reference/countries`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/reference/countries`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -347,21 +326,15 @@ export default function NewApplication() {
     setIsSearchingHs(true);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         return;
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        return;
-      }
-
-      const response = await fetch(`${baseUrl}/api/v1/certificates/hs-codes?query=${encodeURIComponent(query)}`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/hs-codes?query=${encodeURIComponent(query)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -440,21 +413,13 @@ export default function NewApplication() {
     setValidationError(null);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
-      }
-
-      const response = await fetch(`${baseUrl}/api/v1/certificates/reference/transport-modes/${code}`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/transport-modes/${code}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
       });
 
       const result = await response.json();
@@ -481,25 +446,19 @@ export default function NewApplication() {
     setIsSavingTransportMode(true);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
-      }
-
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
       }
 
       const payload = {
         modeOfTransport: code,
       };
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -601,6 +560,7 @@ export default function NewApplication() {
         consigneeAddress: consigneeAddressRef,
         carrier: carrierRef,
         destinationCountry: destinationRef,
+        destinationPort: destinationPortRef,
         countryOfManufacturing: manufacturingRef,
         totalValueFOB: totalValueFOBRef,
         bulkProductQty: bulkProductQtyRef,
@@ -635,14 +595,9 @@ export default function NewApplication() {
     setIsCreatingApplication(true);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
-      }
-
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
       }
 
       const selectedCertificateType = certificateTypes.find(c => c.id === selectedCert);
@@ -650,11 +605,10 @@ export default function NewApplication() {
         throw new Error('Selected certificate type not found.');
       }
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           certificateType: selectedCertificateType.code,
@@ -730,17 +684,12 @@ export default function NewApplication() {
     setValidationError(null);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
-      }
-
-      const payload = {
+      const payload: any = {
         importerEmail: formData.importerEmail,
         consignee: formData.consigneeName,
         consigneeAddress: formData.consigneeAddress,
@@ -749,14 +698,16 @@ export default function NewApplication() {
         destinationCountry: formData.destinationCountry,
         destinationPort: formData.destinationPort,
         countryOfMfg: formData.countryOfManufacturing,
-        bulkQtyMt: formData.bulkProductQty ? parseFloat(formData.bulkProductQty) : 0,
       };
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+      if (formData.bulkProductQty && formData.bulkProductQty.trim() !== '' && !isNaN(parseFloat(formData.bulkProductQty))) {
+        payload.bulkQtyMt = parseFloat(formData.bulkProductQty);
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -790,14 +741,9 @@ export default function NewApplication() {
     setValidationError(null);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
-      }
-
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
       }
 
       const itemsPayload = {
@@ -813,11 +759,10 @@ export default function NewApplication() {
         })),
       };
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify(itemsPayload),
       });
@@ -856,10 +801,10 @@ export default function NewApplication() {
 
     // Validate Goods Line Items
     const hasEmptyLineItems = goodsLineItems.some(item =>
-      !item.hsCode || !item.description || !item.quantity || !item.grossWeight
+      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight
     );
     if (hasEmptyLineItems) {
-      setValidationError('Please fill in all required fields in the Goods/Items section (HS Code, Description, Quantity, Gross Weight)');
+      setValidationError('Please fill in all required fields in the Goods/Items section (HS Code, Description, Marks/No., Quantity, Gross Weight)');
       return;
     }
 
@@ -879,21 +824,15 @@ export default function NewApplication() {
   const fetchExchangeRate = async () => {
     setIsLoadingRate(true);
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         return;
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        return;
-      }
-
-      const response = await fetch(`${baseUrl}/api/v1/integration/fx/usd-ngn`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/integration/fx/usd-ngn`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
@@ -919,21 +858,13 @@ export default function NewApplication() {
     setValidationError(null);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
       }
 
-      const accessToken = localStorage.getItem('accessToken');
-      if (!accessToken) {
-        throw new Error('Access token not found. Please log in again.');
-      }
-
-      const response = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
       });
 
       const result = await response.json();
@@ -948,6 +879,52 @@ export default function NewApplication() {
       setValidationError('Failed to fetch review data. Please try again.');
     } finally {
       setIsLoadingReview(false);
+    }
+  };
+
+  const submitApplication = async () => {
+    if (!applicationId) {
+      setValidationError('Application ID not found');
+      return false;
+    }
+
+    setIsSubmittingApplication(true);
+    setValidationError(null);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        // Redirect to Paystack checkout URL in current tab
+        if (result.data.checkoutUrl) {
+          window.location.href = result.data.checkoutUrl;
+        } else {
+          setValidationError('Payment checkout URL not received');
+          return false;
+        }
+        return true;
+      } else {
+        setValidationError(result.message || 'Failed to submit application');
+        return false;
+      }
+    } catch (err) {
+      console.error('Failed to submit application:', err);
+      setValidationError('Failed to submit application. Please try again.');
+      return false;
+    } finally {
+      setIsSubmittingApplication(false);
     }
   };
 
@@ -1006,7 +983,7 @@ export default function NewApplication() {
     setUploadError(null);
 
     try {
-      const baseUrl = getBaseApiUrl();
+      const baseUrl = getBaseUrl();
       if (!baseUrl) {
         setUploadError('API URL not configured');
         return;
@@ -1018,11 +995,8 @@ export default function NewApplication() {
 
       console.log('Uploading document:', { docCode, fileName: file.name, fileSize: file.size });
 
-      const uploadResponse = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents/upload`, {
+      const uploadResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents/upload`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
         body: formData,
       });
 
@@ -1031,11 +1005,10 @@ export default function NewApplication() {
 
       if (uploadResponse.ok && uploadResult.data) {
         // After successful upload, save the document via PUT endpoint
-        const saveResponse = await fetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
+        const saveResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             documentType: uploadResult.data.documentType,
@@ -1382,6 +1355,20 @@ export default function NewApplication() {
                       {formErrors.destinationCountry && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationCountry}</div>}
                     </div>
                     <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-semibold text-[#374151]">Destination Port</label>
+                      <input
+                        ref={destinationPortRef}
+                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.destinationPort ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                        placeholder="e.g., Tema"
+                        value={formData.destinationPort}
+                        onChange={(e) => {
+                          setFormData({...formData, destinationPort: e.target.value});
+                          if (formErrors.destinationPort) setFormErrors({...formErrors, destinationPort: ''});
+                        }}
+                      />
+                      {formErrors.destinationPort && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationPort}</div>}
+                    </div>
+                    <div className="flex flex-col gap-1">
                       <label className="text-[11px] font-semibold text-[#374151]">Country of Manufacturing {isFieldRequired('COUNTRY_OF_MANUFACTURING') && <span className="text-[#e53e3e]">*</span>}</label>
                       <div ref={manufacturingRef as any} className="relative">
                         <button
@@ -1439,7 +1426,7 @@ export default function NewApplication() {
                       <input
                         ref={bulkProductQtyRef}
                         className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.bulkProductQty ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                        placeholder="Metric tonnes"
+                        placeholder="300"
                         value={formData.bulkProductQty}
                         onChange={(e) => {
                           setFormData({...formData, bulkProductQty: e.target.value});
@@ -1448,22 +1435,6 @@ export default function NewApplication() {
                       />
                       {formErrors.bulkProductQty && <div className="text-[10px] text-[#e53e3e]">{formErrors.bulkProductQty}</div>}
                     </div>
-                    {isFieldApplicable('MARKS_NO') && (
-                      <div className="flex flex-col gap-1 col-span-2">
-                        <label className="text-[11px] font-semibold text-[#374151]">Marks / No. {isFieldRequired('MARKS_NO') && <span className="text-[#e53e3e]">*</span>}</label>
-                        <input
-                          ref={marksNoRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.marksNo ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          placeholder="Shipping marks & package numbers"
-                          value={formData.marksNo}
-                          onChange={(e) => {
-                            setFormData({...formData, marksNo: e.target.value});
-                            if (formErrors.marksNo) setFormErrors({...formErrors, marksNo: ''});
-                          }}
-                        />
-                        {formErrors.marksNo && <div className="text-[10px] text-[#e53e3e]">{formErrors.marksNo}</div>}
-                      </div>
-                    )}
                     {isFieldApplicable('ECOWAS_NUMBER') && (
                       <div className="flex flex-col gap-1">
                         <label className="text-[11px] font-semibold text-[#374151]">ECOWAS Number {isFieldRequired('ECOWAS_NUMBER') && <span className="text-[#e53e3e]">*</span>}</label>
@@ -1553,11 +1524,11 @@ export default function NewApplication() {
                       <thead>
                         <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                          {isFieldApplicable('HS_CODE') && <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code {isFieldRequired('HS_CODE') && <span className="text-[#e53e3e]">*</span>}</th>}
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description {isFieldRequired('DESCRIPTION') && <span className="text-[#e53e3e]">*</span>}</th>
-                          {isFieldApplicable('MARKS_NO') && <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No. {isFieldRequired('MARKS_NO') && <span className="text-[#e53e3e]">*</span>}</th>}
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY {isFieldRequired('QUANTITY') && <span className="text-[#e53e3e]">*</span>}</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt. {isFieldRequired('GROSS_WEIGHT') && <span className="text-[#e53e3e]">*</span>}</th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No. <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt. <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature {isFieldRequired('NOMENCLATURE') && <span className="text-[#e53e3e]">*</span>}</th>
                           {isFieldApplicable('UNIT') && <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Unit {isFieldRequired('UNIT') && <span className="text-[#e53e3e]">*</span>}</th>}
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) {isFieldRequired('VALUE') && <span className="text-[#e53e3e]">*</span>}</th>
@@ -1568,16 +1539,14 @@ export default function NewApplication() {
                         {goodsLineItems.map((item, index) => (
                           <tr key={item.id} className="hover:bg-[#f8faff]">
                             <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
-                            {isFieldApplicable('HS_CODE') && (
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                  value={item.hsCode}
-                                  onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
-                                  placeholder="Code"
-                                />
-                              </td>
-                            )}
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                value={item.hsCode}
+                                onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
+                                placeholder="Code"
+                              />
+                            </td>
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
                               <input
                                 className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
@@ -1586,16 +1555,14 @@ export default function NewApplication() {
                                 placeholder="Description"
                               />
                             </td>
-                            {isFieldApplicable('MARKS_NO') && (
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                  value={item.marksNo}
-                                  onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
-                                  placeholder="Marks"
-                                />
-                              </td>
-                            )}
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                value={item.marksNo}
+                                onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
+                                placeholder="Marks"
+                              />
+                            </td>
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
                               <input
                                 className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
@@ -1900,17 +1867,18 @@ export default function NewApplication() {
                       <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(2)}>← Back to Edit</button>
                       <button
                         className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => setStep(4)}
-                        disabled={!reviewData.canSubmit}
+                        onClick={() => submitApplication()}
+                        disabled={!reviewData.canSubmit || isSubmittingApplication}
                       >
-                        {reviewData.canSubmit ? 'Submit & Proceed to Payment →' : 'Cannot Submit'}
+                        {isSubmittingApplication ? 'Submitting...' : (reviewData.canSubmit ? 'Submit & Proceed to Payment →' : 'Cannot Submit')}
                       </button>
                     </div>
                   </>
                 ) : null}
               </>
             )}
-            {step === 4 && (
+            {/* Step 4 - Payment - Commented out, now redirects directly to Paystack */}
+            {/* {step === 4 && (
                   <>
                     <div className="flex flex-col items-center pt-6">
                       <div className="text-[16px] font-bold text-[#1a2236] mb-1 text-center">Secure Payment</div>
@@ -1974,7 +1942,7 @@ export default function NewApplication() {
                       </div>
                 </div>
               </>
-            )}
+            )} */}
           </div>
         </div>
       </div>
