@@ -22,6 +22,8 @@ export default function ExporterDashboard() {
   const [showWelcomeToast, setShowWelcomeToast] = useState(false);
   const [recentApplications, setRecentApplications] = useState<Application[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(true);
+  const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -41,6 +43,7 @@ export default function ExporterDashboard() {
 
   useEffect(() => {
     fetchRecentApplications();
+    fetchCompanyProfile();
   }, []);
 
   const getBaseApiUrl = () => {
@@ -49,6 +52,34 @@ export default function ExporterDashboard() {
       return '';
     }
     return rawBaseUrl.replace(/\/$/, '');
+  };
+
+  const fetchCompanyProfile = async () => {
+    setIsLoadingProfile(true);
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        console.error('API URL not configured');
+        return;
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/companies/profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setCompanyProfile(result.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch company profile:', err);
+    } finally {
+      setIsLoadingProfile(false);
+    }
   };
 
   const fetchRecentApplications = async () => {
@@ -142,11 +173,13 @@ export default function ExporterDashboard() {
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
-            <div className="text-[22px] font-bold text-[#1a2236] mb-[3px]">Welcome, Lagos Traders Ltd</div>
-            <div className="text-[13px] text-[#6a7a9a] mb-[18px]">TIN: 12345678901 &nbsp;|&nbsp; Last login: Today, 10:24 AM</div>
-            <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
-              ★ &nbsp;NACCIMA Member &nbsp;—&nbsp; Member rates apply &nbsp;|&nbsp; Valid until: 31 Dec 2026
-            </div>
+            <div className="text-[22px] font-bold text-[#1a2236] mb-[3px]">Welcome, {companyProfile?.companyName || 'Loading...'}</div>
+            <div className="text-[13px] text-[#6a7a9a] mb-[18px]">TIN: {companyProfile?.tin || 'Loading...'} &nbsp;|&nbsp; Last login: Today, 10:24 AM</div>
+            {companyProfile && companyProfile.membershipActive && (
+              <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+                ★NACCIMA Member rates apply
+              </div>
+            )}
             <div className="flex gap-3 mb-[18px]">
               <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#2c5282] mb-[2px]">5</div>
