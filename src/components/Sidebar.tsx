@@ -110,7 +110,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
         <span className="text-[13px] w-[15px] text-center">🔍</span> Under Review
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
-      <div className="px-[16px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/issued-certs' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/issued-certs')}>
         <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{issuedCount}</span>}
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium text-[#8a9aba] uppercase tracking-[0.8px] pt-3">Account</div>

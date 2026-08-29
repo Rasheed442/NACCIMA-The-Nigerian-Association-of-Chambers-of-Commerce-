@@ -8,21 +8,30 @@ import LogoutModal from '@/components/LogoutModal';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 import { ClipLoader } from 'react-spinners';
 
-interface Document {
+interface Certificate {
   id: string;
   applicationId: string;
-  companyId: string;
-  documentType: string;
-  fileName: string;
-  fileUrl: string;
-  uploadedBy: string;
-  uploadedAt: string;
+  certificateNumber: string;
+  verificationCode: string;
+  certificateType: string;
+  status: string;
+  issuedAt: string;
+  issuedBy: string;
+  shipperName: string;
+  shipperAddress: string;
+  consignee: string;
+  consigneeAddress: string;
+  destinationCountry: string;
+  destinationPort: string;
+  modeOfTransport: string;
+  pdfUrl: string;
+  voided: boolean;
 }
 
-export default function MyDocuments() {
+export default function IssuedCerts() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +45,10 @@ export default function MyDocuments() {
   }, []);
 
   useEffect(() => {
-    fetchDocuments();
+    fetchCertificates();
   }, []);
 
-  const fetchDocuments = async () => {
+  const fetchCertificates = async () => {
     setIsLoading(true);
     setError(null);
     
@@ -68,31 +77,30 @@ export default function MyDocuments() {
         setIsLoading(false);
         setIsFetchingMore(true);
         
-        // Fetch documents for each application progressively
+        // Fetch certificates for each application progressively
         for (const app of apps) {
           try {
-            const docsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${app.id}/documents`, {
+            const certResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${app.id}/certificate`, {
               method: 'GET',
               headers: {
                 'Content-Type': 'application/json',
               },
             });
 
-            const docsResult = await docsResponse.json();
+            const certResult = await certResponse.json();
 
-            if (docsResponse.ok && docsResult.data) {
-              const docs = Array.isArray(docsResult.data) ? docsResult.data : [docsResult.data];
-              setDocuments(prev => {
-                const newDocuments = [...prev, ...docs];
+            if (certResponse.ok && certResult.data) {
+              setCertificates(prev => {
+                const newCertificates = [...prev, certResult.data];
                 // Hide loading more indicator once we have at least 10 items
-                if (newDocuments.length >= 10) {
+                if (newCertificates.length >= 10) {
                   setIsFetchingMore(false);
                 }
-                return newDocuments;
+                return newCertificates;
               });
             }
           } catch (err) {
-            console.error(`Failed to fetch documents for app ${app.id}:`, err);
+            console.error(`Failed to fetch certificate for app ${app.id}:`, err);
           }
         }
         
@@ -102,8 +110,8 @@ export default function MyDocuments() {
         setIsLoading(false);
       }
     } catch (err) {
-      console.error('Failed to fetch documents:', err);
-      setError('Failed to fetch documents');
+      console.error('Failed to fetch certificates:', err);
+      setError('Failed to fetch certificates');
       setIsLoading(false);
     }
   };
@@ -114,32 +122,34 @@ export default function MyDocuments() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const getDocumentTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      'COMMERCIAL_INVOICE': 'Commercial Invoice',
-      'PACKING_LIST': 'Packing List',
-      'BILL_OF_LADING': 'Bill of Lading',
-      'CERTIFICATE_OF_ORIGIN': 'Certificate of Origin',
-      'INSURANCE_CERTIFICATE': 'Insurance Certificate',
-      'OTHER': 'Other',
-    };
-    return labels[type] || type;
+  const handleDownload = (pdfUrl: string) => {
+    window.open(pdfUrl, '_blank');
   };
 
-  const handleDownload = (fileUrl: string) => {
-    window.open(fileUrl, '_blank');
+  const handleView = (applicationId: string) => {
+    router.push(`/my-applications/${applicationId}`);
   };
 
-  const totalPages = Math.ceil(documents.length / itemsPerPage);
+  const totalPages = Math.ceil(certificates.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = documents.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = certificates.slice(indexOfFirstItem, indexOfLastItem);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  const getStatusBadge = (status: string, voided: boolean) => {
+    if (voided) {
+      return <span className="inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] whitespace-nowrap bg-[#fee2e2] text-[#9b1c1c]">Voided</span>;
+    }
+    if (status === 'VALID') {
+      return <span className="inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] whitespace-nowrap bg-[#d1fae5] text-[#065f46]">Valid</span>;
+    }
+    return <span className="inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] whitespace-nowrap bg-[#f3f4f6] text-[#6b7280]">{status}</span>;
   };
 
   return (
@@ -150,45 +160,59 @@ export default function MyDocuments() {
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             <div className="flex items-center justify-between my-[18px]">
-              <div className="text-[20px] font-medium text-[#1a2236]">My Documents</div>
+              <div className="text-[20px] font-medium text-[#1a2236]">Issued Certificates</div>
             </div>
 
             <div className="overflow-x-auto pt-4 overflow-y-auto rounded-lg border border-[#dde3ee]">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <ClipLoader color="#1a4a8a" size={40} />
-                  <div className="text-[#6a7a9a] mt-3 text-[12px]">Loading documents...</div>
+                  <div className="text-[#6a7a9a] mt-3 text-[12px]">Loading certificates...</div>
                 </div>
               ) : error ? (
                 <div className="text-center py-8 text-[#e53e3e]">{error}</div>
-              ) : documents.length === 0 && !isFetchingMore ? (
-                <div className="text-center py-8 text-[#6a7a9a]">No documents found</div>
+              ) : certificates.length === 0 && !isFetchingMore ? (
+                <div className="text-center py-8 text-[#6a7a9a]">No certificates found</div>
               ) : (
                 <>
                   <table className="w-full border-collapse text-[12px]">
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-[#f1f4f9] text-[12px] text-[#4a5a7a] font-semibold">
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Document Type</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">File Name</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Application ID</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Uploaded At</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate #</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Verification Code</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate Type</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Shipper</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Consignee</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Destination</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Issued At</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Status</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {currentItems.map((doc) => (
-                      <tr key={doc.id} className="hover:bg-[#f8faff] text-[12px] transition-colors">
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getDocumentTypeLabel(doc.documentType)}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{doc.fileName}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono text-[#1a4a8a]">{doc.applicationId}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(doc.uploadedAt)}</td>
+                    {currentItems.map((cert) => (
+                      <tr key={cert.id} className="hover:bg-[#f8faff] text-[12px] transition-colors">
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono text-[#1a4a8a]">{cert.certificateNumber}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono text-[10px] text-[#6a7a9a]">{cert.verificationCode}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.certificateType}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.shipperName}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.consignee}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.destinationCountry}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(cert.issuedAt)}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getStatusBadge(cert.status, cert.voided)}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
                           <div className="flex gap-[5px]">
                             <button 
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
-                              onClick={() => handleDownload(doc.fileUrl)}
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
+                              onClick={() => handleDownload(cert.pdfUrl)}
                             >
                               Download
+                            </button>
+                            <button 
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
+                              onClick={() => handleView(cert.applicationId)}
+                            >
+                              View
                             </button>
                           </div>
                         </td>
@@ -199,16 +223,16 @@ export default function MyDocuments() {
                   {isFetchingMore && (
                     <div className="flex flex-col items-center justify-center py-8">
                       <ClipLoader color="#1a4a8a" size={20} />
-                      <div className="text-[#6a7a9a] mt-2 text-[11px]">Loading more documents...</div>
+                      <div className="text-[#6a7a9a] mt-2 text-[11px]">Loading more certificates...</div>
                     </div>
                   )}
                 </>
               )}
             </div>
-            {documents.length > 0 && (
+            {certificates.length > 0 && (
               <div className="flex items-center justify-between mt-4">
                 <div className="text-[11px] text-[#6a7a9a]">
-                  Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, documents.length)} of {documents.length} documents
+                  Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, certificates.length)} of {certificates.length} certificates
                 </div>
                 <div className="flex items-center gap-2">
                   <button 
