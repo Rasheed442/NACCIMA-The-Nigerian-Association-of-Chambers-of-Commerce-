@@ -8,15 +8,13 @@ import LogoutModal from '../components/LogoutModal';
 import DashboardScreen from '../components/screens/DashboardScreen';
 
 function AppContent() {
-  const { isAuthenticated, login, logout } = useAuth();
-  const [activeScreen, setActiveScreen] = useState('s-login');
+  const { isAuthenticated, role, login, logout } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
     const handleConfirmLogout = () => {
       logout();
-      setActiveScreen('s-login');
       setShowLogoutModal(false);
     };
 
@@ -58,7 +56,6 @@ function AppContent() {
     
     // Clear auth data and redirect
     logout();
-    setActiveScreen('s-login');
     setShowLogoutModal(false);
     router.push('/login');
   };
@@ -69,14 +66,28 @@ function AppContent() {
     return null;
   }
 
-  // If authenticated, show navbar and dashboard screens
+  // Redirect based on role
+  useEffect(() => {
+    if (isAuthenticated && role) {
+      switch (role) {
+        case 'admin':
+          router.push('/admin');
+          break;
+        case 'vetting':
+          router.push('/vetting');
+          break;
+        case 'exporter':
+        default:
+          router.push('/exporter-dashboard');
+          break;
+      }
+    }
+  }, [isAuthenticated, role, router]);
+
+  // Show loading while redirecting
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100%' }}>
-      <Navbar activeScreen={activeScreen} onScreenChange={setActiveScreen} />
-      <div id="main-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', overflow: 'auto' }}>
-        <DashboardScreen activeScreen={activeScreen} onScreenChange={setActiveScreen} />
-        <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
-      </div>
+    <div className="flex items-center justify-center h-screen">
+      <div className="text-[#6a7a9a]">Redirecting...</div>
     </div>
   );
 }

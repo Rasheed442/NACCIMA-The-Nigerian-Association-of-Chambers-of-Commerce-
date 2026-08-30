@@ -27,6 +27,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   user: UserData | null;
   accessToken: string | null;
+  role: string | null;
   login: () => void;
   logout: () => void;
   refreshAccessToken: () => Promise<boolean>;
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<UserData | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Check for existing tokens on mount
       const storedToken = localStorage.getItem('accessToken');
       const storedUserData = localStorage.getItem('userData');
+      const storedRole = localStorage.getItem('userRole');
 
       if (storedToken && storedUserData) {
         try {
@@ -53,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (expiresAt && new Date(expiresAt) > new Date()) {
             setAccessToken(storedToken);
             setUser(JSON.parse(storedUserData));
+            setRole(storedRole || 'exporter');
             setIsAuthenticated(true);
           } else {
             // Token expired, try to refresh
@@ -60,9 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (refreshSuccess) {
               const newToken = localStorage.getItem('accessToken');
               const newUserData = localStorage.getItem('userData');
+              const newRole = localStorage.getItem('userRole');
               if (newToken && newUserData) {
                 setAccessToken(newToken);
                 setUser(JSON.parse(newUserData));
+                setRole(newRole || 'exporter');
                 setIsAuthenticated(true);
               }
             }
@@ -109,8 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('userId');
     localStorage.removeItem('companyId');
     localStorage.removeItem('userData');
+    localStorage.removeItem('userRole');
     setAccessToken(null);
     setUser(null);
+    setRole(null);
     setIsAuthenticated(false);
 
     if (redirectToLogin) {
@@ -171,11 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = () => {
     const storedToken = localStorage.getItem('accessToken');
     const storedUserData = localStorage.getItem('userData');
+    const storedRole = localStorage.getItem('userRole');
     
     if (storedToken && storedUserData) {
       try {
         setAccessToken(storedToken);
         setUser(JSON.parse(storedUserData));
+        setRole(storedRole || 'exporter');
         setIsAuthenticated(true);
       } catch {
         clearAuthData();
@@ -188,7 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, accessToken, login, logout, refreshAccessToken }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, accessToken, role, login, logout, refreshAccessToken }}>
       {children}
     </AuthContext.Provider>
   );

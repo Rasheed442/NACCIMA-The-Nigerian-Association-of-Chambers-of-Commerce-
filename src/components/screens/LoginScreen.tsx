@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
 
 type AuthRole = 'exporter' | 'admin' | 'vetting';
 
@@ -25,12 +26,18 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState<AuthRole>('exporter');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
 
   const handleLogin = async () => {
-    if (!username.trim()) {
+    if (selectedRole === 'exporter' && !username.trim()) {
       setError('TIN is required.');
+      return;
+    }
+    if (selectedRole !== 'exporter' && !username.trim()) {
+      setError('Username is required.');
       return;
     }
     if (!password) {
@@ -72,9 +79,13 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
       localStorage.setItem('userId', result.data.userId);
       localStorage.setItem('companyId', result.data.companyId);
       localStorage.setItem('userData', JSON.stringify(result.data));
+      
+      // Store user role (use selected role from dropdown, or fallback to API role)
+      const userRole = selectedRole || (result.data.roles && result.data.roles.length > 0 ? result.data.roles[0] : 'exporter');
+      localStorage.setItem('userRole', userRole);
 
       localStorage.setItem('showWelcomeToast', 'true');
-      onLoginAsRole('exporter');
+      onLoginAsRole(userRole as AuthRole);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please try again.');
     } finally {
@@ -99,7 +110,9 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
         </div>
         <div className="px-[34px] flex flex-col justify-center bg-white">
           <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Sign in to your account</div>
-          <div className="text-[11.5px] text-[#6a7a9a] mb-[22px]">Use your company TIN as your username</div>
+          <div className="text-[11.5px] text-[#6a7a9a] mb-[22px]">
+            {selectedRole === 'exporter' ? 'Use your company TIN as your username' : 'Enter your credentials to access the dashboard'}
+          </div>
           
           {isVerified && (
             <div className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#f0fdf4] border border-[#86efac] text-[#065f46]">
@@ -108,16 +121,20 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
             </div>
           )}
           <div className="flex flex-col gap-1 mb-3">
-            <label className="text-[13px] font-semibold text-[#374151]">TIN (Tax Identification Number) <span className="text-[#e53e3e]">*</span></label>
+            <label className="text-[13px] font-semibold text-[#374151]">
+              {selectedRole === 'exporter' ? 'TIN (Tax Identification Number)' : 'Username'} <span className="text-[#e53e3e]">*</span>
+            </label>
             <input 
-              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white tracking-widest font-mono text-[13px] focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]" 
+              className={`px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)] ${selectedRole === 'exporter' ? 'tracking-widest font-mono text-[13px]' : ''}`}
               type="text" 
-              placeholder="e.g. 12345678901" 
-              maxLength={11} 
+              placeholder={selectedRole === 'exporter' ? 'e.g. 12345678901' : 'Enter your username'}
+              maxLength={selectedRole === 'exporter' ? 11 : undefined}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
-            <div className="text-[10px] text-[#6b7280] mt-[2px]">Your 11-digit NRS-issued Tax Identification Number</div>
+            {selectedRole === 'exporter' && (
+              <div className="text-[10px] text-[#6b7280] mt-[2px]">Your 11-digit NRS-issued Tax Identification Number</div>
+            )}
           </div>
           <div className="flex flex-col gap-1 mb-[6px]">
             <label className="text-[13px] font-semibold text-[#374151]">Password <span className="text-[#e53e3e]">*</span></label>
@@ -131,6 +148,43 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
           </div>
           <div className="text-right text-[14px] font-medium text-[#3a7bd5] mb-4 cursor-pointer" onClick={onNavigateToForgotPassword}>Forgot password?</div>
           
+          <div className="flex flex-col gap-1 mb-[6px] relative">
+            <label className="text-[13px] font-semibold text-[#374151] text-center">Login as</label>
+            <div className="relative">
+              <button 
+                className="w-full px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)] flex items-center justify-between"
+                onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+              >
+                <span className="flex-1 text-center">
+                  {selectedRole === 'exporter' ? 'Company Administrator (Exporter)' : selectedRole === 'admin' ? 'Platform Super Administrator' : 'Certificate Officer'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-[#6a7a9a]" />
+              </button>
+              {roleDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg z-10">
+                  <div 
+                    className="px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f3f4f6] cursor-pointer text-center"
+                    onClick={() => { setSelectedRole('exporter'); setRoleDropdownOpen(false); }}
+                  >
+                    Company Administrator (Exporter)
+                  </div>
+                  <div 
+                    className="px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f3f4f6] cursor-pointer text-center"
+                    onClick={() => { setSelectedRole('admin'); setRoleDropdownOpen(false); }}
+                  >
+                    Platform Super Administrator
+                  </div>
+                  <div 
+                    className="px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f3f4f6] cursor-pointer text-center"
+                    onClick={() => { setSelectedRole('vetting'); setRoleDropdownOpen(false); }}
+                  >
+                    Certificate Officer
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          
           {error && (
             <div className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">
               <span>⚠️</span>
@@ -143,10 +197,11 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
             onClick={handleLogin}
             disabled={isLoading}
           >
-            {isLoading ? 'Signing in...' : 'Sign In as Exporter'}
+            {isLoading ? 'Signing in...' : `Sign In as ${selectedRole === 'exporter' ? 'Exporter' : selectedRole === 'admin' ? 'Admin' : 'Certificate Officer'}`}
           </button>
           <div className="text-center text-[14px] text-[#6a7a9a] mb-4">
-            New exporter? <span className="text-[#3a7bd5] font-medium cursor-pointer" onClick={onNavigateToRegister}>Register your company →</span>
+            {selectedRole === 'exporter' ? 'New exporter? ' : 'Need an account? '}
+            <span className="text-[#3a7bd5] font-medium cursor-pointer" onClick={onNavigateToRegister}>Register your company →</span>
           </div>
           {/* <div className="mt-[18px] pt-[14px] border-t border-[#f0f0f0]">
             <div className="text-[10.5px] text-[#9ca3af] text-center mb-3">Quick login options</div>
