@@ -146,6 +146,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const newApplicationPath = role === 'admin' ? '/admin/new-application' : '/new-application';
   const myApplicationsPath = role === 'admin' ? '/admin/my-applications' : '/my-applications';
   const issuedCertificatesPath = role === 'admin' ? '/admin/issued-certificates' : '/issued-certs';
+  const certificateTypesPath = '/admin/certificate-types';
 
   const renderAdminSidebar = () => (
     <>
@@ -165,7 +166,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       </div>
       
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Configuration</div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === certificateTypesPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(certificateTypesPath)}>
         <span className="text-[13px] w-[15px] text-center">📋</span> Certificate Types
       </div>
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
