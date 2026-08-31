@@ -92,6 +92,7 @@ export default function AdminCompanyManage() {
           active: result.data.active,
           membershipStartDate: '',
           membershipEndDate: '',
+          membershipComment: '',
         });
       } else {
         setError(result.message || 'Failed to fetch company');
