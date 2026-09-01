@@ -55,6 +55,22 @@ interface Country {
   name: string;
 }
 
+interface CompanyProfile {
+  companyId: string;
+  tin: string;
+  companyName: string;
+  email: string;
+  phoneNumber: string;
+  naccimaRegistrationNumber: string;
+  address: string;
+  state: string;
+  lga: string;
+  membershipActive: boolean;
+  membershipStartDate: string;
+  membershipEndDate: string;
+  membershipStatus: string;
+}
+
 interface GoodsLineItem {
   id: string;
   hsCode: string;
@@ -149,6 +165,8 @@ export default function NewApplication() {
   const [isSavingGoods, setIsSavingGoods] = useState(false);
   const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
   const [selectedTransportModeDetails, setSelectedTransportModeDetails] = useState<TransportMode | null>(null);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   // Application form fields
   const [formData, setFormData] = useState({
@@ -191,6 +209,7 @@ export default function NewApplication() {
     fetchCertificateTypes();
     fetchTransportModes();
     fetchCountries();
+    fetchCompanyProfile();
   }, []);
 
   useEffect(() => {
@@ -314,6 +333,33 @@ export default function NewApplication() {
       console.error('Failed to fetch countries:', err);
     } finally {
       setIsLoadingCountries(false);
+    }
+  };
+
+  const fetchCompanyProfile = async () => {
+    setIsLoadingProfile(true);
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        return;
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/companies/profile`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setCompanyProfile(result.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch company profile:', err);
+    } finally {
+      setIsLoadingProfile(false);
     }
   };
 
@@ -586,6 +632,17 @@ export default function NewApplication() {
     return Object.keys(errors).length === 0;
   };
 
+  const validateGoodsItems = () => {
+    const hasEmptyLineItems = goodsLineItems.some(item =>
+      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight
+    );
+    if (hasEmptyLineItems) {
+      setValidationError('Please fill in all required fields in the Goods/Items section (HS Code, Description, Marks/No., Quantity, Gross Weight)');
+      return false;
+    }
+    return true;
+  };
+
   const handleContinueToStep2 = async () => {
     if (!selectedCert) {
       setCertError('Please select a certificate type');
@@ -680,6 +737,11 @@ export default function NewApplication() {
       return false;
     }
 
+    // Validate shipment details before saving
+    if (!validateStep2()) {
+      return false;
+    }
+
     setIsSavingApplication(true);
     setValidationError(null);
 
@@ -734,6 +796,11 @@ export default function NewApplication() {
   const saveGoodsItems = async () => {
     if (!applicationId) {
       setValidationError('Application ID not found');
+      return false;
+    }
+
+    // Validate goods items before saving
+    if (!validateGoodsItems()) {
       return false;
     }
 
@@ -1205,37 +1272,43 @@ export default function NewApplication() {
                     <div className="text-[13px] font-bold text-[#1a2236]">Shipper / Exporter Details</div>
                     <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">NRS-Verified · Read-Only</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">TIN <span className="text-[#e53e3e]">*</span></label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6] font-mono tracking-widest" value="12345678901" readOnly />
-                      <div className="text-[10px] text-[#6b7280]">🔒 From your company profile — cannot be changed</div>
+                  {isLoadingProfile ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-[12px] text-[#6a7a9a]">Loading company profile...</div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Importer Email {isFieldRequired('IMPORTER_EMAIL') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input
-                        ref={importerEmailRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.importerEmail ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                        placeholder="importer@overseas.com"
-                        value={formData.importerEmail}
-                        onChange={(e) => {
-                          setFormData({...formData, importerEmail: e.target.value});
-                          if (formErrors.importerEmail) setFormErrors({...formErrors, importerEmail: ''});
-                        }}
-                      />
-                      {formErrors.importerEmail && <div className="text-[10px] text-[#e53e3e]">{formErrors.importerEmail}</div>}
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-semibold text-[#374151]">TIN <span className="text-[#e53e3e]">*</span></label>
+                        <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6] font-mono tracking-widest" value={companyProfile?.tin || ''} readOnly />
+                        <div className="text-[10px] text-[#6b7280]">🔒 From your company profile — cannot be changed</div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-semibold text-[#374151]">Importer Email {isFieldRequired('IMPORTER_EMAIL') && <span className="text-[#e53e3e]">*</span>}</label>
+                        <input
+                          ref={importerEmailRef}
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.importerEmail ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          placeholder="importer@overseas.com"
+                          value={formData.importerEmail}
+                          onChange={(e) => {
+                            setFormData({...formData, importerEmail: e.target.value});
+                            if (formErrors.importerEmail) setFormErrors({...formErrors, importerEmail: ''});
+                          }}
+                        />
+                        {formErrors.importerEmail && <div className="text-[10px] text-[#e53e3e]">{formErrors.importerEmail}</div>}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Name <span className="text-[#e53e3e]">*</span></label>
+                        <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value={companyProfile?.companyName || ''} readOnly />
+                        <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified name — contact Admin to correct</div>
+                      </div>
+                      <div className="flex flex-col gap-1 col-span-2">
+                        <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Address <span className="text-[#e53e3e]">*</span></label>
+                        <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value={companyProfile?.address || ''} readOnly />
+                        <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified address — contact Admin to correct</div>
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Name <span className="text-[#e53e3e]">*</span></label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value="Lagos Traders Ltd" readOnly />
-                      <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified name — contact Admin to correct</div>
-                    </div>
-                    <div className="flex flex-col gap-1 col-span-2">
-                      <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Address <span className="text-[#e53e3e]">*</span></label>
-                      <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value="14 Commerce Road, Apapa, Lagos State, Nigeria" readOnly />
-                      <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified address — contact Admin to correct</div>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Section 2: Mode of Transport */}
@@ -1530,7 +1603,7 @@ export default function NewApplication() {
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt. <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature {isFieldRequired('NOMENCLATURE') && <span className="text-[#e53e3e]">*</span>}</th>
-                          {isFieldApplicable('UNIT') && <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Unit {isFieldRequired('UNIT') && <span className="text-[#e53e3e]">*</span>}</th>}
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Unit</th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) {isFieldRequired('VALUE') && <span className="text-[#e53e3e]">*</span>}</th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]"></th>
                         </tr>
@@ -1568,7 +1641,7 @@ export default function NewApplication() {
                                 className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
                                 value={item.quantity}
                                 onChange={(e) => updateLineItem(item.id, 'quantity', e.target.value)}
-                                placeholder="QTY"
+                                placeholder="1000"
                               />
                             </td>
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -1576,7 +1649,7 @@ export default function NewApplication() {
                                 className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
                                 value={item.grossWeight}
                                 onChange={(e) => updateLineItem(item.id, 'grossWeight', e.target.value)}
-                                placeholder="KG"
+                                placeholder="200"
                               />
                             </td>
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -1587,16 +1660,14 @@ export default function NewApplication() {
                                 placeholder="Nomenclature"
                               />
                             </td>
-                            {isFieldApplicable('UNIT') && (
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
-                                  value={item.unit}
-                                  onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
-                                  placeholder="Unit"
-                                />
-                              </td>
-                            )}
+                            <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <input
+                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
+                                value={item.unit}
+                                onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
+                                placeholder="KG"
+                              />
+                            </td>
                             <td className="px-2 py-2 border-b border-[#edf0f5]">
                               <input
                                 className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
@@ -1616,7 +1687,7 @@ export default function NewApplication() {
                     <button
                       className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={saveGoodsItems}
-                      disabled={isSavingGoods}
+                      disabled={isSavingGoods || goodsLineItems.some(item => !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight)}
                     >
                       {isSavingGoods ? 'Saving...' : 'Save Goods Items'}
                     </button>
