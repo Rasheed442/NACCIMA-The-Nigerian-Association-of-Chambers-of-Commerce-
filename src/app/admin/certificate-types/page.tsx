@@ -6,16 +6,31 @@ import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { ClipLoader } from 'react-spinners';
+import { ChevronDown, X } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 
-interface CertificateType {
-  certificateTypeId: string;
-  certificateTypeCode: string;
-  certificateTypeName: string;
-  feeBasis: 'FLAT' | 'PER_UNIT';
-  memberAmount: number;
-  nonMemberAmount: number;
+interface FeeStructure {
+  type: 'FLAT' | 'PERCENTAGE';
   vatRate: number;
+  memberAmount?: number;
+  nonMemberAmount?: number;
+  memberRate?: number;
+  nonMemberRate?: number;
+}
+
+interface CertificateType {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  active: boolean;
+  applicableFields: string[];
+  requiredDocuments: string;
+  feeStructure: FeeStructure;
+  templateUrl: string;
+  certNumberPrefix: string;
+  applicationCount: number;
+  templateConfig: string;
 }
 
 export default function AdminCertificateTypes() {
@@ -32,12 +47,11 @@ export default function AdminCertificateTypes() {
 
   // Form state for editing
   const [formData, setFormData] = useState({
-    certificateTypeName: '',
-    certificateTypeCode: '',
-    feeBasis: 'FLAT' as 'FLAT' | 'PER_UNIT',
-    memberAmount: 0,
-    nonMemberAmount: 0,
-    vatRate: 0,
+    name: '',
+    code: '',
+    certNumberPrefix: '',
+    description: '',
+    applicableFields: [] as string[],
   });
 
   useEffect(() => {
@@ -61,7 +75,7 @@ export default function AdminCertificateTypes() {
         return;
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/fees`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -70,8 +84,9 @@ export default function AdminCertificateTypes() {
 
       const result = await response.json();
 
-      if (response.ok && result.data) {
-        setCertificateTypes(result.data);
+      if (response.ok) {
+        // Response is directly an array, not wrapped in a data property
+        setCertificateTypes(Array.isArray(result) ? result : result.data || []);
       } else {
         setError(result.message || 'Failed to fetch certificate types');
       }
@@ -91,12 +106,11 @@ export default function AdminCertificateTypes() {
   const handleEdit = (cert: CertificateType) => {
     setSelectedCertificate(cert);
     setFormData({
-      certificateTypeName: cert.certificateTypeName,
-      certificateTypeCode: cert.certificateTypeCode,
-      feeBasis: cert.feeBasis,
-      memberAmount: cert.memberAmount,
-      nonMemberAmount: cert.nonMemberAmount,
-      vatRate: cert.vatRate,
+      name: cert.name,
+      code: cert.code,
+      certNumberPrefix: cert.certNumberPrefix,
+      description: cert.description,
+      applicableFields: cert.applicableFields,
     });
     setIsPanelMounted(true);
     setTimeout(() => setIsPanelOpen(true), 10);
@@ -104,17 +118,15 @@ export default function AdminCertificateTypes() {
 
   const handleCancel = () => {
     setIsPanelOpen(false);
-    // Wait for slide-out animation to complete before unmounting
     setTimeout(() => {
       setIsPanelMounted(false);
       setSelectedCertificate(null);
       setFormData({
-        certificateTypeName: '',
-        certificateTypeCode: '',
-        feeBasis: 'FLAT',
-        memberAmount: 0,
-        nonMemberAmount: 0,
-        vatRate: 0,
+        name: '',
+        code: '',
+        certNumberPrefix: '',
+        description: '',
+        applicableFields: [],
       });
     }, 300);
   };
@@ -123,16 +135,46 @@ export default function AdminCertificateTypes() {
     setIsSaving(true);
     setError(null);
     setSuccess(false);
+
+    if (!selectedCertificate) {
+      setError('No certificate selected');
+      setIsSaving(false);
+      return;
+    }
     
     try {
-      // Mock save - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-      
-      // Refresh data
-      fetchCertificateTypes();
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        setError('API URL not configured');
+        return;
+      }
+
+      const payload = {
+        name: formData.name,
+        code: formData.code,
+        certNumberPrefix: formData.certNumberPrefix,
+        description: formData.description,
+        applicableFields: formData.applicableFields,
+      };
+
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${selectedCertificate.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+        handleCancel();
+        fetchCertificateTypes();
+      } else {
+        setError(result.message || 'Failed to save certificate type');
+      }
     } catch (err) {
       console.error('Failed to save certificate type:', err);
       setError('Failed to save certificate type');
@@ -141,9 +183,18 @@ export default function AdminCertificateTypes() {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFieldToggle = (field: string) => {
+    setFormData(prev => ({
+      ...prev,
+      applicableFields: prev.applicableFields.includes(field)
+        ? prev.applicableFields.filter(f => f !== field)
+        : [...prev.applicableFields, field]
+    }));
   };
 
   if (isLoading) {
@@ -174,7 +225,7 @@ export default function AdminCertificateTypes() {
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <div className="text-[24px] font-medium text-[#1a2236]">Certificate Type</div>
+                <div className="text-[24px] font-medium text-[#1a2236]">Certificate Types</div>
                 <div className="text-[12px] text-[#6a7a9a]">Configure fields, required documents, and certificate number format per type</div>
               </div>
               <button className="px-4 py-2 bg-[#1a4a8a] text-white rounded-[4px] text-[12px] font-medium hover:bg-[#153c70]">
@@ -201,25 +252,25 @@ export default function AdminCertificateTypes() {
                   <tr className="bg-[#f8fafd] border-b border-[#dde3ee]">
                     <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Certificate</th>
                     <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Code</th>
-                    <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Fee Basis</th>
-                    <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Member Fee</th>
-                    <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Non-Member Fee</th>
-                    <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">VAT Rate</th>
+                    <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Applications</th>
+                    <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Status</th>
                     <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {certificateTypes.map((cert, index) => (
                     <tr 
-                      key={cert.certificateTypeId}
+                      key={cert.id}
                       className={`border-b border-[#dde3ee] hover:bg-[#f8fafd] ${index === 0 ? 'bg-[#f0f7ff]' : ''}`}
                     >
-                      <td className="px-4 py-3 text-[13px] font-medium text-[#1a2236]">{cert.certificateTypeName}</td>
-                      <td className="px-4 py-3 text-[13px] font-mono text-[#6a7a9a]">{cert.certificateTypeCode}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#6a7a9a]">{cert.feeBasis}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#6a7a9a]">₦{cert.memberAmount?.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#6a7a9a]">₦{cert.nonMemberAmount?.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-[13px] text-[#6a7a9a]">{(cert.vatRate * 100)?.toFixed(1)}%</td>
+                      <td className="px-4 py-3 text-[13px] font-medium text-[#1a2236]">{cert.name}</td>
+                      <td className="px-4 py-3 text-[13px] font-mono text-[#6a7a9a]">{cert.code}</td>
+                      <td className="px-4 py-3 text-[13px] text-[#6a7a9a]">{cert.applicationCount}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block text-[11px] font-medium px-2 py-[4px] rounded whitespace-nowrap ${cert.active ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fef3c7] text-[#92400e]'}`}>
+                          {cert.active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">
                         <button 
                           onClick={() => handleEdit(cert)}
@@ -237,30 +288,28 @@ export default function AdminCertificateTypes() {
             {/* Slide-out Configuration Panel */}
             {isPanelMounted && selectedCertificate && (
               <div className="fixed inset-0 z-50 flex justify-end">
-                {/* Backdrop */}
                 <div 
                   className={`absolute inset-0 bg-black/20 transition-opacity duration-300 ${isPanelOpen ? 'opacity-100' : 'opacity-0'}`}
                   onClick={handleCancel}
                 />
-                {/* Slide-out Panel */}
-                <div className={`relative w-[400px] h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out overflow-y-auto ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                <div className={`relative w-[340px] h-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out overflow-y-auto ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                   <div className="p-5">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="text-[14px] font-semibold text-[#1a2236]">✏️ Editing: {selectedCertificate?.certificateTypeName}</div>
+                      <div className="text-[14px] font-semibold text-[#1a2236]">✏️ Editing: {selectedCertificate?.name}</div>
                       <button 
                         onClick={handleCancel}
-                        className="text-[#6a7a9a] hover:text-[#1a2236] text-[18px]"
+                        className="text-[#6a7a9a] hover:text-[#1a2236]"
                       >
-                        ✕
+                        <X size={18} />
                       </button>
                     </div>
                     
                     <div className="mb-3">
-                      <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Certificate Name</label>
+                      <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Display Name</label>
                       <input
                         type="text"
-                        name="certificateTypeName"
-                        value={formData.certificateTypeName}
+                        name="name"
+                        value={formData.name}
                         onChange={handleInputChange}
                         className="w-full px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[13px]"
                       />
@@ -271,59 +320,48 @@ export default function AdminCertificateTypes() {
                         <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Code</label>
                         <input
                           type="text"
-                          name="certificateTypeCode"
-                          value={formData.certificateTypeCode}
+                          name="code"
+                          value={formData.code}
                           onChange={handleInputChange}
                           className="w-full px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[13px] font-mono"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Fee Basis</label>
-                        <select
-                          name="feeBasis"
-                          value={formData.feeBasis}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[13px]"
-                        >
-                          <option value="FLAT">Flat</option>
-                          <option value="PER_UNIT">Per Unit</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <div>
-                        <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Member Fee (₦)</label>
+                        <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Cert # Prefix</label>
                         <input
-                          type="number"
-                          name="memberAmount"
-                          value={formData.memberAmount}
+                          type="text"
+                          name="certNumberPrefix"
+                          value={formData.certNumberPrefix}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[13px]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Non-Member Fee (₦)</label>
-                        <input
-                          type="number"
-                          name="nonMemberAmount"
-                          value={formData.nonMemberAmount}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[13px]"
+                          className="w-full px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[13px] font-mono"
                         />
                       </div>
                     </div>
 
                     <div className="mb-3">
-                      <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">VAT Rate</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="vatRate"
-                        value={formData.vatRate}
+                      <label className="block text-[11px] text-[#6a7a9a] font-medium mb-1">Description</label>
+                      <textarea
+                        name="description"
+                        value={formData.description}
                         onChange={handleInputChange}
+                        rows={2}
                         className="w-full px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[13px]"
                       />
+                    </div>
+
+                    <div className="text-[11px] font-semibold text-[#374151] mb-2">Applicable Fields <span className="font-normal text-[#9ca3af]">(toggle to show/hide on form)</span></div>
+                    <div className="border border-[#e5e7eb] rounded-[6px] p-2 mb-3 max-h-[220px] overflow-y-auto">
+                      {['TIN', 'SHIPPER_NAME', 'SHIPPER_ADDRESS', 'APPROVAL_NUMBER', 'IMPORTER_EMAIL', 'CONSIGNEE', 'CONSIGNEE_ADDRESS', 'CARRIER', 'MODE_OF_TRANSPORT', 'DESTINATION', 'COUNTRY_OF_MANUFACTURING', 'TOTAL_ITEMS', 'DATE', 'TOTAL_VALUE_FOB', 'ECOWAS_NUMBER', 'CRITERIA', 'HS_CODE', 'BULK_PRODUCT_QTY_MT', 'DESCRIPTION', 'QUANTITY', 'GROSS_WEIGHT', 'NOMENCLATURE', 'VALUE'].map((field) => (
+                        <div key={field} className="flex items-center justify-between py-2 px-1">
+                          <span className="text-[12px] text-[#374151]">{field.replace(/_/g, ' ')}</span>
+                          <button 
+                            onClick={() => handleFieldToggle(field)}
+                            className={`w-10 h-5 rounded-full relative transition-colors ${formData.applicableFields.includes(field) ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'}`}
+                          >
+                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${formData.applicableFields.includes(field) ? 'right-0.5' : 'left-0.5'}`} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
 
                     <div className="flex gap-2">
