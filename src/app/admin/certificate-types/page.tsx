@@ -8,6 +8,7 @@ import LogoutModal from '@/components/LogoutModal';
 import { ClipLoader } from 'react-spinners';
 import { ChevronDown, X } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
+import { FiPlus } from "react-icons/fi";
 
 interface FeeStructure {
   type: 'FLAT' | 'PERCENTAGE';
@@ -223,13 +224,13 @@ export default function AdminCertificateTypes() {
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar role="admin" />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between my-6">
               <div>
-                <div className="text-[24px] font-medium text-[#1a2236]">Certificate Types</div>
-                <div className="text-[12px] text-[#6a7a9a]">Configure fields, required documents, and certificate number format per type</div>
+                <div className="text-[24px] font-semibold text-[#1a2236]">Certificate Types</div>
+                <div className="text-[14px] font-medium text-[#6a7a9a]">Configure fields, required documents, and certificate number format per type</div>
               </div>
-              <button className="px-4 py-2 bg-[#1a4a8a] text-white rounded-[4px] text-[12px] font-medium hover:bg-[#153c70]">
-                ➕ Add Certificate Type
+              <button className="px-4 cursor-pointer flex items-center gap-2 py-2 bg-[#1a4a8a] text-white rounded text-[14px] font-medium hover:bg-[#153c70]">
+                <FiPlus color="white" /> Add Certificate Type
               </button>
             </div>
 
@@ -246,7 +247,7 @@ export default function AdminCertificateTypes() {
             )}
 
             {/* Full-width Table */}
-            <div className="bg-white border border-[#dde3ee] rounded-[8px] shadow-[0_1px_4px_rgba(0,0,0,0.05)] overflow-hidden">
+            <div className="bg-white border border-[#dde3ee] rounded shadow-[0_1px_4px_rgba(0,0,0,0.05)] overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="bg-[#f8fafd] border-b border-[#dde3ee]">

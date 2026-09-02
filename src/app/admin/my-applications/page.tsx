@@ -253,19 +253,19 @@ export default function AdminApplications() {
 
             {/* Summary Cards */}
             <div className="flex gap-3 mb-4">
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">{stats.pendingReview}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Pending Review</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#1a4a8a] mb-[2px]">{stats.reviewedToday}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Reviewed Today</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">{stats.approvedThisMonth}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Approved This Month</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#9b1c1c] mb-[2px]">{stats.rejectedThisMonth}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Rejected This Month</div>
               </div>
@@ -409,7 +409,7 @@ export default function AdminApplications() {
               <input 
                 type="text" 
                 placeholder="Company ID..."
-                className="px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] w-[150px]"
+                className="px-3 py-2 border border-[#d1d5db] rounded-[4px] placeholder:text-[13px] text-[13px] w-[150px]"
                 value={filterCompanyId}
                 onChange={(e) => setFilterCompanyId(e.target.value)}
               />
@@ -417,7 +417,7 @@ export default function AdminApplications() {
               <input 
                 type="text" 
                 placeholder="Search by company name..."
-                className="px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] flex-1"
+                className="px-3 py-2 border border-[#d1d5db] rounded-[4px] placeholder:text-[13px] text-[13px] flex-1"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -426,7 +426,7 @@ export default function AdminApplications() {
               </button>
             </div>
 
-            <div className="overflow-x-auto pt-4 overflow-y-auto rounded-lg border border-[#dde3ee]">
+            <div className="overflow-x-auto pt-4 overflow-y-auto rounded border border-[#dde3ee]">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <ClipLoader size={40} color="#1a4a8a" />
@@ -439,7 +439,7 @@ export default function AdminApplications() {
               ) : (
                 <table className="w-full border-collapse text-[12px]">
                   <thead className="sticky top-0 z-2">
-                    <tr className="bg-[#f1f4f9] text-[12px] text-[#4a5a7a] font-semibold">
+                    <tr className="bg-[#f1f4f9] text-[14px] text-[#4a5a7a] font-medium">
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Approval #</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Company</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">TIN</th>
@@ -453,7 +453,7 @@ export default function AdminApplications() {
                   </thead>
                   <tbody>
                     {filteredApps.map((app) => (
-                      <tr key={app.applicationId} className="hover:bg-[#f8faff] text-[12px] transition-colors">
+                      <tr key={app.applicationId} className="hover:bg-[#f8faff] text-[14px] transition-colors">
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.applicationId}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.companyName || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.tin || '—'}</td>
@@ -471,25 +471,51 @@ export default function AdminApplications() {
                 </table>
               )}
             </div>
-            {filteredApps.length > 0 && (
+            {filteredApps.length > 0 && totalPages > 0 && (
               <div className="flex items-center justify-between mt-4">
-                <div className="text-[11px] text-[#6a7a9a]">
-                  Page {currentPage + 1} of {totalPages}
+                <div className="text-[13px] text-[#6a7a9a] font-medium">
+                  Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, applications.length)} of {applications.length} results
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <button 
-                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" 
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 0}
                   >
-                    Prev
+                    ←
                   </button>
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i;
+                    } else if (currentPage < 3) {
+                      pageNum = i;
+                    } else if (currentPage > totalPages - 3) {
+                      pageNum = totalPages - 5 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        className={`px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all ${
+                          currentPage === pageNum
+                            ? 'bg-[#1a4a8a] text-white'
+                            : 'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]'
+                        }`}
+                        onClick={() => handlePageChange(pageNum)}
+                      >
+                        {pageNum + 1}
+                      </button>
+                    );
+                  })}
                   <button 
-                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" 
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage >= totalPages - 1}
                   >
-                    Next
+                    →
                   </button>
                 </div>
               </div>
