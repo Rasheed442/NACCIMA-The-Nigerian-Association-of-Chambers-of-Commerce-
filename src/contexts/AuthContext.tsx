@@ -194,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    clearAuthData();
+    clearAuthData(true);
   };
 
   return (

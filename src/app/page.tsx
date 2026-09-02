@@ -31,7 +31,7 @@ function AppContent() {
 
   const handleLogout = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
-    
+
     // Call logout API if we have a refresh token
     if (refreshToken) {
       try {
@@ -53,22 +53,21 @@ function AppContent() {
 
     // Clear all localStorage items
     localStorage.clear();
-    
+
     // Clear auth data and redirect
     logout();
     setShowLogoutModal(false);
     router.push('/login');
   };
 
-  // If not authenticated, redirect to login
-  if (!isAuthenticated) {
-    router.push('/login');
-    return null;
-  }
-
-  // Redirect based on role
+  // Redirect based on authentication status and role
   useEffect(() => {
-    if (isAuthenticated && role) {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+
+    if (role) {
       switch (role) {
         case 'admin':
           router.push('/admin');
