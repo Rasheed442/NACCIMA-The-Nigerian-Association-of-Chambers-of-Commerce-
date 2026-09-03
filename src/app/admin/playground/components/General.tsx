@@ -284,7 +284,7 @@ export default function General() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="shrink-0 rounded-lg border border-[#1a4a8a] bg-[#e8f0fe] px-3 py-1.5 text-sm font-medium text-[#1a4a8a] hover:bg-[#d4e6fd]"
+                  className="shrink-0 rounded-lg border border-gray-purple-200 bg-purple-200 px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-[#d4e6fd]"
                 >
                   {form.templateFileName ? "Change Template" : "Upload Template"}
                 </button>
