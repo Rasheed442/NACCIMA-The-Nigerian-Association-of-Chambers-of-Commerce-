@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FiPlus, FiZoomIn, FiZoomOut, FiMaximize, FiRotateCcw, FiRotateCw, FiGrid, FiEye, FiEyeOff, FiSave, FiDownload, FiMoreVertical } from 'react-icons/fi';
+import General from './General';
 
 type Align = 'left' | 'center' | 'right';
 type VAlign = 'top' | 'middle' | 'bottom';
@@ -194,8 +195,18 @@ const COMPONENT_GROUPS: Array<{
   },
 ];
 
+const TABS = [
+    { id: 'general', label: 'General' },
+      { id: 'applicable-fields', label: 'Applicable Fields' },
+      { id: 'required-documents', label: 'Required Documents' },
+
+  { id: 'template-designer', label: 'Template Designer' },
+  { id: 'membering-format', label: 'Membering & Format' },
+  { id: 'Fee', label: 'Fee & changes' },
+];
+
 export function TemplateDesigner() {
-  const [activeTab, setActiveTab] = useState('template-designer');
+  const [activeTab, setActiveTab] = useState('general');
   const [elements, setElements] = useState<FieldElement[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('template-designer-elements');
@@ -458,7 +469,7 @@ export function TemplateDesigner() {
         </div>
         <div className="flex items-end gap-2">
           <div className="flex flex-col">
-            <label className="text-[11px] text-[#6a7a9a]">Certificate type</label>
+            <label className="text-[13px] text-[#6a7a9a] font-medium">Certificate type</label>
             <select className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] min-w-[200px]">
               <option>Certificate of origin (NACCIMA-CO)</option>
               <option>Certificate of inspection</option>
@@ -485,113 +496,96 @@ export function TemplateDesigner() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="grid grid-cols-4 gap-1 px-4 py-3 bg-white border-b border-[#dde3ee]">
-        <button
-          className={`px-4 py-2 text-[13px] font-medium rounded-lg transition-all ${
-            activeTab === 'template-designer'
-              ? 'bg-[#1a4a8a] text-white'
-              : 'bg-[#f4f5f7] text-[#4a5a7a] hover:bg-[#e8eef5]'
-          }`}
-          onClick={() => setActiveTab('template-designer')}
-        >
-          Template Designer
-        </button>
-        <button
-          className={`px-4 py-2 text-[13px] font-medium rounded-lg transition-all ${
-            activeTab === 'field-mapping'
-              ? 'bg-[#1a4a8a] text-white'
-              : 'bg-[#f4f5f7] text-[#4a5a7a] hover:bg-[#e8eef5]'
-          }`}
-          onClick={() => setActiveTab('field-mapping')}
-        >
-          Field Mapping
-        </button>
-        <button
-          className={`px-4 py-2 text-[13px] font-medium rounded-lg transition-all ${
-            activeTab === 'validation-rules'
-              ? 'bg-[#1a4a8a] text-white'
-              : 'bg-[#f4f5f7] text-[#4a5a7a] hover:bg-[#e8eef5]'
-          }`}
-          onClick={() => setActiveTab('validation-rules')}
-        >
-          Validation Rules
-        </button>
-        <button
-          className={`px-4 py-2 text-[13px] font-medium rounded-lg transition-all ${
-            activeTab === 'preview'
-              ? 'bg-[#1a4a8a] text-white'
-              : 'bg-[#f4f5f7] text-[#4a5a7a] hover:bg-[#e8eef5]'
-          }`}
-          onClick={() => setActiveTab('preview')}
-        >
-          Preview
-        </button>
+      <div className="flex flex-wrap gap-2 px-4 py-3 my-4 bg-white border-b border-[#dde3ee]">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            className={`px-4 py-2 text-[13px] font-medium rounded-lg transition-all ${
+              activeTab === tab.id
+                ? 'bg-[#1a4a8a] text-white'
+                : 'bg-[#f4f5f7] text-[#4a5a7a] hover:bg-[#e8eef5]'
+            }`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'general' && (
+        <div className="flex-1 overflow-auto bg-[#f9fafb] ">
+          <General />
+        </div>
+      )}
+
       {activeTab === 'template-designer' && (
         <>
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[#dde3ee] bg-white">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-[#dde3ee] bg-white shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="flex items-center border border-[#d1d5db] rounded">
+          <div className="flex items-center border border-[#d1d5db] rounded-lg overflow-hidden">
             <button
-              className="p-1.5 hover:bg-[#f0f1f3]"
+              className="p-2 hover:bg-[#e8f0fe] transition-colors"
               onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))}
+              title="Zoom out"
             >
-              <FiZoomOut size={14} />
+              <FiZoomOut size={16} className="text-[#1a4a8a]" />
             </button>
-            <span className="px-2 text-[12px] text-[#6a7a9a] min-w-[40px] text-center">
+            <div className="w-px h-5 bg-[#d1d5db]" />
+            <span className="px-3 text-[13px] font-medium text-[#1a2236] min-w-[50px] text-center">
               {Math.round(zoom * 100)}%
             </span>
+            <div className="w-px h-5 bg-[#d1d5db]" />
             <button
-              className="p-1.5 hover:bg-[#f0f1f3]"
+              className="p-2 hover:bg-[#e8f0fe] transition-colors"
               onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
+              title="Zoom in"
             >
-              <FiZoomIn size={14} />
+              <FiZoomIn size={16} className="text-[#1a4a8a]" />
             </button>
           </div>
           <button
-            className="px-3 py-1.5 border border-[#d1d5db] rounded text-[12px] hover:bg-[#f4f5f7]"
+            className="px-4 py-2 border border-[#d1d5db] rounded-lg text-[13px] font-medium text-[#1a2236] hover:bg-[#e8f0fe] hover:border-[#1a4a8a] transition-all"
             onClick={() => setZoom(1)}
           >
-            Fit width
+            Fit to screen
           </button>
-          <div className="w-px h-5 bg-[#dde3ee]" />
-          <button className="p-1.5 border border-[#d1d5db] rounded hover:bg-[#f4f5f7]">
-            <FiRotateCcw size={14} />
+          <div className="w-px h-6 bg-[#dde3ee]" />
+          <button className="p-2 border border-[#d1d5db] rounded-lg hover:bg-[#e8f0fe] hover:border-[#1a4a8a] transition-all" title="Rotate left">
+            <FiRotateCcw size={16} className="text-[#1a4a8a]" />
           </button>
-          <button className="p-1.5 border border-[#d1d5db] rounded hover:bg-[#f4f5f7]">
-            <FiRotateCw size={14} />
+          <button className="p-2 border border-[#d1d5db] rounded-lg hover:bg-[#e8f0fe] hover:border-[#1a4a8a] transition-all" title="Rotate right">
+            <FiRotateCw size={16} className="text-[#1a4a8a]" />
           </button>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] text-[#6a7a9a]">Grid</span>
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-medium text-[#1a2236]">Grid</span>
             <button
-              className={`w-8 h-4 rounded-full transition-colors ${
+              className={`w-11 h-6 rounded-full transition-colors ${
                 gridOn ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'
               }`}
               onClick={() => setGridOn((v) => !v)}
             >
               <div
-                className={`w-3 h-3 bg-white rounded-full transition-transform ${
-                  gridOn ? 'translate-x-4' : 'translate-x-0.5'
+                className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform ${
+                  gridOn ? 'translate-x-5' : 'translate-x-0.5'
                 }`}
               />
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] text-[#6a7a9a]">Show bounds</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-medium text-[#1a2236]">Show bounds</span>
             <button
-              className={`w-8 h-4 rounded-full transition-colors ${
+              className={`w-11 h-6 rounded-full transition-colors ${
                 boundsOn ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'
               }`}
               onClick={() => setBoundsOn((v) => !v)}
             >
               <div
-                className={`w-3 h-3 bg-white rounded-full transition-transform ${
-                  boundsOn ? 'translate-x-4' : 'translate-x-0.5'
+                className={`w-5 h-5 bg-white rounded-full shadow-md transition-transform ${
+                  boundsOn ? 'translate-x-5' : 'translate-x-0.5'
                 }`}
               />
             </button>
@@ -600,46 +594,56 @@ export function TemplateDesigner() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden mx-4">
+      <div className="flex-1 flex overflow-hidden">
         {/* Left panel - Components */}
-        <div className="w-64 border-r border-[#dde3ee] bg-white overflow-y-auto p-4">
-          <h2 className="text-[14px] font-semibold text-[#1a2236] mb-1">Components</h2>
-          <p className="text-[11px] text-[#6a7a9a] mb-4">
-            Drag and drop onto the template
-          </p>
+        <div className="w-72 border-r border-[#dde3ee] bg-white overflow-y-auto">
+          <div className="p-5 border-b border-[#dde3ee]">
+            <h2 className="text-[15px] font-semibold text-[#1a2236] mb-1">Components</h2>
+            <p className="text-[12px] text-[#6a7a9a]">
+              Drag and drop onto the template
+            </p>
+          </div>
 
-          {COMPONENT_GROUPS.map((group) => (
-            <div key={group.label}>
-              <div className="text-[10px] font-bold text-[#9ca3af] uppercase tracking-wider mb-2 mt-4 first:mt-0">
-                {group.label}
-              </div>
-              {group.items.map((item) => (
-                <div
-                  key={item.type}
-                  className="flex items-center gap-2 px-3 py-2 border border-[#d1d5db] rounded-lg mb-1.5 cursor-grab hover:border-[#1a4a8a] hover:bg-[#f0f7ff] text-[13px] transition-colors"
-                  draggable
-                  onDragStart={(e) =>
-                    e.dataTransfer.setData('text/plain', item.type)
-                  }
-                  onClick={() => addComponent(item.type)}
-                >
-                  <span className="text-[#6a7a9a]">{item.icon}</span>
-                  {item.label}
+          <div className="p-4">
+            {COMPONENT_GROUPS.map((group, groupIndex) => (
+              <div key={group.label}>
+                <div className="text-[11px] font-bold text-[#1a4a8a] uppercase tracking-wider mb-3 mt-5 first:mt-0">
+                  {group.label}
                 </div>
-              ))}
-            </div>
-          ))}
+                <div className="space-y-2">
+                  {group.items.map((item) => (
+                    <div
+                      key={item.type}
+                      className="flex items-center gap-3 px-4 py-3 border border-[#d1d5db] rounded-xl cursor-grab hover:border-[#1a4a8a] hover:bg-[#e8f0fe] hover:shadow-md transition-all group"
+                      draggable
+                      onDragStart={(e) =>
+                        e.dataTransfer.setData('text/plain', item.type)
+                      }
+                      onClick={() => addComponent(item.type)}
+                    >
+                      <span className="text-[#6a7a7a] text-lg group-hover:text-[#1a4a8a] transition-colors">{item.icon}</span>
+                      <span className="text-[13px] font-medium text-[#1a2236]">{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
 
-          <div className="mt-4 p-3 bg-[#f9fafb] rounded-lg text-[12px] text-[#6a7a9a] leading-relaxed">
-            <strong className="text-[#1a2236]">Tip:</strong> Drag a component onto the
-            template. Click it to edit properties.
+            <div className="mt-6 p-4 bg-gradient-to-br from-[#e8f0fe] to-[#f0f7ff] rounded-xl border border-[#d4e6fd]">
+              <div className="flex items-start gap-2">
+                <span className="text-[#1a4a8a] text-sm">💡</span>
+                <div className="text-[12px] text-[#1a2236] leading-relaxed">
+                  <strong className="text-[#1a4a8a]">Tip:</strong> Drag a component onto the template. Click it to edit properties.
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Canvas */}
-        <div className="flex-1 bg-[#dfe2e7] overflow-auto flex justify-center">
+        <div className="flex-1 bg-gradient-to-br from-[#e8ecf1] to-[#dfe2e7] overflow-auto flex justify-center p-2">
           <div
-            className="bg-white shadow-lg relative overflow-auto"
+            className="bg-white shadow-2xl relative overflow-auto rounded-lg"
             style={{
               width: '1600px',
               height: '1200px',
@@ -652,88 +656,89 @@ export function TemplateDesigner() {
                 transformOrigin: 'top left',
               }}
             >
-              <div className="text-center text-[26px] font-bold tracking-widest border-b-2 border-[#222]">
-                ORIGINAL
-              </div>
               <div
                 ref={gridRef}
                 className="relative "
                 style={{
-                  height: '868px',
+                  height: '0px',
                   backgroundImage: gridOn
                     ? 'linear-gradient(to right, #eee 1px, transparent 1px), linear-gradient(to bottom, #eee 1px, transparent 1px)'
                     : undefined,
                   backgroundSize: '20px 20px',
-                  transform: `translate(${panX}px, ${panY}px)`,
+                  transform: `translate(${10}px, ${10}px)`,
+                  // transform: `translate(${panX}px, ${panY}px)`,
                 }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={onDropOnCanvas}
                 onMouseDown={onCanvasMouseDown}
               >
+                <div className="text-center text-[26px] font-bold tracking-widest border-b-2 border-[#222] ">
+                  ORIGINAL
+                </div>
               {/* Numbered Sections */}
-              <div className="absolute inset-0 pointer-events-none pt-8">
+              <div className="absolute inset-0 pointer-events-none ">
                 {/* Section 1 - Exporter Details */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '20px', top: '10px', width: '450px', height: '80px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '5px', top: '65px', width: '450px', height: '80px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">1</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Exporter Details</div>
                 </div>
 
                 {/* Section 2 - Consignee Details */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '490px', top: '10px', width: '450px', height: '80px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '475px', top: '65px', width: '450px', height: '80px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">2</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Consignee Details</div>
                 </div>
 
                 {/* Section 3 - Certificate Number */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '20px', top: '100px', width: '200px', height: '60px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '5px', top: '160px', width: '200px', height: '60px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">3</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Certificate No.</div>
                 </div>
 
                 {/* Section 4 - Country of Origin */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '240px', top: '100px', width: '350px', height: '60px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '230px', top: '160px', width: '350px', height: '60px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">4</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Country of Origin</div>
                 </div>
 
                 {/* Section 5 - Transport Details */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '610px', top: '100px', width: '330px', height: '60px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '600px', top: '160px', width: '330px', height: '60px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">5</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Transport Details</div>
                 </div>
 
                 {/* Section 6 - Goods Table */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '20px', top: '170px', width: '920px', height: '300px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '5px', top: '240px', width: '920px', height: '300px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">6</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Goods Description</div>
                 </div>
 
                 {/* Section 7 - Declaration */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '20px', top: '480px', width: '450px', height: '120px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '5px', top: '560px', width: '450px', height: '120px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">7</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Declaration</div>
                 </div>
 
                 {/* Section 8 - Certification */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '490px', top: '480px', width: '450px', height: '120px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '475px', top: '560px', width: '450px', height: '120px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">8</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Certification</div>
                 </div>
 
                 {/* Section 9 - Signature */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '20px', top: '610px', width: '300px', height: '80px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '5px', top: '700px', width: '300px', height: '80px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">9</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Signature</div>
                 </div>
 
                 {/* Section 10 - Date */}
-                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '340px', top: '610px', width: '200px', height: '80px' }}>
+                <div className="absolute border-2   bg-[#f1f5f9]/30" style={{ left: '320px', top: '700px', width: '200px', height: '80px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">10</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Date</div>
                 </div>
 
                 {/* Section 11 - Stamp */}
-                <div className="absolute border-2  bg-[#f1f5f9]/30" style={{ left: '560px', top: '610px', width: '380px', height: '80px' }}>
+                <div className="absolute border-2  bg-[#f1f5f9]/30" style={{ left: '535px', top: '700px', width: '380px', height: '80px' }}>
                   <div className="absolute -top-3 -left-3 w-6 h-6 bg-[#1a4a8a] text-white rounded-full flex items-center justify-center text-xs font-bold">11</div>
                   <div className="absolute top-1 left-2 text-[10px] text-[#64748b] font-medium">Official Stamp</div>
                 </div>
@@ -799,20 +804,33 @@ export function TemplateDesigner() {
         </div>
 
         {/* Right panel - Properties */}
-        <div className="w-72 border-l border-[#dde3ee] bg-white overflow-y-auto p-4">
-          {!selected ? (
-            <div className="text-[12px] text-[#6a7a9a] leading-relaxed pt-2">
-              Select a component on the template to edit its position, size,
-              typography and colors here.
-            </div>
-          ) : (
-            <PropertiesForm
-              el={selected}
-              onChange={updateSelected}
-              onChangePad={updateSelectedPad}
-              onDelete={() => deleteElement(selected.id)}
-            />
-          )}
+        <div className="w-80 border-l border-[#dde3ee] bg-white overflow-y-auto">
+          <div className="p-5 border-b border-[#dde3ee]">
+            <h2 className="text-[15px] font-semibold text-[#1a2236] mb-1">Properties</h2>
+            <p className="text-[12px] text-[#6a7a9a]">
+              Edit selected component properties
+            </p>
+          </div>
+          <div className="p-5">
+            {!selected ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-[#f9fafb] rounded-full flex items-center justify-center mb-4">
+                  <FiEye size={24} className="text-[#9ca3af]" />
+                </div>
+                <p className="text-[13px] text-[#6a7a9a] leading-relaxed">
+                  Select a component on the template to edit its position, size,
+                  typography and colors here.
+                </p>
+              </div>
+            ) : (
+              <PropertiesForm
+                el={selected}
+                onChange={updateSelected}
+                onChangePad={updateSelectedPad}
+                onDelete={() => deleteElement(selected.id)}
+              />
+            )}
+          </div>
         </div>
       </div>
         </>

@@ -109,7 +109,7 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
             <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ Certificate of Origin (COO) &amp; GSP</div>
             <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ ECOWAS &amp; Movement Certificates</div>
             <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ Solid Mineral Certificate</div>
-            <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ Paystack-powered secure payments</div>
+            <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ Secure payments</div>
             <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ Member &amp; Non-Member fee rates</div>
           </div>
         </div>
@@ -164,7 +164,7 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
             {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
           <div className="text-center text-[14px] text-[#6a7a9a] mb-4">
-            Need an account? 
+            Need an account? {" "}
             <span className="text-[#3a7bd5] font-medium cursor-pointer" onClick={onNavigateToRegister}>Register your company →</span>
           </div>
         </div>
