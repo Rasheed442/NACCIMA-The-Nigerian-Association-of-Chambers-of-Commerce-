@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { TemplateDesigner } from '../certificate-types/components/template-designer';
+import { TemplateDesigner } from '../components/template-designer';
 
-export default function AdminPlayground() {
+export default function NewCertificateType() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
@@ -22,8 +22,8 @@ export default function AdminPlayground() {
         <AppHeader role="admin" />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar role="admin" />
-          <TemplateDesigner />
- </div>
+          <TemplateDesigner mode="create" />
+        </div>
       </div>
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />

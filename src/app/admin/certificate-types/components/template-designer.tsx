@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type IconType } from 'react-icons';
 import {
   FiZoomIn,
   FiZoomOut,
@@ -32,13 +33,17 @@ import {
   FiEye,
   FiUpload,
   FiRefreshCw,
-  type IconType,
 } from 'react-icons/fi';
 import General from './General';
 import ApplicableFields from './Applicable-Fields';
 import RequiredDocuments from './Required-documents';
 import MemberingFormat from './MemberingFormat';
 import FeeCharges from './FeeCharges';
+
+interface TemplateDesignerProps {
+  mode?: 'create' | 'edit';
+  certificateType?: any;
+}
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -330,7 +335,7 @@ const TABS = [
   { id: 'Fee', label: 'Fees & Charges' },
 ];
 
-export function TemplateDesigner() {
+export function TemplateDesigner({ mode = 'create', certificateType }: TemplateDesignerProps) {
   const [activeTab, setActiveTab] = useState('template-designer');
   const [elements, setElements] = useState<FieldElement[]>(() => {
     if (typeof window !== 'undefined') {
@@ -355,20 +360,77 @@ export function TemplateDesigner() {
   const [openBorderSection, setOpenBorderSection] = useState(false);
   const [openAdvancedSection, setOpenAdvancedSection] = useState(false);
   const [enabledFields, setEnabledFields] = useState<Record<string, boolean>>({});
+  const [templateUrl, setTemplateUrl] = useState<string | null>(null);
+  const [templatePageSize, setTemplatePageSize] = useState<{ width: number; height: number } | null>(null);
+  const [showElements, setShowElements] = useState(false);
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
 
-  // Load enabled fields from localStorage
+  // Load enabled fields from localStorage and listen for changes
   useEffect(() => {
-    const saved = localStorage.getItem('applicable-fields-enabled');
-    if (saved) {
-      try {
-        setEnabledFields(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse enabled fields:', e);
+    const loadEnabledFields = () => {
+      const saved = localStorage.getItem('applicable-fields-enabled');
+      if (saved) {
+        try {
+          setEnabledFields(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse enabled fields:', e);
+        }
       }
-    }
+    };
+
+    // Initial load
+    loadEnabledFields();
+
+    // Listen for storage changes (when localStorage is modified in another tab or window)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'applicable-fields-enabled' && e.newValue) {
+        try {
+          setEnabledFields(JSON.parse(e.newValue));
+        } catch (e) {
+          console.error('Failed to parse enabled fields from storage event:', e);
+        }
+      }
+    };
+
+    // Listen for custom event (when localStorage is modified in the same tab)
+    const handleCustomEvent = (e: CustomEvent) => {
+      setEnabledFields(e.detail);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('applicable-fields-changed', handleCustomEvent as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('applicable-fields-changed', handleCustomEvent as EventListener);
+    };
+  }, []);
+
+  // Load template URL from localStorage and listen for changes
+  useEffect(() => {
+    const loadTemplateUrl = () => {
+      const saved = localStorage.getItem('certificate-template-url');
+      if (saved) {
+        setTemplateUrl(saved);
+      }
+    };
+
+    // Initial load
+    loadTemplateUrl();
+
+    // Listen for custom event (when template is uploaded in General tab)
+    const handleTemplateEvent = (e: CustomEvent) => {
+      setTemplateUrl(e.detail.templateUrl);
+      setTemplatePageSize(e.detail.pageSize);
+    };
+
+    window.addEventListener('template-url-uploaded', handleTemplateEvent as EventListener);
+
+    return () => {
+      window.removeEventListener('template-url-uploaded', handleTemplateEvent as EventListener);
+    };
   }, []);
 
   const canvasScrollRef = useRef<HTMLDivElement | null>(null);
@@ -465,6 +527,7 @@ export function TemplateDesigner() {
       };
       commit((prev) => [...prev, el]);
       setSelectedId(el.id);
+      setShowElements(true);
     },
     [commit]
   );
@@ -491,11 +554,13 @@ export function TemplateDesigner() {
       y = Math.round(y / GRID_STEP) * GRID_STEP;
     }
     addComponent(item, x, y);
+    setShowElements(true);
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.target !== gridRef.current) return;
     setSelectedId(null);
+    setShowElements(true);
   };
 
   useEffect(() => {
@@ -561,6 +626,34 @@ export function TemplateDesigner() {
     setSelectedId(null);
   };
 
+  // Mapping from template-designer field IDs to Applicable-Fields field IDs (uppercase underscore format from API)
+  const FIELD_ID_MAP: Record<string, string> = {
+    'consigneeAddress': 'CONSIGNEE_ADDRESS',
+    'shipperName': 'SHIPPER_NAME',
+    'shipperAddress': 'SHIPPER_ADDRESS',
+    'tin': 'TIN',
+    'importerEmail': 'IMPORTER_EMAIL',
+    'modeOfTransport': 'MODE_OF_TRANSPORT',
+    'consignee': 'CONSIGNEE',
+    'carrier': 'CARRIER',
+    'destination': 'DESTINATION',
+    'countryOfManufacturing': 'COUNTRY_OF_MANUFACTURING',
+    'fobValue': 'FOB_VALUE',
+    'totalItems': 'TOTAL_ITEMS',
+    'date': 'DATE',
+    'hsCode': 'HS_CODE',
+    'marksNo': 'MARKS_NO',
+    'ecowasNumber': 'ECOWAS_NUMBER',
+    'criteriaEtls': 'CRITERIA_ETLS',
+    'unitOfMeasurement': 'UNIT_OF_MEASUREMENT',
+    'numberKindPackages': 'NUMBER_KIND_PACKAGES',
+    'descriptionOfGoods': 'DESCRIPTION_OF_GOODS',
+    'grossWeight': 'GROSS_WEIGHT',
+    'nomenclature': 'NOMENCLATURE',
+    'invoiceNumber': 'INVOICE_NUMBER',
+    'approvalNumber': 'APPROVAL_NUMBER',
+  };
+
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
     return FULL_PALETTE_GROUPS.map((g) => {
@@ -569,8 +662,8 @@ export function TemplateDesigner() {
       // Filter Application Fields based on enabled fields from localStorage
       if (g.label === 'Application Fields') {
         filteredItems = g.items.filter((i) => {
-          const fieldId = i.type;
-          const isEnabled = enabledFields[fieldId] !== false; // Default to enabled if not set
+          const fieldId = FIELD_ID_MAP[i.type] || i.type;
+          const isEnabled = enabledFields[fieldId] !== false;
           return isEnabled;
         });
       }
@@ -590,7 +683,7 @@ export function TemplateDesigner() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-[#dde3ee] bg-white">
         <div>
           <h1 className="text-[18px] font-semibold text-[#1a2236] flex items-center gap-2">
-            Edit Certificate Type
+            {mode === 'create' ? 'Add Certificate Type' : 'Edit Certificate Type'}
             <span className="text-[11px] font-semibold text-green-800 bg-green-100 border border-green-600 px-2 py-0.5 rounded-full">
               Active
             </span>
@@ -608,10 +701,7 @@ export function TemplateDesigner() {
               <option>Phytosanitary certificate</option>
             </select>
           </div>
-          <button
-            className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] font-medium hover:bg-[#f4f5f7] flex items-center gap-1"
-            onClick={() => window.open('https://mediaserver.advancedtechnologypark.com/media/system/certificate-templates/35ec6acb2796412192b64af97fb43f61.pdf', '_blank')}
-          >
+          <button className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] font-medium hover:bg-[#f4f5f7] flex items-center gap-1">
             Preview PDF
           </button>
           <button
@@ -647,12 +737,12 @@ export function TemplateDesigner() {
 
       {activeTab === 'general' && (
         <div className="flex-1 overflow-auto bg-[#f9fafb]">
-          <General />
+          <General onTabChange={setActiveTab} />
         </div>
       )}
       {activeTab === 'applicable-fields' && (
         <div className="flex-1 overflow-auto bg-[#f9fafb] p-6">
-          <ApplicableFields />
+          <ApplicableFields onTabChange={setActiveTab} />
         </div>
       )}
       {activeTab === 'required-documents' && (
@@ -807,15 +897,18 @@ export function TemplateDesigner() {
             >
               <div
                 className="bg-white shadow-[0_1px_3px_rgba(20,30,60,0.08),0_12px_32px_rgba(20,30,60,0.10)] relative rounded-md shrink-0"
-                style={{ width: PAPER_W * zoom, height: PAPER_H * zoom }}
+                style={{ 
+                  width: (templatePageSize?.width || PAPER_W) * zoom, 
+                  height: (templatePageSize?.height || PAPER_H) * zoom 
+                }}
               >
                 <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
                   <div
                     ref={gridRef}
                     className="relative"
                     style={{
-                      width: PAPER_W,
-                      height: PAPER_H,
+                      width: templatePageSize?.width || PAPER_W,
+                      height: templatePageSize?.height || PAPER_H,
                       backgroundImage: gridOn
                         ? 'linear-gradient(to right, #eef1f6 1px, transparent 1px), linear-gradient(to bottom, #eef1f6 1px, transparent 1px)'
                         : undefined,
@@ -825,8 +918,17 @@ export function TemplateDesigner() {
                     onDrop={onDropOnCanvas}
                     onMouseDown={onCanvasMouseDown}
                   >
-                    {/* Static chrome */}
-                    <div className="absolute left-6 top-5 text-[15px] font-bold tracking-[0.25em] text-[#1a2236]">
+                    {/* PDF Template Background */}
+                    {templateUrl && (
+                      <iframe
+                        src={templateUrl}
+                        className="absolute inset-0 w-full h-full border-0 pointer-events-none"
+                        title="Template Preview"
+                      />
+                    )}
+
+                    {/* Static chrome - commented out to show only uploaded PDF */}
+                    {/* <div className="absolute left-6 top-5 text-[15px] font-bold tracking-[0.25em] text-[#1a2236]">
                       ORIGINAL
                     </div>
                     <div className="absolute right-6 top-6 text-right">
@@ -850,10 +952,10 @@ export function TemplateDesigner() {
 
                     <p className="absolute text-center text-[9px] text-[#9aa5bb]" style={{ left: 24, bottom: 6, width: PAPER_W - 48 }}>
                       Name and Signature / Stamp
-                    </p>
+                    </p> */}
 
-                    {/* Section outlines */}
-                    <div className="absolute inset-0 pointer-events-none">
+                    {/* Section outlines - commented out to show only uploaded PDF */}
+                    {/* <div className="absolute inset-0 pointer-events-none">
                       {SECTIONS.map((s) => (
                         <div key={s.label}>
                           <div
@@ -868,10 +970,16 @@ export function TemplateDesigner() {
                           />
                         </div>
                       ))}
-                      <p className="absolute text-[9px] text-[#4a5a7a]" style={{ left: 66, top: 176 - 13 }}>
+                      <p
+                        className="absolute text-[9px] leading-relaxed text-[#3a4560]"
+                        style={{ left: 66, top: 176 - 13 }}
+                      >
                         FROM:
                       </p>
-                      <p className="absolute text-[9px] text-[#4a5a7a]" style={{ left: 66, top: 196 - 13 }}>
+                      <p
+                        className="absolute text-[9px] leading-relaxed text-[#3a4560]"
+                        style={{ left: 66, top: 196 - 13 }}
+                      >
                         TO:
                       </p>
                       <p
@@ -881,10 +989,10 @@ export function TemplateDesigner() {
                         It is hereby certified, on the basis of control carried out, that the declaration by the
                         exporter is correct.
                       </p>
-                    </div>
+                    </div> */}
 
                     {/* Draggable field elements */}
-                    {elements.map((el) => {
+                    {showElements && elements.map((el) => {
                       const isSelected = el.id === selectedId;
                       return (
                         <div
@@ -935,7 +1043,7 @@ export function TemplateDesigner() {
             {/* Properties panel */}
             <div className="w-[320px] border-l border-[#dde3ee] bg-white overflow-y-auto shrink-0">
               <div className="flex items-center justify-between p-4 border-b border-[#dde3ee]">
-                <h2 className="text-[15px] font-semibold text-[#1a2236]">Component Properties</h2>
+                <h2 className="text-[12px] font-medium text-[#1a2236]">Component Properties</h2>
                 {selected && (
                   <button
                     className="flex items-center gap-1.5 px-2.5 py-1 border border-[#f0b4b0] text-[#dc2626] rounded text-[11.5px] font-semibold hover:bg-[#fdeceb] transition-colors"
@@ -991,10 +1099,7 @@ export function TemplateDesigner() {
               >
                 <FiRefreshCw size={12} /> Reset
               </button>
-              <button
-                className="px-3.5 py-1.5 border border-[#d1d5db] rounded text-[12.5px] font-medium text-[#3a4560] hover:bg-[#f4f5f7] transition-colors"
-                onClick={() => window.open('https://mediaserver.advancedtechnologypark.com/media/system/certificate-templates/35ec6acb2796412192b64af97fb43f61.pdf', '_blank')}
-              >
+              <button className="px-3.5 py-1.5 border border-[#d1d5db] rounded text-[12.5px] font-medium text-[#3a4560] hover:bg-[#f4f5f7] transition-colors">
                 Preview PDF
               </button>
             </div>

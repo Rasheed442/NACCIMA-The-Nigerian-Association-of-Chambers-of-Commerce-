@@ -74,6 +74,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   IMPORTER_EMAIL: Mail,
   MODE_OF_TRANSPORT: Plane,
   CONSIGNEE: Users,
+  CONSIGNEE_ADDRESS: MapPin,
   CARRIER: UserRound,
   DESTINATION: Compass,
   COUNTRY_OF_MANUFACTURING: Globe2,
@@ -107,6 +108,7 @@ const TYPE_MAP: Record<string, string> = {
   IMPORTER_EMAIL: "Email",
   MODE_OF_TRANSPORT: "Dropdown",
   CONSIGNEE: "Text",
+  CONSIGNEE_ADDRESS: "Text",
   CARRIER: "Text",
   DESTINATION: "Text",
   COUNTRY_OF_MANUFACTURING: "Text",
@@ -136,6 +138,7 @@ const FALLBACK_FIELDS: FieldDef[] = [
   { id: "importerEmail", label: "Importer Email", icon: Mail, type: "Email", group: "application", badge: null, defaultEnabled: true },
   { id: "modeOfTransport", label: "Mode of Transport", icon: Plane, type: "Dropdown", group: "application", badge: null, defaultEnabled: true },
   { id: "consignee", label: "Consignee", icon: Users, type: "Text", group: "application", badge: null, defaultEnabled: true },
+  { id: "consigneeAddress", label: "Consignee Address", icon: MapPin, type: "Text", group: "application", badge: null, defaultEnabled: true },
   { id: "carrier", label: "Carrier", icon: UserRound, type: "Text", group: "application", badge: null, defaultEnabled: true },
   { id: "destination", label: "Destination", icon: Compass, type: "Text", group: "application", badge: null, defaultEnabled: true },
   { id: "countryOfManufacturing", label: "Country of Manufacturing", icon: Globe2, type: "Text", group: "application", badge: null, defaultEnabled: true },
@@ -235,12 +238,27 @@ const GROUP_META: Record<
 const GROUP_ORDER: Group[] = ["application", "nrsLocked", "readOnly"];
 const COLUMN_COUNT = 3;
 
-export default function ApplicableFieldsPanel() {
+interface ApplicableFieldsProps {
+  onTabChange?: (tabId: string) => void;
+}
+
+export default function ApplicableFieldsPanel({ onTabChange }: ApplicableFieldsProps) {
   const [fields, setFields] = useState<FieldDef[]>(FALLBACK_FIELDS);
   const [loading, setLoading] = useState(true);
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(FALLBACK_FIELDS.map((f) => [f.id, f.defaultEnabled]))
-  );
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(() => {
+    // Load enabled state from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('applicable-fields-enabled');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Failed to parse enabled fields from localStorage:', e);
+        }
+      }
+    }
+    return Object.fromEntries(FALLBACK_FIELDS.map((f) => [f.id, f.defaultEnabled]));
+  });
   const [openGroups, setOpenGroups] = useState<Record<Group, boolean>>({
     application: true,
     nrsLocked: true,
@@ -258,7 +276,14 @@ export default function ApplicableFieldsPanel() {
         if (data.success && Array.isArray(data.data)) {
           const mappedFields = data.data.map(mapApiFieldToFieldDef);
           setFields(mappedFields);
-          setEnabled(Object.fromEntries(mappedFields.map((f) => [f.id, f.defaultEnabled])));
+          // Preserve existing enabled state for fields that exist, add new fields as enabled
+          setEnabled((prevEnabled) => {
+            const newEnabled: Record<string, boolean> = {};
+            mappedFields.forEach((f: any) => {
+              newEnabled[f.id] = prevEnabled[f.id] !== undefined ? prevEnabled[f.id] : f.defaultEnabled;
+            });
+            return newEnabled;
+          });
         }
       } catch (error) {
         console.error('Failed to fetch certificate fields:', error);
@@ -282,8 +307,10 @@ export default function ApplicableFieldsPanel() {
   const selectAll = () =>
     setEnabled(Object.fromEntries(fields.map((f) => [f.id, true])));
 
-  const clearAll = () =>
+  const clearAll = () => {
     setEnabled(Object.fromEntries(fields.map((f) => [f.id, false])));
+    localStorage.removeItem('applicable-fields-enabled');
+  };
 
   const toggleGroupOpen = (group: Group) =>
     setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }));
@@ -298,9 +325,11 @@ export default function ApplicableFieldsPanel() {
     return map;
   }, [fields]);
 
-  // Save enabled fields to localStorage when they change
+  // Save enabled fields to localStorage when they change and dispatch custom event
   useEffect(() => {
     localStorage.setItem('applicable-fields-enabled', JSON.stringify(enabled));
+    // Dispatch custom event for same-tab communication
+    window.dispatchEvent(new CustomEvent('applicable-fields-changed', { detail: enabled }));
   }, [enabled]);
 
   if (loading) {
@@ -462,7 +491,13 @@ export default function ApplicableFieldsPanel() {
           </button>
           <button
             type="button"
-            className="flex items-center gap-1 rounded-lg bg-[#1a4a8a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2a5a9a] transition-colors"
+            disabled={enabledCount === 0}
+            onClick={() => onTabChange?.('required-documents')}
+            className={`flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              enabledCount === 0
+                ? 'bg-[#cbd5e1] text-[#94a3b8] cursor-not-allowed'
+                : 'bg-[#1a4a8a] text-white hover:bg-[#2a5a9a]'
+            }`}
           >
             Next
             <ChevronRight className="h-4 w-4" />
