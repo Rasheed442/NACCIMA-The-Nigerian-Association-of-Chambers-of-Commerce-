@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { apiFetch, getBaseUrl } from "@/utils/api";
 
 type Status = "active" | "inactive" | "draft";
@@ -131,27 +131,25 @@ export default function General({ onTabChange }: GeneralProps) {
         pageIndex: 0,
       }));
 
-      // Upload template to API
+      // Convert file to data URL for immediate display in template designer
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        window.dispatchEvent(new CustomEvent('template-data-uploaded', { detail: { dataUrl, pageSize } }));
+      };
+      reader.readAsDataURL(file);
+
+      // Upload template to API (but don't store URL)
       const baseUrl = getBaseUrl();
       const formData = new FormData();
       formData.append('file', file);
 
       // Use a placeholder ID for now - this should be replaced with actual certificate type ID
       const certificateTypeId = '50000000-0000-0000-0000-000000000002';
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateTypeId}/template`, {
+      await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateTypeId}/template`, {
         method: 'POST',
         body: formData,
       });
-
-      const result = await response.json();
-      if (response.ok && result.data) {
-        const templateUrl = result.data.templateUrl || `${baseUrl}/api/v1/admin/certificate-types/${certificateTypeId}/template`;
-        setForm((prev) => ({ ...prev, templateUrl }));
-
-        // Save template URL to localStorage for template designer
-        localStorage.setItem('certificate-template-url', templateUrl);
-        window.dispatchEvent(new CustomEvent('template-url-uploaded', { detail: { templateUrl, pageSize } }));
-      }
     } catch {
       setErrors((prev) => ({
         ...prev,

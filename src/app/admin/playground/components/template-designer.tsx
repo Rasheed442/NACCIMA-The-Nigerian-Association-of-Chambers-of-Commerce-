@@ -32,8 +32,8 @@ import {
   FiEye,
   FiUpload,
   FiRefreshCw,
-  type IconType,
 } from 'react-icons/fi';
+import { type IconType } from 'react-icons';
 import General from './General';
 import ApplicableFields from './Applicable-Fields';
 import RequiredDocuments from './Required-documents';

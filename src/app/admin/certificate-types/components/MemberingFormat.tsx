@@ -1,11 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Info, ChevronLeft, ChevronRight, Check, ChevronDown, ChevronUp } from "lucide-react";
+import { apiFetch, getBaseUrl } from "@/utils/api";
 
-type NumberingMethod = "auto" | "manual" | "random";
+type NumberingMethod = string;
 type Padding = 4 | 6 | 8 | 10;
 type ResetFrequency = "never" | "yearly" | "monthly" | "daily";
+
+interface NumberingMethodOption {
+  code: string;
+  name: string;
+}
+
+interface NumberingConfig {
+  method: string;
+  padding: number;
+  incrementStep: number;
+  resetFrequency: string;
+  separator: string;
+  format: string;
+}
 
 interface NumberingState {
   method: NumberingMethod;
@@ -18,6 +33,8 @@ interface NumberingState {
   useYear: boolean;
   resetAnnually: boolean;
   allowManualOverride: boolean;
+  separator: string;
+  format: string;
 }
 
 const PADDING_OPTIONS: { value: Padding; label: string }[] = [
@@ -100,9 +117,20 @@ function Select<T extends string | number>({
   );
 }
 
-export default function CertificateNumberingPanel() {
+interface MemberingFormatProps {
+  certificateType?: {
+    id: string;
+    code: string;
+    numberingConfig?: NumberingConfig;
+  } | null;
+}
+
+export default function CertificateNumberingPanel({ certificateType }: MemberingFormatProps) {
+  const [numberingMethods, setNumberingMethods] = useState<NumberingMethodOption[]>([]);
+  const [loadingMethods, setLoadingMethods] = useState(true);
+  
   const [state, setState] = useState<NumberingState>({
-    method: "auto",
+    method: "AUTO_INCREMENT",
     prefix: "CO/",
     currentNumber: "00001234",
     padding: 8,
@@ -112,7 +140,51 @@ export default function CertificateNumberingPanel() {
     useYear: false,
     resetAnnually: false,
     allowManualOverride: false,
+    separator: "",
+    format: "{PREFIX}{SEQUENCE}",
   });
+
+  // Load numbering config from certificate type
+  useEffect(() => {
+    if (certificateType?.numberingConfig) {
+      const config = certificateType.numberingConfig;
+      setState((prev) => ({
+        ...prev,
+        method: config.method || prev.method,
+        padding: config.padding as Padding || prev.padding,
+        incrementStep: config.incrementStep || prev.incrementStep,
+        resetFrequency: config.resetFrequency.toLowerCase() as ResetFrequency || prev.resetFrequency,
+        separator: config.separator || "",
+        format: config.format || prev.format,
+      }));
+    }
+  }, [certificateType?.numberingConfig]);
+
+  // Fetch numbering methods from API
+  useEffect(() => {
+    const fetchNumberingMethods = async () => {
+      try {
+        const baseUrl = getBaseUrl();
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/numbering-methods`);
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.data)) {
+          setNumberingMethods(data.data);
+          // Set default method to first available if not already set
+          if (data.data.length > 0 && !certificateType?.numberingConfig) {
+            setState((prev) => ({ ...prev, method: data.data[0].code }));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch numbering methods:', error);
+        // Keep using fallback methods
+      } finally {
+        setLoadingMethods(false);
+      }
+    };
+
+    fetchNumberingMethods();
+  }, [certificateType?.numberingConfig]);
 
   const update = <K extends keyof NumberingState>(key: K, value: NumberingState[K]) =>
     setState((prev) => ({ ...prev, [key]: value }));
@@ -150,12 +222,12 @@ export default function CertificateNumberingPanel() {
               <Select
                 value={state.method}
                 onChange={(v) => update("method", v as NumberingMethod)}
-                options={[
-                  { value: "auto", label: "Auto Increment" },
-                  { value: "manual", label: "Manual Entry" },
-                  { value: "random", label: "Random" },
-                ]}
+                options={numberingMethods.length > 0 
+                  ? numberingMethods.map((m) => ({ value: m.code, label: m.name }))
+                  : [{ value: "AUTO_INCREMENT", label: "Auto Increment" }]
+                }
                 className={selectClass}
+                disabled={loadingMethods}
               />
             </Field>
 
@@ -165,6 +237,26 @@ export default function CertificateNumberingPanel() {
                 value={state.prefix}
                 onChange={(e) => update("prefix", e.target.value)}
                 placeholder="CO/"
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Separator">
+              <input
+                type="text"
+                value={state.separator}
+                onChange={(e) => update("separator", e.target.value)}
+                placeholder="-"
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="Format Pattern">
+              <input
+                type="text"
+                value={state.format}
+                onChange={(e) => update("format", e.target.value)}
+                placeholder="{PREFIX}{SEQUENCE}"
                 className={inputClass}
               />
             </Field>

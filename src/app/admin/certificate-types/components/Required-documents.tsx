@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Truck,
   Plane,
@@ -19,6 +19,7 @@ import {
   ChevronRight,
   type LucideIcon,
 } from "lucide-react";
+import { apiFetch, getBaseUrl } from "@/utils/api";
 
 type Accent = "emerald" | "sky" | "violet" | "amber" | "rose";
 
@@ -37,6 +38,15 @@ interface TransportMode {
   active: boolean;
   expanded: boolean;
   documents: DocumentItem[];
+}
+
+interface RequiredDocumentsProps {
+  certificateType?: {
+    id: string;
+    code: string;
+    name: string;
+    requiredDocuments?: Record<string, string[]>;
+  } | null;
 }
 
 const ACCENT_STYLES: Record<
@@ -117,13 +127,70 @@ const INITIAL_MODES: TransportMode[] = [
   },
 ];
 
-export default function RequiredDocumentsPanel() {
+export default function RequiredDocumentsPanel({ certificateType }: RequiredDocumentsProps) {
   const [modes, setModes] = useState<TransportMode[]>(INITIAL_MODES);
   const [editingDoc, setEditingDoc] = useState<{ modeId: string; docId: string } | null>(null);
   const [draftName, setDraftName] = useState("");
   const [addingModeOpen, setAddingModeOpen] = useState(false);
   const [newModeName, setNewModeName] = useState("");
   const [dragState, setDragState] = useState<{ modeId: string; docId: string } | null>(null);
+
+  // Fetch required documents from API
+  useEffect(() => {
+    const fetchRequiredDocuments = async () => {
+      if (!certificateType?.id) return;
+
+      try {
+        const baseUrl = getBaseUrl();
+        const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateType.id}`);
+        const data = await response.json();
+
+        if (data.success && data.data?.requiredDocuments) {
+          const apiDocs = data.data.requiredDocuments;
+          
+          // Convert API response to TransportMode format
+          const transportModes: TransportMode[] = Object.entries(apiDocs).map(([key, docs]) => {
+            const modeKey = key.toLowerCase();
+            let icon: LucideIcon = Truck;
+            let accent: Accent = "emerald";
+            let subtitle = "Road Transport";
+
+            if (modeKey === "air") {
+              icon = Plane;
+              accent = "sky";
+              subtitle = "Air Transport";
+            } else if (modeKey === "sea") {
+              icon = Ship;
+              accent = "violet";
+              subtitle = "Sea Transport";
+            }
+
+            return {
+              id: modeKey,
+              name: key.charAt(0) + key.slice(1).toLowerCase(),
+              subtitle,
+              icon,
+              accent,
+              active: true,
+              expanded: true,
+              documents: (docs as string[]).map((docName) => ({
+                id: nextId("doc"),
+                name: docName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+                required: true,
+              })),
+            };
+          });
+
+          setModes(transportModes);
+        }
+      } catch (error) {
+        console.error('Failed to fetch required documents:', error);
+        // Keep using initial modes as fallback
+      }
+    };
+
+    fetchRequiredDocuments();
+  }, [certificateType?.id]);
 
   const totalDocuments = useMemo(
     () => modes.reduce((sum, m) => sum + m.documents.length, 0),

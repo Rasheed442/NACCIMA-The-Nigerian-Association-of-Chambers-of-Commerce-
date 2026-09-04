@@ -258,7 +258,7 @@ export default function ApplicableFieldsPanel() {
         if (data.success && Array.isArray(data.data)) {
           const mappedFields = data.data.map(mapApiFieldToFieldDef);
           setFields(mappedFields);
-          setEnabled(Object.fromEntries(mappedFields.map((f) => [f.id, f.defaultEnabled])));
+          setEnabled(Object.fromEntries(mappedFields.map((f:any) => [f.id, f.defaultEnabled])));
         }
       } catch (error) {
         console.error('Failed to fetch certificate fields:', error);

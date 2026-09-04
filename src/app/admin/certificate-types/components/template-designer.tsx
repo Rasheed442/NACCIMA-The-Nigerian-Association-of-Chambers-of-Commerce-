@@ -33,12 +33,16 @@ import {
   FiEye,
   FiUpload,
   FiRefreshCw,
+  FiImage,
+  FiBarChart,
+  FiEdit,
 } from 'react-icons/fi';
 import General from './General';
 import ApplicableFields from './Applicable-Fields';
 import RequiredDocuments from './Required-documents';
 import MemberingFormat from './MemberingFormat';
 import FeeCharges from './FeeCharges';
+import { apiFetch, getBaseUrl } from '@/utils/api';
 
 interface TemplateDesignerProps {
   mode?: 'create' | 'edit';
@@ -141,10 +145,69 @@ interface PaletteItem {
   w: number;
   h: number;
   badge?: 'NRS-locked' | 'System' | 'Component';
+  category?: string;
+}
+
+interface ApiField {
+  code: string;
+  name: string;
+  category: string;
+  applicable: boolean;
+  required: boolean;
+  readOnly: boolean;
+  templateComponent: string;
+  repeatable: boolean;
 }
 
 const APPLICATION_FIELDS_VISIBLE = 14;
 const TOTAL_ENABLED_FIELDS = 26;
+
+// Mapping from templateComponent to component properties
+const TEMPLATE_COMPONENT_MAP: Record<string, { icon: IconType; typeLabel: string; w: number; h: number }> = {
+  TEXT: { icon: FiFileText, typeLabel: 'Text', w: 180, h: 18 },
+  MULTI_LINE_TEXT: { icon: FiAlignLeft, typeLabel: 'Multi-line Text', w: 220, h: 40 },
+  NUMBER: { icon: FiHash, typeLabel: 'Number', w: 140, h: 18 },
+  DATE: { icon: FiCalendar, typeLabel: 'Date', w: 140, h: 18 },
+  DROPDOWN: { icon: FiChevronDown, typeLabel: 'Dropdown', w: 200, h: 18 },
+  CHECKBOX: { icon: FiCheckSquare, typeLabel: 'Checkbox', w: 22, h: 22 },
+  GOODS_COLUMN: { icon: FiGrid, typeLabel: 'Goods Column', w: 120, h: 18 },
+  QR_CODE: { icon: FiGrid, typeLabel: 'QR Code', w: 80, h: 80 },
+  VERIFICATION_CODE: { icon: FiShield, typeLabel: 'Verification Code', w: 200, h: 22 },
+  IMAGE: { icon: FiImage, typeLabel: 'Image', w: 100, h: 100 },
+  BARCODE: { icon: FiBarChart, typeLabel: 'Barcode', w: 150, h: 40 },
+  SIGNATURE: { icon: FiEdit, typeLabel: 'Signature', w: 172, h: 20 },
+};
+
+// Convert API field to PaletteItem
+function apiFieldToPaletteItem(field: ApiField): PaletteItem {
+  const component = TEMPLATE_COMPONENT_MAP[field.templateComponent] || TEMPLATE_COMPONENT_MAP.TEXT;
+  let kind: FieldKind = 'application';
+  let source = 'Manual Entry';
+  let badge: 'NRS-locked' | 'System' | 'Component' | undefined;
+
+  if (field.readOnly) {
+    kind = 'system';
+    source = 'System';
+    badge = 'System';
+  } else if (field.required && field.category === 'APPLICATION') {
+    kind = 'nrs-locked';
+    source = 'NRS';
+    badge = 'NRS-locked';
+  }
+
+  return {
+    type: field.code,
+    label: field.name,
+    icon: component.icon,
+    kind,
+    typeLabel: component.typeLabel,
+    source,
+    w: component.w,
+    h: component.h,
+    badge,
+    category: field.category,
+  };
+}
 
 // Full palette of all possible fields
 const FULL_PALETTE_GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
@@ -344,11 +407,11 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
         try {
           return JSON.parse(saved);
         } catch {
-          return makeSeed();
+          return [];
         }
       }
     }
-    return makeSeed();
+    return [];
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.9);
@@ -360,9 +423,12 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
   const [openBorderSection, setOpenBorderSection] = useState(false);
   const [openAdvancedSection, setOpenAdvancedSection] = useState(false);
   const [enabledFields, setEnabledFields] = useState<Record<string, boolean>>({});
-  const [templateUrl, setTemplateUrl] = useState<string | null>(null);
+  const [templateDataUrl, setTemplateDataUrl] = useState<string | null>(null);
   const [templatePageSize, setTemplatePageSize] = useState<{ width: number; height: number } | null>(null);
   const [showElements, setShowElements] = useState(false);
+  const [apiFields, setApiFields] = useState<ApiField[]>([]);
+  const [loadingFields, setLoadingFields] = useState(true);
+  const [certificateTypeCode, setCertificateTypeCode] = useState<string>('');
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
@@ -408,30 +474,50 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
     };
   }, []);
 
-  // Load template URL from localStorage and listen for changes
+  // Listen for custom event (when template is uploaded in General tab)
   useEffect(() => {
-    const loadTemplateUrl = () => {
-      const saved = localStorage.getItem('certificate-template-url');
-      if (saved) {
-        setTemplateUrl(saved);
-      }
-    };
-
-    // Initial load
-    loadTemplateUrl();
-
-    // Listen for custom event (when template is uploaded in General tab)
     const handleTemplateEvent = (e: CustomEvent) => {
-      setTemplateUrl(e.detail.templateUrl);
+      setTemplateDataUrl(e.detail.dataUrl);
       setTemplatePageSize(e.detail.pageSize);
     };
 
-    window.addEventListener('template-url-uploaded', handleTemplateEvent as EventListener);
+    window.addEventListener('template-data-uploaded', handleTemplateEvent as EventListener);
 
     return () => {
-      window.removeEventListener('template-url-uploaded', handleTemplateEvent as EventListener);
+      window.removeEventListener('template-data-uploaded', handleTemplateEvent as EventListener);
     };
   }, []);
+
+  // Fetch fields from API
+  useEffect(() => {
+    const fetchFields = async () => {
+      try {
+        const code = certificateType?.code;
+        if (!code) {
+          console.error('Certificate type code not available');
+          setLoadingFields(false);
+          return;
+        }
+        
+        setCertificateTypeCode(code);
+        
+        const baseUrl = getBaseUrl();
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/types/${code}/fields`);
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.data)) {
+          setApiFields(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch certificate fields:', error);
+        // Keep using fallback fields
+      } finally {
+        setLoadingFields(false);
+      }
+    };
+
+    fetchFields();
+  }, [certificateType]);
 
   const canvasScrollRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -496,7 +582,7 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
       const p = kindPalette(item.kind);
       const el: FieldElement = {
         id: uid('el'),
-        text: item.label.toUpperCase().replace(/[^A-Z0-9]+/g, '_'),
+        text: item.type,
         label: item.label,
         typeLabel: item.typeLabel,
         source: item.source,
@@ -544,7 +630,10 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
   const onDropOnCanvas = (e: React.DragEvent) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('text/plain');
-    const item = FULL_PALETTE_GROUPS.flatMap((g) => g.items).find((i) => i.type === type);
+    
+    // Search in both dynamic API fields and fallback palette
+    let item = filteredGroups.flatMap((g) => g.items).find((i) => i.type === type);
+    
     if (!item || !gridRef.current) return;
     const rect = gridRef.current.getBoundingClientRect();
     let x = Math.round((e.clientX - rect.left) / zoom);
@@ -622,7 +711,7 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
   };
 
   const handleReset = () => {
-    commit(() => makeSeed());
+    commit(() => []);
     setSelectedId(null);
   };
 
@@ -656,10 +745,46 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
 
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
+
+    // If API fields are loaded, use them to build dynamic palette
+    if (apiFields.length > 0) {
+      // Group fields by category
+      const grouped = apiFields.reduce((acc, field) => {
+        if (!field.applicable) return acc; // Skip non-applicable fields
+
+        const category = field.category || 'Other';
+        if (!acc[category]) {
+          acc[category] = [];
+        }
+        acc[category].push(field);
+        return acc;
+      }, {} as Record<string, ApiField[]>);
+
+      // Convert to palette groups
+      const groups = Object.entries(grouped).map(([category, fields]) => ({
+        label: category,
+        items: fields.map(apiFieldToPaletteItem),
+      }));
+
+      // Filter by enabled fields and search
+      return groups.map((g) => {
+        let filteredItems = g.items.filter((i) => {
+          const isEnabled = enabledFields[i.type] !== false;
+          return isEnabled;
+        });
+
+        if (q) {
+          filteredItems = filteredItems.filter((i) => i.label.toLowerCase().includes(q));
+        }
+
+        return { ...g, items: filteredItems };
+      }).filter((g) => g.items.length > 0);
+    }
+
+    // Fallback to hardcoded palette if API fields not loaded
     return FULL_PALETTE_GROUPS.map((g) => {
       let filteredItems = g.items;
-      
-      // Filter Application Fields based on enabled fields from localStorage
+
       if (g.label === 'Application Fields') {
         filteredItems = g.items.filter((i) => {
           const fieldId = FIELD_ID_MAP[i.type] || i.type;
@@ -667,15 +792,14 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
           return isEnabled;
         });
       }
-      
-      // Apply search filter
+
       if (q) {
         filteredItems = filteredItems.filter((i) => i.label.toLowerCase().includes(q));
       }
-      
+
       return { ...g, items: filteredItems };
     }).filter((g) => g.items.length > 0);
-  }, [search, enabledFields]);
+  }, [search, enabledFields, apiFields]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#f6f7fb]">
@@ -747,12 +871,12 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
       )}
       {activeTab === 'required-documents' && (
         <div className="flex-1 overflow-auto bg-[#f9fafb] p-6">
-          <RequiredDocuments />
+          <RequiredDocuments certificateType={certificateType} />
         </div>
       )}
       {activeTab === 'numbering-format' && (
         <div className="flex-1 overflow-auto bg-[#f9fafb] p-6">
-          <MemberingFormat />
+          <MemberingFormat certificateType={certificateType} />
         </div>
       )}
       {activeTab === 'Fee' && (
@@ -919,9 +1043,9 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
                     onMouseDown={onCanvasMouseDown}
                   >
                     {/* PDF Template Background */}
-                    {templateUrl && (
+                    {templateDataUrl && (
                       <iframe
-                        src={templateUrl}
+                        src={`${templateDataUrl}#toolbar=0&navpanes=0&scrollbar=0`}
                         className="absolute inset-0 w-full h-full border-0 pointer-events-none"
                         title="Template Preview"
                       />
