@@ -191,6 +191,26 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
     </>
   );
 
+  const renderVettingSidebar = () => (
+    <>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-queue' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/vetting-queue')}>
+        <span className="text-[13px] w-[15px] text-center">📥</span> Applications Queue {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">12</span>}
+      </div>
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+        <span className="text-[13px] w-[15px] text-center">🗂️</span> My Reviews
+      </div>
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+        <span className="text-[13px] w-[15px] text-center">✅</span> Approved Today {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">5</span>}
+      </div>
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+        <span className="text-[13px] w-[15px] text-center">❌</span> Rejected
+      </div>
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+        <span className="text-[13px] w-[15px] text-center">📊</span> Reports
+      </div>
+    </>
+  );
+
   const renderExporterSidebar = () => (
     <>
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === dashboardPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(dashboardPath)}>
@@ -225,7 +245,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
 
   return (
     <nav className={`w-[250px] relative ${sidebarBg} border-r ${borderColor} flex-shrink-0 py-[18px] overflow-y-auto opacity-100 transition-opacity duration-200`}>
-      {role === 'admin' ? renderAdminSidebar() : renderExporterSidebar()}
+      {role === 'admin' ? renderAdminSidebar() : role === 'vetting' ? renderVettingSidebar() : renderExporterSidebar()}
       <div className="flex-1"></div>
       <div className="px-[16px] py-[20px] flex items-center gap-2 text-[15px] text-[#e53e3e] cursor-pointer w-full transition-all hover:bg-[#fef2f2] hover:text-[#dc2626] absolute bottom-30 border-t-1 border-[#dc2626]" onClick={() => window.dispatchEvent(new CustomEvent('open-logout-modal'))}>
         <span className="text-[15px] w-3.75 text-center">🚪</span> Log Out

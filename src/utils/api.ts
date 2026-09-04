@@ -127,7 +127,7 @@ export async function apiFetch(url: string, options: FetchOptions = {}): Promise
   return response;
 }
 
-function clearAuthData() {
+export function clearAuthData() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('accessTokenExpiresAt');

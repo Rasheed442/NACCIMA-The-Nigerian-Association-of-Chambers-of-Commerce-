@@ -17,6 +17,11 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import { apiFetch, getBaseUrl, clearAuthData } from '@/utils/api';
+import { DayPicker } from 'react-day-picker';
+import { format } from 'date-fns';
+import { ChevronDown, Calendar, FileX2 } from 'lucide-react';
+import 'react-day-picker/dist/style.css';
 
 const certificateData = [
   { name: 'Cert. of Origin', applications: 482 },
@@ -101,8 +106,10 @@ export default function AdminPage() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dateFrom, setDateFrom] = useState('2026-01-01');
-  const [dateTo, setDateTo] = useState('2027-01-01');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(new Date('2026-01-01'));
+  const [dateTo, setDateTo] = useState<Date | undefined>(new Date('2027-01-01'));
+  const [showFromCalendar, setShowFromCalendar] = useState(false);
+  const [showToCalendar, setShowToCalendar] = useState(false);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -110,24 +117,30 @@ export default function AdminPage() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const from = `${dateFrom}T00:00:00Z`;
-        const to = `${dateTo}T00:00:00Z`;
-        const response = await fetch(`/api/v1/admin/dashboard?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
-        const data = await response.json();
-        if (data.success) {
-          setDashboardData(data.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
-      } finally {
-        setLoading(false);
+        const baseUrl = getBaseUrl();
+  
+
+  const fetchDashboardData = async () => {
+    if (!dateFrom || !dateTo) return;
+    setLoading(true);
+    try {
+      const from = format(dateFrom, 'yyyy-MM-dd') + 'T00:00:00Z';
+      const to = format(dateTo, 'yyyy-MM-dd') + 'T00:00:00Z';
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/dashboard?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      const data = await response.json();
+      if (data.success) {
+        setDashboardData(data.data);
       }
-    };
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDashboardData();
-  }, [dateFrom, dateTo]);
+  }, []);
 
   const transformedCertificateData = useMemo(() => {
     if (!dashboardData) return certificateData;
@@ -187,7 +200,8 @@ export default function AdminPage() {
 
   const handleLogout = () => {
     setShowLogoutModal(false);
-    router.push('/');
+    clearAuthData();
+    router.push('/login');
   };
 
   return (
@@ -197,35 +211,67 @@ export default function AdminPage() {
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar role="admin" />
           <div className="flex-1 px-[28px] py-[22px] overflow-x-hidden overflow-auto bg-[#fbfbfe]">
-            <div className="text-[22px] font-bold text-[#1a2236] ">Admin Dashboard</div>
-            <div className="text-[13px] text-[#6a7a9a] mb-[18px]">Overview as of {new Date().toLocaleDateString()}</div>
+            <div className="flex items-start justify-between mb-[18px]">
+              <div>
+                <div className="text-[22px] font-bold text-[#1a2236] ">Admin Dashboard</div>
+                <div className="text-[13px] text-[#6a7a9a] mt-1">Overview as of {new Date().toLocaleDateString()}</div>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowFromCalendar(!showFromCalendar)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm border border-[#d1d5db] rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]"
+                  >
+                    <Calendar className="h-4 w-4 text-[#6b7280]" />
+                    <span className="text-[#374151]">{dateFrom ? format(dateFrom, 'MMM dd, yyyy') : 'From'}</span>
+                    <ChevronDown className="h-4 w-4 text-[#6b7280]" />
+                  </button>
+                  {showFromCalendar && (
+                    <div className="absolute right-0 mt-2 z-50 bg-white border border-[#e5e7eb] rounded-lg shadow-lg p-3">
+                      <DayPicker
+                        mode="single"
+                        selected={dateFrom}
+                        onSelect={(date) => {
+                          setDateFrom(date);
+                          setShowFromCalendar(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
 
-            <div className="flex items-center gap-4 mb-6 p-4 bg-white border border-[#e5e7eb] rounded-lg shadow-sm">
-              <div className="flex items-center gap-3">
-                <label className="text-[13px] font-medium text-[#374151]">From:</label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="px-3 py-2 text-sm border border-[#d1d5db] rounded-md focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] focus:border-transparent"
-                />
+                <div className="relative">
+                  <button
+                    onClick={() => setShowToCalendar(!showToCalendar)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm border border-[#d1d5db] rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]"
+                  >
+                    <Calendar className="h-4 w-4 text-[#6b7280]" />
+                    <span className="text-[#374151]">{dateTo ? format(dateTo, 'MMM dd, yyyy') : 'To'}</span>
+                    <ChevronDown className="h-4 w-4 text-[#6b7280]" />
+                  </button>
+                  {showToCalendar && (
+                    <div className="absolute right-0 mt-2 z-50 bg-white border border-[#e5e7eb] rounded-lg shadow-lg p-3">
+                      <DayPicker
+                        mode="single"
+                        selected={dateTo}
+                        onSelect={(date) => {
+                          setDateTo(date);
+                          setShowToCalendar(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={fetchDashboardData}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-[#1d4ed8] rounded-md hover:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? 'Loading...' : 'Apply'}
+                </button>
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-[13px] font-medium text-[#374151]">To:</label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="px-3 py-2 text-sm border border-[#d1d5db] rounded-md focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] focus:border-transparent"
-                />
-              </div>
-              <button
-                onClick={() => setLoading(true)}
-                disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-[#1d4ed8] rounded-md hover:bg-[#1e40af] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {loading ? 'Loading...' : 'Apply Filter'}
-              </button>
             </div>
 
             <div className="grid grid-cols-4 gap-4 mb-6">
@@ -279,6 +325,20 @@ export default function AdminPage() {
               </div>
             </div>
 
+            {!loading && dashboardData && (
+              dashboardData.kpis.totalApplications === 0 &&
+              dashboardData.kpis.revenueCollected === 0 &&
+              dashboardData.applicationsByCertificateType.length === 0 &&
+              dashboardData.statusBreakdown.length === 0 &&
+              dashboardData.recentActivity.length === 0
+            ) ? (
+              <div className="flex flex-col items-center justify-center py-20 bg-white border border-[#edf2f7] shadow-sm rounded-lg">
+                <FileX2 className="h-16 w-16 text-[#9ca3af] mb-4" />
+                <div className="text-[18px] font-semibold text-[#374151] mb-2">No data available</div>
+                <div className="text-[14px] text-[#6b7280]">No data available for the selected date range.</div>
+              </div>
+            ) : (
+              <>
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-2 bg-white border border-[#edf2f7] shadow-sm rounded p-4">
                 <div className="text-[16px] font-medium mb-3 pt-2">Applications by Certificate Type (2026)</div>
@@ -361,6 +421,8 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
+              </>
+            )}
 
             <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
           </div>

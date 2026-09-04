@@ -205,7 +205,7 @@ const TABS = [
       { id: 'required-documents', label: 'Required Documents' },
 
   { id: 'template-designer', label: 'Template Designer' },
-  { id: 'membering-format', label: 'Membering & Format' },
+  { id: 'numbering-format', label: 'Numbering & Format' },
   { id: 'Fee', label: 'Fee & changes' },
 ];
 
@@ -535,7 +535,7 @@ export function TemplateDesigner() {
         </div>
       )}
 
-      {activeTab === 'membering-format' && (
+      {activeTab === 'numbering-format' && (
         <div className="flex-1 overflow-auto bg-[#f9fafb] p-6">
           <MemberingFormat />
         </div>

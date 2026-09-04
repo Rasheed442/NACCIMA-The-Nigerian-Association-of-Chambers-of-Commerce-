@@ -37,8 +37,8 @@ export default function AppHeader({
     }
   }, []);
 
-  const headerBg = role === 'admin' ? 'bg-[#2d1b69]' : 'bg-[#1a3a5c]';
-  const roleTag = role === 'admin' ? 'Admin Panel' : role === 'vetting' ? 'Vetting' : 'E-Certificate Platform';
+  const headerBg = role === 'admin' ? 'bg-[#2d1b69]' : role === 'vetting' ? 'bg-[#1a3a2a]' : 'bg-[#1a3a5c]';
+  const roleTag = role === 'admin' ? 'Admin Panel' : role === 'vetting' ? 'Staff Portal — Vetting' : 'E-Certificate Platform';
   const userName = userData ? `${userData.firstName} ${userData.lastName}` : companyName;
   const userInitials = userData 
     ? `${userData.firstName.charAt(0)}${userData.lastName.charAt(0)}` 
@@ -75,7 +75,7 @@ export default function AppHeader({
      
 
         <div className="flex items-center gap-2 cursor-pointer">
-          <div className={`w-8.75 h-8.75 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${role === 'admin' ? 'bg-[#7b4fb1]' : 'bg-[#2c6ea3]'}`}>
+          <div className={`w-8.75 h-8.75 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${role === 'admin' ? 'bg-[#7b4fb1]' : role === 'vetting' ? 'bg-[#1e8449]' : 'bg-[#2c6ea3]'}`}>
             {userInitials}
           </div>
           <span className="text-[13px] text-[#c8ddf0]">{userName}</span>

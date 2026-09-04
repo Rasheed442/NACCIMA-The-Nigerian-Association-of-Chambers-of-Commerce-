@@ -6,14 +6,34 @@ import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { FaPlus } from "react-icons/fa";
 import { useRouter } from 'next/navigation';
-import { apiFetch, getBaseUrl } from '@/utils/api';
-
+import { apiFetch, getBaseUrl, clearAuthData } from '@/utils/api';
+import { FaArrowUp } from "react-icons/fa6";
 interface Application {
-  id: string;
+  applicationId: string;
+  approvalNumber: string;
   certificateType: string;
-  destinationCountry: string;
+  destination: string;
   submittedAt: string;
-  status: 'DRAFT' | 'SUBMITTED' | 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ISSUED' | 'UNAPPROVED';
+  status: string;
+  action: string;
+  certificateNumber?: string;
+  certificatePdfUrl?: string;
+}
+
+interface DashboardData {
+  activeApplications: number;
+  pendingPayment: number;
+  underReview: number;
+  certificatesIssued: number;
+  newApplicationsThisWeek: number;
+  certificatesIssuedThisMonth: number;
+  averageReviewDays: number;
+  membership: {
+    member: boolean;
+    status: string;
+  };
+  recentApplications: Application[];
+  generatedAt: string;
 }
 
 export default function ExporterDashboard() {
@@ -24,6 +44,8 @@ export default function ExporterDashboard() {
   const [isLoadingApps, setIsLoadingApps] = useState(true);
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -42,7 +64,7 @@ export default function ExporterDashboard() {
   }, []);
 
   useEffect(() => {
-    fetchRecentApplications();
+    fetchDashboardData();
     fetchCompanyProfile();
   }, []);
 
@@ -82,7 +104,8 @@ export default function ExporterDashboard() {
     }
   };
 
-  const fetchRecentApplications = async () => {
+  const fetchDashboardData = async () => {
+    setIsLoadingDashboard(true);
     setIsLoadingApps(true);
     
     try {
@@ -92,7 +115,7 @@ export default function ExporterDashboard() {
         return;
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/dashboard`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -102,26 +125,25 @@ export default function ExporterDashboard() {
       const result = await response.json();
 
       if (response.ok && result.data) {
-        const apps = Array.isArray(result.data) ? result.data : [result.data];
-        const sortedApps = apps.sort((a: Application, b: Application) => 
-          new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
-        ).slice(0, 10);
-        setRecentApplications(sortedApps);
+        setDashboardData(result.data);
+        setRecentApplications(result.data.recentApplications || []);
       }
     } catch (err) {
-      console.error('Failed to fetch recent applications:', err);
+      console.error('Failed to fetch dashboard data:', err);
     } finally {
+      setIsLoadingDashboard(false);
       setIsLoadingApps(false);
     }
   };
 
   const handleLogout = () => {
     setShowLogoutModal(false);
-    router.push('/');
+    clearAuthData();
+    router.push('/login');
   };
 
-  const getStatusBadge = (status: Application['status']) => {
-    const badges: Record<Application['status'], { bg: string; text: string }> = {
+  const getStatusBadge = (status: string) => {
+    const badges: Record<string, { bg: string; text: string }> = {
       DRAFT: { bg: 'bg-[#f3f4f6]', text: 'text-[#6b7280]' },
       SUBMITTED: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
       PENDING_PAYMENT: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
@@ -129,9 +151,10 @@ export default function ExporterDashboard() {
       APPROVED: { bg: 'bg-[#d1fae5]', text: 'text-[#065f46]' },
       REJECTED: { bg: 'bg-[#fee2e2]', text: 'text-[#9b1c1c]' },
       ISSUED: { bg: 'bg-[#e0e7ff]', text: 'text-[#3730a3]' },
+      CERTIFICATE_ISSUED: { bg: 'bg-[#e0e7ff]', text: 'text-[#3730a3]' },
       UNAPPROVED: { bg: 'bg-[#fdf2f8]', text: 'text-[#9d174d]' },
     };
-    const labels: Record<Application['status'], string> = {
+    const labels: Record<string, string> = {
       DRAFT: 'Draft',
       SUBMITTED: 'Submitted',
       PENDING_PAYMENT: 'Pending Payment',
@@ -139,6 +162,7 @@ export default function ExporterDashboard() {
       APPROVED: 'Approved',
       REJECTED: 'Rejected',
       ISSUED: 'Issued',
+      CERTIFICATE_ISSUED: 'Issued',
       UNAPPROVED: 'Unapproved',
     };
     const badge = badges[status] || { bg: 'bg-[#f3f4f6]', text: 'text-[#6b7280]' };
@@ -149,9 +173,20 @@ export default function ExporterDashboard() {
     );
   };
 
-  const getActionButton = (status: Application['status'], id: string) => {
-    if (status === 'ISSUED') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]">Download</button>;
+  const getActionButton = (status: string, id: string, pdfUrl?: string) => {
+    if (status === 'ISSUED' || status === 'CERTIFICATE_ISSUED') {
+      return (
+        <button 
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
+          onClick={() => {
+            if (pdfUrl) {
+              window.open(pdfUrl, '_blank');
+            }
+          }}
+        >
+          Download
+        </button>
+      );
     }
     if (status === 'PENDING_PAYMENT') {
       return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
@@ -175,39 +210,39 @@ export default function ExporterDashboard() {
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             <div className="text-[22px] font-bold text-[#1a2236] mb-[3px]">Welcome, {companyProfile?.companyName || 'Loading...'}</div>
             <div className="text-[13px] text-[#6a7a9a] mb-[18px]">TIN: {companyProfile?.tin || 'Loading...'} &nbsp;|&nbsp; Last login: Today, 10:24 AM</div>
-            {companyProfile && companyProfile.membershipActive && (
+            {dashboardData?.membership?.member && (
               <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
                 ★NACCIMA Member rates apply
               </div>
             )}
             <div className="flex gap-3 mb-[18px]">
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#2c5282] mb-[2px]">5</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Active Applications</div>
-                <div className="text-[10px] text-[#059669] mt-[3px]">↑ 2 new this week</div>
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow shadow-md">
+                <div className="text-[26px] font-extrabold text-[#2c5282] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.activeApplications || 0}</div>
+                <div className="text-[15px] text-[#6a7a9a] font-medium">Active Applications</div>
+                <div className="text-[13px] text-[#059669] mt-[3px] flex items-center gap-1 pt-2"><FaArrowUp /> {dashboardData?.newApplicationsThisWeek || 0} new this week</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">1</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Pending Payment</div>
-                <div className="text-[10px] text-[#059669] mt-[3px]">Action required</div>
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow shadow-md">
+                <div className="text-[26px] font-extrabold text-[#92400e] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.pendingPayment || 0}</div>
+                <div className="text-[15px] text-[#6a7a9a] font-medium">Pending Payment</div>
+                <div className="text-[13px] text-[#059669] mt-[3px] pt-2">Action required</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#1a2236] mb-[2px]">2</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Under Review</div>
-                <div className="text-[10px] text-[#059669] mt-[3px]">Avg. 2 days</div>
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow shadow-md">
+                <div className="text-[26px] font-extrabold text-[#1a2236] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.underReview || 0}</div>
+                <div className="text-[15px] text-[#6a7a9a] font-medium">Under Review</div>
+                <div className="text-[13px] text-[#059669] mt-[3px]">Avg. {dashboardData?.averageReviewDays?.toFixed(1) || '0'} days</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">23</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Certificates Issued</div>
-                <div className="text-[10px] text-[#059669] mt-[3px]">↑ 4 this month</div>
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow shadow-md">
+                <div className="text-[26px] font-extrabold text-[#065f46] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.certificatesIssued || 0}</div>
+                <div className="text-[15px] text-[#6a7a9a] font-medium">Certificates Issued</div>
+                <div className="text-[13px] text-[#059669] mt-[3px] pt-2 flex items-center gap-1"><FaArrowUp /> {dashboardData?.certificatesIssuedThisMonth || 0} this month</div>
               </div>
             </div>
-            <div className="flex items-center justify-between my-[13px]">
-              <div className="text-[17px] font-medium text-[#1a2236]">Recent Applications</div>
+            <div className="flex items-center justify-between my-[13px] pt-[18px]">
+              <div className="text-[19px] font-medium text-[#1a2236]">Recent Applications</div>
               <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => router.push('/new-application')}><FaPlus color="white"/> New Application</button>
             </div>
             <div className="overflow-x-auto pt-4">
-              <table className="w-full border-collapse text-[12px]">
+              <table className="w-full border-collapse text-[14px]">
                 <thead>
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
                     <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Approval #</th>
@@ -233,14 +268,14 @@ export default function ExporterDashboard() {
                     </tr>
                   ) : (
                     recentApplications.map((app) => (
-                      <tr key={app.id} className="hover:bg-[#f8faff] uppercase">
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.id}</td>
+                      <tr key={app.applicationId} className="hover:bg-[#f8faff] uppercase">
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.approvalNumber}</td>
                         <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.certificateType}</td>
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.destinationCountry}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.destination}</td>
                         <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{formatDate(app.submittedAt)}</td>
                         <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{getStatusBadge(app.status)}</td>
                         <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
-                          <div className="flex gap-1">{getActionButton(app.status, app.id)}</div>
+                          <div className="flex gap-1">{getActionButton(app.status, app.applicationId, app.certificatePdfUrl)}</div>
                         </td>
                       </tr>
                     ))
