@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { type IconType } from 'react-icons';
 import {
   FiZoomIn,
@@ -37,16 +37,81 @@ import {
   FiBarChart,
   FiEdit,
 } from 'react-icons/fi';
-import General from './General';
-import ApplicableFields from './Applicable-Fields';
-import RequiredDocuments from './Required-documents';
-import MemberingFormat from './MemberingFormat';
-import FeeCharges from './FeeCharges';
+import General, { type GeneralRef } from './General';
+import ApplicableFields, { type ApplicableFieldsRef } from './Applicable-Fields';
+import RequiredDocuments, { type RequiredDocumentsRef } from './Required-documents';
+import MemberingFormat, { type MemberingFormatRef } from './MemberingFormat';
+import FeeCharges, { type FeeChargesRef } from './FeeCharges';
 import { apiFetch, getBaseUrl } from '@/utils/api';
+
+// Simple SwitchField component
+interface SwitchFieldProps {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
+function SwitchField({ label, checked, onChange }: SwitchFieldProps) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer">
+      <div className="relative">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          className="sr-only"
+        />
+        <div className={`w-10 h-5 rounded-full transition-colors ${checked ? 'bg-[#4f46e5]' : 'bg-[#d1d5db]'}`}>
+          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${checked ? 'left-5' : 'left-0.5'}`} />
+        </div>
+      </div>
+      <span className="text-sm text-[#3a4560]">{label}</span>
+    </label>
+  );
+}
+
+function PaletteRow({ item, onAdd }: { item: PaletteItem; onAdd: () => void }) {
+  const Icon = item.icon;
+  return (
+    <div
+      className="flex items-center gap-2.5 px-2.5 py-2 border border-[#e5e8f0] rounded-lg cursor-grab hover:border-[#1a4a8a] hover:bg-[#f5f8ff] transition-all group"
+      draggable
+      onDragStart={(e) => e.dataTransfer.setData('text/plain', item.type)}
+      onClick={onAdd}
+    >
+      <Icon size={13} className="text-[#8a94ac] group-hover:text-[#1a4a8a] transition-colors shrink-0" />
+      <span className="text-[12px] font-medium text-[#1a2236] flex-1 truncate">{item.label}</span>
+      {item.badge && (
+        <span
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold border ${
+            item.badge === 'NRS-locked'
+              ? 'bg-[#fff8e6] border-[#f0d896] text-[#92720c]'
+              : item.badge === 'System'
+              ? 'bg-[#f1eefc] border-[#d7cdf5] text-[#5b3fae]'
+              : 'bg-[#eef1ff] border-[#cfd6fb] text-[#3c46a3]'
+          }`}
+        >
+          {item.badge}
+        </span>
+      )}
+    </div>
+  );
+}
 
 interface TemplateDesignerProps {
   mode?: 'create' | 'edit';
   certificateType?: any;
+}
+
+export interface TemplateDesignerData {
+  templateConfig: {
+    elements: FieldElement[];
+    pageSize: { width: number; height: number } | null;
+  };
+}
+
+export interface TemplateDesignerRef {
+  getData: () => TemplateDesignerData;
 }
 
 /* ------------------------------------------------------------------ */
@@ -258,134 +323,6 @@ const FULL_PALETTE_GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
 ];
 
 /* ------------------------------------------------------------------ */
-/* Seed layout                                                         */
-/* ------------------------------------------------------------------ */
-
-function makeField(
-  partial: Pick<FieldElement, 'text' | 'label' | 'kind' | 'typeLabel' | 'source' | 'x' | 'y' | 'w' | 'h'> &
-    Partial<FieldElement>
-): FieldElement {
-  const p = kindPalette(partial.kind);
-  return {
-    id: uid('el'),
-    fontSize: partial.h && partial.h <= 18 ? 8.5 : 9.5,
-    leading: 9.5,
-    fontFamily: 'Helvetica',
-    bold: false,
-    italic: false,
-    underline: false,
-    align: 'center',
-    valign: 'middle',
-    color: '#000000',
-    bg: '#ffffff',
-    wrap: true,
-    maxLines: 4,
-    required: false,
-    readOnly: partial.kind === 'system',
-    repeated: false,
-    border: p.dashed ? 'dashed' : 'solid',
-    borderColor: p.dashed ? PURPLE_BORDER : p.border,
-    pad: { t: 2, r: 3, b: 2, l: 3 },
-    enabled: true,
-    ...partial,
-  };
-}
-
-function makeSeed(): FieldElement[] {
-  const seed: FieldElement[] = [
-    // top bar
-    makeField({ text: 'CO/00001234', label: 'Certificate Number', kind: 'system', typeLabel: 'Text', source: 'System', x: 686, y: 22, w: 132, h: 22 }),
-
-    // section 1 — exporter
-    makeField({ text: 'SHIPPER_NAME', label: "Shipper's Name", kind: 'nrs-locked', typeLabel: 'Text', source: 'NRS', x: 28, y: 52, w: 379, h: 17, align: 'left' }),
-    makeField({ text: 'SHIPPER_ADDRESS', label: "Shipper's Address", kind: 'nrs-locked', typeLabel: 'Text', source: 'NRS', x: 28, y: 71, w: 379, h: 17, align: 'left' }),
-
-    // section 2 — consignee
-    makeField({ text: 'CONSIGNEE', label: 'Consignee', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 28, y: 100, w: 379, h: 17, align: 'left' }),
-    makeField({ text: 'CONSIGNEE_ADDRESS', label: 'Consignee Address', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 28, y: 119, w: 379, h: 17, align: 'left' }),
-
-    // section 3 — transport
-    makeField({ text: 'MODE_OF_TRANSPORT', label: 'Mode of Transport', kind: 'application', typeLabel: 'Dropdown', source: 'Manual Entry', x: 28, y: 154, w: 248, h: 16 }),
-    makeField({ text: 'PORT_OF_LOADING', label: 'Port of Loading', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 66, y: 176, w: 210, h: 15, align: 'left', fontSize: 8 }),
-    makeField({ text: 'PORT_OF_DISCHARGE', label: 'Port of Discharge', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 66, y: 196, w: 210, h: 15, align: 'left', fontSize: 8 }),
-
-    // section 4 — for official use
-    makeField({ text: 'APPROVAL_NUMBER', label: 'Approval Number', kind: 'system', typeLabel: 'Text', source: 'System', x: 316, y: 194, w: 208, h: 22 }),
-
-    // section 5 — country of origin
-    makeField({ text: 'COUNTRY_OF_ORIGIN', label: 'Country of Origin', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 584, y: 194, w: 210, h: 22 }),
-
-    // section 6 — marks & numbers
-    makeField({ text: 'MARKS_NO', label: 'Marks / Numbers', kind: 'application', typeLabel: 'Multi-line text', source: 'Manual Entry', x: 30, y: 250, w: 126, h: 58 }),
-
-    // section 7 — packages
-    makeField({ text: 'TOTAL_PACKAGES', label: 'Total Packages', kind: 'application', typeLabel: 'Number', source: 'Manual Entry', x: 180, y: 246, w: 156, h: 17 }),
-    makeField({ text: 'PACKAGE_TYPE', label: 'Package Type', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 180, y: 267, w: 156, h: 17 }),
-
-    // section 8 — description of goods (selected in mockup)
-    makeField({ text: 'DESCRIPTION_OF_GOODS', label: 'Description of Goods', kind: 'goods', typeLabel: 'Multi-line text', source: 'Goods Item', x: 360, y: 246, w: 256, h: 62 }),
-
-    // section 9 — HS code
-    makeField({ text: 'HS_CODE', label: 'HS Code', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 640, y: 250, w: 172, h: 18 }),
-
-    // section 10 — origin criterion
-    makeField({ text: 'CRITERIA_ETLS', label: 'Criteria (ETLS)', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 30, y: 350, w: 126, h: 18 }),
-
-    // section 11 — gross weight
-    makeField({ text: 'GROSS_WEIGHT', label: 'Gross Weight or Quantity', kind: 'application', typeLabel: 'Number', source: 'Manual Entry', x: 180, y: 350, w: 156, h: 18 }),
-
-    // section 12 — invoice
-    makeField({ text: 'INVOICE_NUMBER', label: 'Invoice Number', kind: 'application', typeLabel: 'Text', source: 'Manual Entry', x: 360, y: 344, w: 256, h: 16 }),
-    makeField({ text: 'INVOICE_DATE', label: 'Invoice Date', kind: 'application', typeLabel: 'Date', source: 'Manual Entry', x: 360, y: 364, w: 256, h: 16 }),
-
-    // section 13 — FOB value
-    makeField({ text: 'FOB_VALUE', label: 'FOB Value (USD for CoO)', kind: 'application', typeLabel: 'Number', source: 'Manual Entry', x: 640, y: 350, w: 172, h: 18 }),
-
-    // section 14 — certification
-    makeField({ text: 'ISSUE_DATE', label: 'Issue Date', kind: 'system', typeLabel: 'Date', source: 'System', x: 30, y: 496, w: 170, h: 20 }),
-    makeField({ text: 'SIGNATURE', label: 'Signature', kind: 'system', typeLabel: 'Image', source: 'System', x: 214, y: 496, w: 172, h: 20 }),
-
-    // section 15 — issuing office
-    makeField({ text: 'ISSUING_OFFICE', label: 'Issuing Office', kind: 'system', typeLabel: 'Text', source: 'System', x: 420, y: 432, w: 172, h: 20 }),
-    makeField({ text: 'SEAL_STAMP', label: 'Seal / Stamp', kind: 'system', typeLabel: 'Image', source: 'System', x: 420, y: 496, w: 172, h: 20 }),
-
-    // verification
-    makeField({ text: 'QR_CODE', label: 'QR Code', kind: 'system', typeLabel: 'QR Code', source: 'System', x: 626, y: 428, w: 62, h: 62 }),
-    makeField({ text: 'VERIFICATION_CODE', label: 'Verification Code', kind: 'system', typeLabel: 'Text', source: 'System', x: 606, y: 500, w: 210, h: 18 }),
-  ];
-
-  return seed;
-}
-
-interface SectionBox {
-  n: number | null;
-  label: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-const SECTIONS: SectionBox[] = [
-  { n: 1, label: 'Exporter (Name, address, country)', x: 24, y: 48, w: 389, h: 40 },
-  { n: 2, label: 'Consignee (Name, address, country)', x: 24, y: 96, w: 389, h: 40 },
-  { n: 3, label: 'Means of Transport and Route (as far as known)', x: 24, y: 150, w: 256, h: 76 },
-  { n: 4, label: 'For Official Use', x: 292, y: 150, w: 256, h: 76 },
-  { n: 5, label: 'Country of Origin', x: 560, y: 150, w: 258, h: 76 },
-  { n: 6, label: 'Marks & Numbers', x: 24, y: 234, w: 140, h: 90 },
-  { n: 7, label: 'Number and Kind of Packages', x: 174, y: 234, w: 170, h: 90 },
-  { n: 8, label: 'Description of Goods', x: 354, y: 234, w: 270, h: 90 },
-  { n: 9, label: 'HS Code', x: 634, y: 234, w: 184, h: 90 },
-  { n: 10, label: 'Origin Criterion', x: 24, y: 336, w: 140, h: 56 },
-  { n: 11, label: 'Gross Weight or Other Quantity', x: 174, y: 336, w: 170, h: 56 },
-  { n: 12, label: 'Number and Date of Invoices', x: 354, y: 336, w: 270, h: 56 },
-  { n: 13, label: 'FOB Value (USD for CoO)', x: 634, y: 336, w: 184, h: 56 },
-  { n: 14, label: 'Certification', x: 24, y: 410, w: 390, h: 130 },
-  { n: 15, label: 'Issuing Office', x: 424, y: 410, w: 190, h: 130 },
-  { n: null, label: 'Verification', x: 624, y: 410, w: 194, h: 130 },
-];
-
-/* ------------------------------------------------------------------ */
 /* Tabs shell                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -398,8 +335,16 @@ const TABS = [
   { id: 'Fee', label: 'Fees & Charges' },
 ];
 
-export function TemplateDesigner({ mode = 'create', certificateType }: TemplateDesignerProps) {
+const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(({ mode = 'create', certificateType }, ref) => {
+  console.log('TemplateDesigner props - mode:', mode, 'certificateType:', certificateType);
   const [activeTab, setActiveTab] = useState('template-designer');
+
+  // Refs for child components
+  const generalRef = useRef<GeneralRef>(null);
+  const applicableFieldsRef = useRef<ApplicableFieldsRef>(null);
+  const requiredDocumentsRef = useRef<RequiredDocumentsRef>(null);
+  const memberingFormatRef = useRef<MemberingFormatRef>(null);
+  const feeChargesRef = useRef<FeeChargesRef>(null);
   const [elements, setElements] = useState<FieldElement[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('template-designer-elements-v2');
@@ -425,7 +370,6 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
   const [enabledFields, setEnabledFields] = useState<Record<string, boolean>>({});
   const [templateDataUrl, setTemplateDataUrl] = useState<string | null>(null);
   const [templatePageSize, setTemplatePageSize] = useState<{ width: number; height: number } | null>(null);
-  const [showElements, setShowElements] = useState(false);
   const [apiFields, setApiFields] = useState<ApiField[]>([]);
   const [loadingFields, setLoadingFields] = useState(true);
   const [certificateTypeCode, setCertificateTypeCode] = useState<string>('');
@@ -436,10 +380,10 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
   // Load enabled fields from localStorage and listen for changes
   useEffect(() => {
     const loadEnabledFields = () => {
-      const saved = localStorage.getItem('applicable-fields-enabled');
-      if (saved) {
+      const savedValue = localStorage.getItem('applicable-fields-enabled');
+      if (savedValue) {
         try {
-          setEnabledFields(JSON.parse(saved));
+          setEnabledFields(JSON.parse(savedValue));
         } catch (e) {
           console.error('Failed to parse enabled fields:', e);
         }
@@ -454,8 +398,8 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
       if (e.key === 'applicable-fields-enabled' && e.newValue) {
         try {
           setEnabledFields(JSON.parse(e.newValue));
-        } catch (e) {
-          console.error('Failed to parse enabled fields from storage event:', e);
+        } catch (err) {
+          console.error('Failed to parse enabled fields from storage event:', err);
         }
       }
     };
@@ -498,13 +442,13 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
           setLoadingFields(false);
           return;
         }
-        
+
         setCertificateTypeCode(code);
-        
+
         const baseUrl = getBaseUrl();
         const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/types/${code}/fields`);
         const data = await response.json();
-        
+
         if (data.success && Array.isArray(data.data)) {
           setApiFields(data.data);
         }
@@ -600,20 +544,19 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
         underline: false,
         align: 'center',
         valign: 'middle',
-        color: '#000000',
-        bg: '#ffffff',
+        color: p.text,
+        bg: p.bg,
         wrap: true,
         maxLines: 4,
         required: false,
         readOnly: item.kind === 'system',
         repeated: false,
         border: p.dashed ? 'dashed' : 'solid',
-        borderColor: p.dashed ? PURPLE_BORDER : p.border,
+        borderColor: p.border,
         pad: { t: 2, r: 3, b: 2, l: 3 },
       };
       commit((prev) => [...prev, el]);
       setSelectedId(el.id);
-      setShowElements(true);
     },
     [commit]
   );
@@ -630,10 +573,10 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
   const onDropOnCanvas = (e: React.DragEvent) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('text/plain');
-    
+
     // Search in both dynamic API fields and fallback palette
-    let item = filteredGroups.flatMap((g) => g.items).find((i) => i.type === type);
-    
+    const item = filteredGroups.flatMap((g) => g.items).find((i) => i.type === type);
+
     if (!item || !gridRef.current) return;
     const rect = gridRef.current.getBoundingClientRect();
     let x = Math.round((e.clientX - rect.left) / zoom);
@@ -643,13 +586,11 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
       y = Math.round(y / GRID_STEP) * GRID_STEP;
     }
     addComponent(item, x, y);
-    setShowElements(true);
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
     if (e.target !== gridRef.current) return;
     setSelectedId(null);
-    setShowElements(true);
   };
 
   useEffect(() => {
@@ -697,9 +638,102 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
     localStorage.setItem('template-designer-elements-v2', JSON.stringify(elements));
   }, [elements]);
 
+  // Expose data via ref
+  useImperativeHandle(ref, () => ({
+    getData: () => ({
+      templateConfig: {
+        elements,
+        pageSize: templatePageSize,
+      },
+    }),
+  }), [elements, templatePageSize]);
+
   const handleSave = () => {
     setSaved(true);
     setTimeout(() => setSaved(false), 1200);
+  };
+
+  const handleSubmitCertificateType = () => {
+    // Handle successful certificate type submission
+    console.log('Certificate type submitted successfully');
+  };
+
+  // Function to collect all form data from child components
+  const getFormData = () => {
+    const generalData = generalRef.current?.getData();
+    const applicableFieldsData = applicableFieldsRef.current?.getData();
+    const requiredDocumentsData = requiredDocumentsRef.current?.getData();
+    const memberingFormatData = memberingFormatRef.current?.getData();
+
+    console.log('getFormData - generalData:', generalData);
+    console.log('getFormData - applicableFieldsData:', applicableFieldsData);
+    console.log('getFormData - requiredDocumentsData:', requiredDocumentsData);
+
+    // Convert requiredDocuments from object to JSON string of array
+    let requiredDocumentsString = "[\"COMMERCIAL_INVOICE\",\"PACKING_LIST\",\"BILL_OF_LADING\"]";
+    if (requiredDocumentsData?.requiredDocuments) {
+      // If it's an object with transport modes, flatten all documents into a single array
+      if (typeof requiredDocumentsData.requiredDocuments === 'object' && !Array.isArray(requiredDocumentsData.requiredDocuments)) {
+        const allDocs = Object.values(requiredDocumentsData.requiredDocuments).flat();
+        requiredDocumentsString = JSON.stringify(allDocs);
+      } else if (Array.isArray(requiredDocumentsData.requiredDocuments)) {
+        requiredDocumentsString = JSON.stringify(requiredDocumentsData.requiredDocuments);
+      }
+    }
+
+    // Build templateConfig as JSON string with proper structure
+    // Convert template designer elements to fields format
+    const fields: any = {};
+    elements.forEach((element) => {
+      if (element.kind !== 'component') {
+        fields[element.id] = {
+          x: element.x,
+          y: element.y,
+          width: element.w,
+          height: element.h || 20,
+          fontSize: element.fontSize || 10,
+          font: element.fontFamily || 'HELVETICA',
+          align: element.align || 'LEFT',
+          wrap: element.wrap || false,
+        };
+      }
+    });
+
+    const templateConfigObj = {
+      page: {
+        index: generalData?.pageIndex || 0,
+        width: generalData?.pageSize?.width || 608.16,
+        height: generalData?.pageSize?.height || 1008.48,
+      },
+      fields,
+    };
+
+    // Convert templateConfig to JSON string
+    const templateConfigString = JSON.stringify(templateConfigObj);
+
+    // Convert applicableFields from object to array of enabled field names
+    const applicableFieldsArray = applicableFieldsData?.enabledFields
+      ? Object.keys(applicableFieldsData.enabledFields).filter(key => applicableFieldsData.enabledFields[key] === true)
+      : [];
+
+    const result = {
+      code: generalData?.code,
+      name: generalData?.displayName,
+      description: generalData?.description,
+      active: generalData?.status === 'active',
+      applicableFields: applicableFieldsArray,
+      requiredDocuments: requiredDocumentsString,
+      numberingConfig: memberingFormatData?.numberingConfig,
+      templateConfig: templateConfigString,
+      templateFileName: generalData?.templateFileName,
+      pageIndex: generalData?.pageIndex,
+      pageSize: generalData?.pageSize,
+      certNumberPrefix: generalData?.certPrefix,
+      templateUrl: generalData?.templateUrl,
+    };
+
+    console.log('getFormData - final result:', result);
+    return result;
   };
 
   const handleFitWidth = () => {
@@ -717,30 +751,30 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
 
   // Mapping from template-designer field IDs to Applicable-Fields field IDs (uppercase underscore format from API)
   const FIELD_ID_MAP: Record<string, string> = {
-    'consigneeAddress': 'CONSIGNEE_ADDRESS',
-    'shipperName': 'SHIPPER_NAME',
-    'shipperAddress': 'SHIPPER_ADDRESS',
-    'tin': 'TIN',
-    'importerEmail': 'IMPORTER_EMAIL',
-    'modeOfTransport': 'MODE_OF_TRANSPORT',
-    'consignee': 'CONSIGNEE',
-    'carrier': 'CARRIER',
-    'destination': 'DESTINATION',
-    'countryOfManufacturing': 'COUNTRY_OF_MANUFACTURING',
-    'fobValue': 'FOB_VALUE',
-    'totalItems': 'TOTAL_ITEMS',
-    'date': 'DATE',
-    'hsCode': 'HS_CODE',
-    'marksNo': 'MARKS_NO',
-    'ecowasNumber': 'ECOWAS_NUMBER',
-    'criteriaEtls': 'CRITERIA_ETLS',
-    'unitOfMeasurement': 'UNIT_OF_MEASUREMENT',
-    'numberKindPackages': 'NUMBER_KIND_PACKAGES',
-    'descriptionOfGoods': 'DESCRIPTION_OF_GOODS',
-    'grossWeight': 'GROSS_WEIGHT',
-    'nomenclature': 'NOMENCLATURE',
-    'invoiceNumber': 'INVOICE_NUMBER',
-    'approvalNumber': 'APPROVAL_NUMBER',
+    consigneeAddress: 'CONSIGNEE_ADDRESS',
+    shipperName: 'SHIPPER_NAME',
+    shipperAddress: 'SHIPPER_ADDRESS',
+    tin: 'TIN',
+    importerEmail: 'IMPORTER_EMAIL',
+    modeOfTransport: 'MODE_OF_TRANSPORT',
+    consignee: 'CONSIGNEE',
+    carrier: 'CARRIER',
+    destination: 'DESTINATION',
+    countryOfManufacturing: 'COUNTRY_OF_MANUFACTURING',
+    fobValue: 'FOB_VALUE',
+    totalItems: 'TOTAL_ITEMS',
+    date: 'DATE',
+    hsCode: 'HS_CODE',
+    marksNo: 'MARKS_NO',
+    ecowasNumber: 'ECOWAS_NUMBER',
+    criteriaEtls: 'CRITERIA_ETLS',
+    unitOfMeasurement: 'UNIT_OF_MEASUREMENT',
+    numberKindPackages: 'NUMBER_KIND_PACKAGES',
+    descriptionOfGoods: 'DESCRIPTION_OF_GOODS',
+    grossWeight: 'GROSS_WEIGHT',
+    nomenclature: 'NOMENCLATURE',
+    invoiceNumber: 'INVOICE_NUMBER',
+    approvalNumber: 'APPROVAL_NUMBER',
   };
 
   const filteredGroups = useMemo(() => {
@@ -767,18 +801,20 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
       }));
 
       // Filter by enabled fields and search
-      return groups.map((g) => {
-        let filteredItems = g.items.filter((i) => {
-          const isEnabled = enabledFields[i.type] !== false;
-          return isEnabled;
-        });
+      return groups
+        .map((g) => {
+          let filteredItems = g.items.filter((i) => {
+            const isEnabled = enabledFields[i.type] !== false;
+            return isEnabled;
+          });
 
-        if (q) {
-          filteredItems = filteredItems.filter((i) => i.label.toLowerCase().includes(q));
-        }
+          if (q) {
+            filteredItems = filteredItems.filter((i) => i.label.toLowerCase().includes(q));
+          }
 
-        return { ...g, items: filteredItems };
-      }).filter((g) => g.items.length > 0);
+          return { ...g, items: filteredItems };
+        })
+        .filter((g) => g.items.length > 0);
     }
 
     // Fallback to hardcoded palette if API fields not loaded
@@ -859,31 +895,23 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
         ))}
       </div>
 
-      {activeTab === 'general' && (
-        <div className="flex-1 overflow-auto bg-[#f9fafb]">
-          <General onTabChange={setActiveTab} />
+      <div className="flex-1 overflow-auto bg-[#f9fafb]">
+        <div className={activeTab === 'general' ? '' : 'hidden'}>
+          <General ref={generalRef} onTabChange={setActiveTab} />
         </div>
-      )}
-      {activeTab === 'applicable-fields' && (
-        <div className="flex-1 overflow-auto bg-[#f9fafb] p-6">
-          <ApplicableFields onTabChange={setActiveTab} />
+        <div className={activeTab === 'applicable-fields' ? '' : 'hidden'}>
+          <ApplicableFields ref={applicableFieldsRef} onTabChange={setActiveTab} />
         </div>
-      )}
-      {activeTab === 'required-documents' && (
-        <div className="flex-1 overflow-auto bg-[#f9fafb] p-6">
-          <RequiredDocuments certificateType={certificateType} />
+        <div className={activeTab === 'required-documents' ? '' : 'hidden'}>
+          <RequiredDocuments ref={requiredDocumentsRef} certificateType={certificateType} onTabChange={setActiveTab} />
         </div>
-      )}
-      {activeTab === 'numbering-format' && (
-        <div className="flex-1 overflow-auto bg-[#f9fafb] p-6">
-          <MemberingFormat certificateType={certificateType} />
+        <div className={activeTab === 'numbering-format' ? '' : 'hidden'}>
+          <MemberingFormat ref={memberingFormatRef} certificateType={certificateType} onTabChange={setActiveTab} />
         </div>
-      )}
-      {activeTab === 'Fee' && (
-        <div className="flex-1 overflow-auto bg-[#f9fafb]">
-          <FeeCharges />
+        <div className={activeTab === 'Fee' ? '' : 'hidden'}>
+          <FeeCharges ref={feeChargesRef} onTabChange={setActiveTab} onSubmit={handleSubmitCertificateType} certificateType={certificateType} mode={mode} getFormData={getFormData} />
         </div>
-      )}
+      </div>
 
       {activeTab === 'template-designer' && (
         <>
@@ -952,7 +980,7 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
           </div>
 
           {/* Main content */}
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex overflow-hidden">
             {/* Palette */}
             <div className="w-72 border-r border-[#dde3ee] bg-white overflow-y-auto shrink-0">
               <div className="p-4 border-b border-[#dde3ee]">
@@ -1021,9 +1049,9 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
             >
               <div
                 className="bg-white shadow-[0_1px_3px_rgba(20,30,60,0.08),0_12px_32px_rgba(20,30,60,0.10)] relative rounded-md shrink-0"
-                style={{ 
-                  width: (templatePageSize?.width || PAPER_W) * zoom, 
-                  height: (templatePageSize?.height || PAPER_H) * zoom 
+                style={{
+                  width: (templatePageSize?.width || PAPER_W) * zoom,
+                  height: (templatePageSize?.height || PAPER_H) * zoom,
                 }}
               >
                 <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
@@ -1042,7 +1070,7 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
                     onDrop={onDropOnCanvas}
                     onMouseDown={onCanvasMouseDown}
                   >
-                    {/* PDF Template Background */}
+                    {/* PDF template background, if one was uploaded in the General tab */}
                     {templateDataUrl && (
                       <iframe
                         src={`${templateDataUrl}#toolbar=0&navpanes=0&scrollbar=0`}
@@ -1051,77 +1079,14 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
                       />
                     )}
 
-                    {/* Static chrome - commented out to show only uploaded PDF */}
-                    {/* <div className="absolute left-6 top-5 text-[15px] font-bold tracking-[0.25em] text-[#1a2236]">
-                      ORIGINAL
-                    </div>
-                    <div className="absolute right-6 top-6 text-right">
-                      <div className="text-[9px] font-semibold text-[#6a7a9a] mb-1">Certificate No.</div>
-                    </div>
-
-                    <div className="absolute text-center" style={{ left: 429, top: 48, width: 389 }}>
-                      <p className="text-[13px] font-bold text-[#1a2236] tracking-wide">CERTIFICATE OF ORIGIN</p>
-                      <p className="text-[9.5px] text-[#3a4560] mt-1.5">issued by</p>
-                      <p className="text-[10.5px] font-semibold text-[#1a2236] mt-1 leading-snug">
-                        NIGERIAN ASSOCIATION OF CHAMBERS OF
-                        <br />
-                        COMMERCE, INDUSTRY, MINES &amp; AGRICULTURE
-                        <br />
-                        (NACCIMA)
-                      </p>
-                      <p className="text-[9.5px] text-[#3a4560] mt-1.5 tracking-widest">NIGERIA</p>
-                    </div>
-
-                    <div className="absolute left-6 border-t-2 border-[#1a2236]" style={{ top: 40, width: PAPER_W - 48 }} />
-
-                    <p className="absolute text-center text-[9px] text-[#9aa5bb]" style={{ left: 24, bottom: 6, width: PAPER_W - 48 }}>
-                      Name and Signature / Stamp
-                    </p> */}
-
-                    {/* Section outlines - commented out to show only uploaded PDF */}
-                    {/* <div className="absolute inset-0 pointer-events-none">
-                      {SECTIONS.map((s) => (
-                        <div key={s.label}>
-                          <div
-                            className="absolute text-[9px] font-semibold text-[#4a5a7a]"
-                            style={{ left: s.x, top: s.y - 13 }}
-                          >
-                            {s.n != null ? `${s.n}. ${s.label}` : s.label}
-                          </div>
-                          <div
-                            className="absolute border border-[#dbe0ea] rounded-[2px]"
-                            style={{ left: s.x, top: s.y, width: s.w, height: s.h }}
-                          />
-                        </div>
-                      ))}
-                      <p
-                        className="absolute text-[9px] leading-relaxed text-[#3a4560]"
-                        style={{ left: 66, top: 176 - 13 }}
-                      >
-                        FROM:
-                      </p>
-                      <p
-                        className="absolute text-[9px] leading-relaxed text-[#3a4560]"
-                        style={{ left: 66, top: 196 - 13 }}
-                      >
-                        TO:
-                      </p>
-                      <p
-                        className="absolute text-[9px] leading-relaxed text-[#3a4560]"
-                        style={{ left: 30, top: 434, width: 358 }}
-                      >
-                        It is hereby certified, on the basis of control carried out, that the declaration by the
-                        exporter is correct.
-                      </p>
-                    </div> */}
-
                     {/* Draggable field elements */}
-                    {showElements && elements.map((el) => {
+                    {elements.map((el) => {
                       const isSelected = el.id === selectedId;
+                      const kindColors = kindPalette(el.kind);
                       return (
                         <div
                           key={el.id}
-                          className={`absolute cursor-move overflow-hidden flex font-semibold select-none ${
+                          className={`absolute cursor-move overflow-hidden flex select-none ${
                             isSelected ? 'ring-2 ring-[#1a4a8a] ring-offset-1' : ''
                           }`}
                           onMouseDown={(e) => onElMouseDown(e, el)}
@@ -1138,10 +1103,10 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
                             textDecoration: el.underline ? 'underline' : 'none',
                             justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center',
                             alignItems: el.valign === 'top' ? 'flex-start' : el.valign === 'bottom' ? 'flex-end' : 'center',
-                            color: kindPalette(el.kind).text,
-                            background: kindPalette(el.kind).bg,
+                            color: el.color,
+                            background: el.bg,
                             border: `1.4px ${el.border === 'none' ? 'solid' : el.border} ${
-                              el.border === 'none' ? kindPalette(el.kind).border : el.borderColor
+                              el.border === 'none' ? kindColors.border : el.borderColor
                             }`,
                             borderRadius: 4,
                             padding: `${el.pad.t}px ${el.pad.r}px ${el.pad.b}px ${el.pad.l}px`,
@@ -1209,7 +1174,7 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
               <span>Page 1 of 1</span>
               <span className="text-[#dde3ee]">|</span>
               <span>
-                Paper: {PAPER_W} x {PAPER_H} pt
+                Paper: {templatePageSize?.width ?? PAPER_W} x {templatePageSize?.height ?? PAPER_H} pt
               </span>
               <span className="text-[#dde3ee]">|</span>
               <span>Units: PDF Points (pt)</span>
@@ -1226,13 +1191,25 @@ export function TemplateDesigner({ mode = 'create', certificateType }: TemplateD
               <button className="px-3.5 py-1.5 border border-[#d1d5db] rounded text-[12.5px] font-medium text-[#3a4560] hover:bg-[#f4f5f7] transition-colors">
                 Preview PDF
               </button>
+              {/* <button
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1a4a8a] text-white rounded text-[12.5px] font-medium hover:bg-[#2a5a9a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleSubmitCertificateType}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Saving...' : 'Save Certificate Type'}
+              </button> */}
             </div>
           </div>
+
         </>
       )}
     </div>
   );
-}
+});
+
+TemplateDesigner.displayName = 'TemplateDesigner';
+
+export { TemplateDesigner };
 
 /* ------------------------------------------------------------------ */
 /* Small building blocks                                               */
@@ -1251,55 +1228,6 @@ function QrGlyph() {
         <rect key={i} x={x} y={y} width={3.4} height={3.4} />
       ))}
     </svg>
-  );
-}
-
-function SwitchField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-[13px] font-medium text-[#1a2236]">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        className={`w-9 h-5 rounded-full transition-colors ${checked ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'}`}
-        onClick={() => onChange(!checked)}
-      >
-        <div
-          className={`w-4 h-4 bg-white rounded-full shadow-md transition-transform ${
-            checked ? 'translate-x-4' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
-    </div>
-  );
-}
-
-function PaletteRow({ item, onAdd }: { item: PaletteItem; onAdd: () => void }) {
-  const Icon = item.icon;
-  return (
-    <div
-      className="flex items-center gap-2.5 px-2.5 py-2 border border-[#e5e8f0] rounded-lg cursor-grab hover:border-[#1a4a8a] hover:bg-[#f5f8ff] transition-all group"
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('text/plain', item.type)}
-      onClick={onAdd}
-    >
-      <Icon size={13} className="text-[#8a94ac] group-hover:text-[#1a4a8a] transition-colors shrink-0" />
-      <span className="text-[12px] font-medium text-[#1a2236] flex-1 truncate">{item.label}</span>
-      {item.badge && (
-        <span
-          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold border ${
-            item.badge === 'NRS-locked'
-              ? 'bg-[#fff8e6] border-[#f0d896] text-[#92720c]'
-              : item.badge === 'System'
-              ? 'bg-[#f1eefc] border-[#d7cdf5] text-[#5b3fae]'
-              : 'bg-[#eef1ff] border-[#cfd6fb] text-[#3c46a3]'
-          }`}
-        >
-          {item.badge}
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -1396,7 +1324,7 @@ function PropertiesForm({
       {/* Selected field */}
       <div className="mb-4">
         <div className="text-[10.5px] font-semibold text-[#9aa5bb] uppercase tracking-wide mb-1.5">Selected Field</div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 mb-2">
           <span className="text-[13.5px] font-bold text-[#1a2236] break-words">{el.text}</span>
           <button
             type="button"
@@ -1408,7 +1336,17 @@ function PropertiesForm({
             {el.enabled ? 'Enabled' : 'Disabled'}
           </button>
         </div>
-        <div className="mt-1.5 flex items-center gap-3 text-[11px] text-[#6a7a9a]">
+        <div className="mb-2">
+          <label className="block text-[10.5px] text-[#6a7a9a] mb-1">Display Label</label>
+          <input
+            type="text"
+            value={el.label}
+            onChange={(e) => onChange({ label: e.target.value })}
+            className="w-full px-2 py-1.5 border border-[#d1d5db] rounded text-[11.5px] focus:border-[#1a4a8a] focus:ring-2 focus:ring-[#e8f0fe] outline-none transition-colors"
+            placeholder="Enter display label"
+          />
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-[#6a7a9a]">
           <span>
             Type: <span className="font-medium text-[#3a4560]">{el.typeLabel}</span>
           </span>
@@ -1418,7 +1356,7 @@ function PropertiesForm({
         </div>
       </div>
 
-      {el.typeLabel === 'Image' && el.label === 'Badge / Logo' && (
+      {el.typeLabel === 'Image' && (
         <div className="mb-4">
           <label className="block text-[11px] text-[#6a7a9a] mb-1">Upload Image</label>
           <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-[11.5px]" />

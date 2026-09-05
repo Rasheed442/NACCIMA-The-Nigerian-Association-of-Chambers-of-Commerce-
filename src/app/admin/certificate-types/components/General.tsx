@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { apiFetch, getBaseUrl } from "@/utils/api";
 
 type Status = "active" | "inactive" | "draft";
@@ -28,6 +28,23 @@ interface FormState {
 
 interface GeneralProps {
   onTabChange?: (tabId: string) => void;
+}
+
+export interface GeneralData {
+  displayName: string;
+  code: string;
+  certPrefix: string;
+  description: string;
+  status: Status;
+  templateFileName: string;
+  templateUrl: string;
+  pageIndex: number;
+  pageSize: PageSize | null;
+}
+
+export interface GeneralRef {
+  getData: () => GeneralData;
+  validate: () => FormErrors;
 }
 
 interface FormErrors {
@@ -74,7 +91,7 @@ async function inspectPdf(file: File): Promise<{ pageSize: PageSize; pageCount: 
   return { pageSize, pageCount };
 }
 
-export default function General({ onTabChange }: GeneralProps) {
+const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange }, ref) => {
   const [form, setForm] = useState<FormState>({
     displayName: "",
     code: "",
@@ -139,17 +156,26 @@ export default function General({ onTabChange }: GeneralProps) {
       };
       reader.readAsDataURL(file);
 
-      // Upload template to API (but don't store URL)
+      // Upload template to API and store the returned URL
       const baseUrl = getBaseUrl();
       const formData = new FormData();
       formData.append('file', file);
 
       // Use a placeholder ID for now - this should be replaced with actual certificate type ID
       const certificateTypeId = '50000000-0000-0000-0000-000000000002';
-      await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateTypeId}/template`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateTypeId}/template`, {
         method: 'POST',
         body: formData,
       });
+
+      const result = await response.json();
+      console.log('Template upload result:', result);
+      if (response.ok && result.data?.templateUrl) {
+        console.log('Setting templateUrl:', result.data.templateUrl);
+        setForm((prev) => ({ ...prev, templateUrl: result.data.templateUrl }));
+      } else {
+        console.error('Template upload failed:', result);
+      }
     } catch {
       setErrors((prev) => ({
         ...prev,
@@ -193,6 +219,22 @@ export default function General({ onTabChange }: GeneralProps) {
 
     return next;
   };
+
+  // Expose data and validation via ref
+  useImperativeHandle(ref, () => ({
+    getData: () => ({
+      displayName: form.displayName,
+      code: form.code,
+      certPrefix: form.certPrefix,
+      description: form.description,
+      status: form.status,
+      templateFileName: form.templateFileName,
+      templateUrl: form.templateUrl,
+      pageIndex: form.pageIndex,
+      pageSize: form.pageSize,
+    }),
+    validate,
+  }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -392,7 +434,11 @@ export default function General({ onTabChange }: GeneralProps) {
       </div>
     </form>
   );
-}
+});
+
+General.displayName = 'General';
+
+export default General;
 
 function Field({
   label,

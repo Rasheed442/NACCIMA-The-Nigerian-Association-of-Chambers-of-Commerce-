@@ -102,6 +102,7 @@ export default function EditCertificateType() {
   }
 
   if (error || !certificateType) {
+    console.log('Edit page - error or no certificateType:', { error, certificateType });
     return (
       <div className="h-screen flex flex-col">
         <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
@@ -111,7 +112,7 @@ export default function EditCertificateType() {
             <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="text-red-600 mb-3">{error || 'Certificate type not found'}</div>
-                <button 
+                <button
                   onClick={() => router.push('/admin/certificate-types')}
                   className="px-4 py-2 bg-[#1a4a8a] text-white rounded"
                 >
@@ -125,6 +126,7 @@ export default function EditCertificateType() {
     );
   }
 
+  console.log('Edit page - rendering TemplateDesigner with:', { mode: 'edit', certificateType });
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">

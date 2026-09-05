@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import {
   Truck,
   Plane,
@@ -47,6 +47,15 @@ interface RequiredDocumentsProps {
     name: string;
     requiredDocuments?: Record<string, string[]>;
   } | null;
+  onTabChange?: (tabId: string) => void;
+}
+
+export interface RequiredDocumentsData {
+  requiredDocuments: Record<string, string[]>;
+}
+
+export interface RequiredDocumentsRef {
+  getData: () => RequiredDocumentsData;
 }
 
 const ACCENT_STYLES: Record<
@@ -127,7 +136,7 @@ const INITIAL_MODES: TransportMode[] = [
   },
 ];
 
-export default function RequiredDocumentsPanel({ certificateType }: RequiredDocumentsProps) {
+const RequiredDocumentsPanel = forwardRef<RequiredDocumentsRef, RequiredDocumentsProps>(({ certificateType, onTabChange }, ref) => {
   const [modes, setModes] = useState<TransportMode[]>(INITIAL_MODES);
   const [editingDoc, setEditingDoc] = useState<{ modeId: string; docId: string } | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -191,6 +200,22 @@ export default function RequiredDocumentsPanel({ certificateType }: RequiredDocu
 
     fetchRequiredDocuments();
   }, [certificateType?.id]);
+
+  // Expose data via ref
+  useImperativeHandle(ref, () => ({
+    getData: () => {
+      // Convert TransportMode format to API format
+      const requiredDocuments: Record<string, string[]> = {};
+      modes.forEach((mode) => {
+        if (mode.active && mode.documents.length > 0) {
+          requiredDocuments[mode.id.toUpperCase()] = mode.documents.map((doc) =>
+            doc.name.toUpperCase().replace(/\s+/g, '_')
+          );
+        }
+      });
+      return { requiredDocuments };
+    },
+  }));
 
   const totalDocuments = useMemo(
     () => modes.reduce((sum, m) => sum + m.documents.length, 0),
@@ -420,6 +445,7 @@ export default function RequiredDocumentsPanel({ certificateType }: RequiredDocu
           </button>
           <button
             type="button"
+            onClick={() => onTabChange?.('template-designer')}
             className="flex items-center gap-1 rounded-lg bg-[#1a4a8a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2a5a9a] transition-colors"
           >
             Next
@@ -429,7 +455,11 @@ export default function RequiredDocumentsPanel({ certificateType }: RequiredDocu
       </div>
     </div>
   );
-}
+});
+
+RequiredDocumentsPanel.displayName = 'RequiredDocumentsPanel';
+
+export default RequiredDocumentsPanel;
 
 function TransportModeCard({
   mode,

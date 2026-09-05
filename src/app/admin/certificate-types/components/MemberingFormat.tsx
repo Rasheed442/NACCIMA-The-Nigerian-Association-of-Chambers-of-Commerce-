@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Info, ChevronLeft, ChevronRight, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { apiFetch, getBaseUrl } from "@/utils/api";
 
@@ -123,9 +123,18 @@ interface MemberingFormatProps {
     code: string;
     numberingConfig?: NumberingConfig;
   } | null;
+  onTabChange?: (tabId: string) => void;
 }
 
-export default function CertificateNumberingPanel({ certificateType }: MemberingFormatProps) {
+export interface MemberingFormatData {
+  numberingConfig: NumberingConfig;
+}
+
+export interface MemberingFormatRef {
+  getData: () => MemberingFormatData;
+}
+
+const CertificateNumberingPanel = forwardRef<MemberingFormatRef, MemberingFormatProps>(({ certificateType, onTabChange }, ref) => {
   const [numberingMethods, setNumberingMethods] = useState<NumberingMethodOption[]>([]);
   const [loadingMethods, setLoadingMethods] = useState(true);
   
@@ -185,6 +194,20 @@ export default function CertificateNumberingPanel({ certificateType }: Membering
 
     fetchNumberingMethods();
   }, [certificateType?.numberingConfig]);
+
+  // Expose data via ref
+  useImperativeHandle(ref, () => ({
+    getData: () => ({
+      numberingConfig: {
+        method: state.method,
+        padding: state.padding,
+        incrementStep: state.incrementStep,
+        resetFrequency: state.resetFrequency,
+        separator: state.separator,
+        format: state.format,
+      },
+    }),
+  }));
 
   const update = <K extends keyof NumberingState>(key: K, value: NumberingState[K]) =>
     setState((prev) => ({ ...prev, [key]: value }));
@@ -394,6 +417,7 @@ export default function CertificateNumberingPanel({ certificateType }: Membering
             </button>
             <button
               type="button"
+              onClick={() => onTabChange?.('Fee')}
               className="flex items-center gap-1 rounded-lg bg-[#1a4a8a] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2a5a9a] transition-colors"
             >
               Next
@@ -404,7 +428,11 @@ export default function CertificateNumberingPanel({ certificateType }: Membering
       </div>
     </div>
   );
-}
+});
+
+CertificateNumberingPanel.displayName = 'CertificateNumberingPanel';
+
+export default CertificateNumberingPanel;
 
 const inputClass =
   "w-full rounded-lg border border-[#cbd5e1] px-3 py-2.5 text-sm text-[#1e293b] placeholder:text-[#94a3b8] outline-none transition-colors focus:border-[#1a4a8a] focus:ring-2 focus:ring-[#1a4a8a]/20";

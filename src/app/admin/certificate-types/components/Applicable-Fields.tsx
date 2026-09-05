@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import {
   CreditCard,
   User,
@@ -242,7 +242,15 @@ interface ApplicableFieldsProps {
   onTabChange?: (tabId: string) => void;
 }
 
-export default function ApplicableFieldsPanel({ onTabChange }: ApplicableFieldsProps) {
+export interface ApplicableFieldsData {
+  enabledFields: Record<string, boolean>;
+}
+
+export interface ApplicableFieldsRef {
+  getData: () => ApplicableFieldsData;
+}
+
+const ApplicableFieldsPanel = forwardRef<ApplicableFieldsRef, ApplicableFieldsProps>(({ onTabChange }, ref) => {
   const [fields, setFields] = useState<FieldDef[]>(FALLBACK_FIELDS);
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() => {
@@ -331,6 +339,13 @@ export default function ApplicableFieldsPanel({ onTabChange }: ApplicableFieldsP
     // Dispatch custom event for same-tab communication
     window.dispatchEvent(new CustomEvent('applicable-fields-changed', { detail: enabled }));
   }, [enabled]);
+
+  // Expose data via ref
+  useImperativeHandle(ref, () => ({
+    getData: () => ({
+      enabledFields: enabled,
+    }),
+  }));
 
   if (loading) {
     return (
@@ -506,7 +521,11 @@ export default function ApplicableFieldsPanel({ onTabChange }: ApplicableFieldsP
       </div>
     </div>
   );
-}
+});
+
+ApplicableFieldsPanel.displayName = 'ApplicableFieldsPanel';
+
+export default ApplicableFieldsPanel;
 
 function FieldRow({
   field,

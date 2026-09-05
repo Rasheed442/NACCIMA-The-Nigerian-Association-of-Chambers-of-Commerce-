@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import {
   Info,
   ChevronDown,
@@ -12,8 +12,9 @@ import {
   Check,
   X,
 } from "lucide-react";
+import { apiFetch, getBaseUrl } from "@/utils/api";
 
-type CalcMethod = "percentage" | "fixed" | "tiered";
+type CalcMethod = "PERCENTAGE" | "FLAT" | "TIERED";
 type Rounding = "none" | "2dp" | "whole" | "nearest10" | "nearest50" | "nearest100";
 
 interface Tier {
@@ -25,14 +26,46 @@ interface Tier {
 }
 
 interface FeeState {
-  method: CalcMethod;
+  feeBasis: CalcMethod;
   memberRate: string;
   nonMemberRate: string;
+  memberAmount: string;
+  nonMemberAmount: string;
   vatRate: string;
   currency: string;
   processingFee: string;
   rounding: Rounding;
   tiers: Tier[];
+}
+
+export interface FeeChargesData {
+  feeStructure: {
+    feeBasis: CalcMethod;
+    memberRate: string;
+    nonMemberRate: string;
+    memberAmount: string;
+    nonMemberAmount: string;
+    vatRate: string;
+    currency: string;
+    processingFee: string;
+    rounding: Rounding;
+    tiers: Tier[];
+  };
+}
+
+export interface FeeChargesRef {
+  getData: () => FeeChargesData;
+}
+
+interface FeeChargesProps {
+  onTabChange?: (tabId: string) => void;
+  onSubmit?: () => void;
+  certificateType?: {
+    id: string;
+    code: string;
+  } | null;
+  mode?: 'create' | 'edit';
+  getFormData?: () => any;
 }
 
 const CURRENCIES = [
@@ -95,7 +128,7 @@ function formatCurrency(value: number, currency: string): string {
 
 function formatUsd(value: string): string {
   const n = parseFloat(value);
-  if (Number.isNaN(n)) return "$0.00";
+  if (Number.isNaN(n)) return "0.00";
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -163,18 +196,83 @@ function Select<T extends string | number>({
   );
 }
 
-export default function FeeStructurePanel() {
+const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabChange, onSubmit, certificateType, mode = 'create', getFormData }, ref) => {
   const [state, setState] = useState<FeeState>({
-    method: "tiered",
-    memberRate: "0.11",
-    nonMemberRate: "0.125",
-    vatRate: "7.50",
+    feeBasis: "TIERED",
+    memberRate: "0.0011",
+    nonMemberRate: "0.00125",
+    memberAmount: "40000",
+    nonMemberAmount: "52000",
+    vatRate: "0.075",
     currency: "NGN",
     processingFee: "0.00",
     rounding: "2dp",
     tiers: DEFAULT_TIERS,
   });
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [loadingMethods, setLoadingMethods] = useState(true);
+  const [feeMethods, setFeeMethods] = useState<{ code: string; name: string }[]>([]);
+
+  // Fetch fee calculation methods
+  useEffect(() => {
+    const fetchFeeMethods = async () => {
+      try {
+        const baseUrl = getBaseUrl();
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/fee-calculation-methods`);
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.data)) {
+          setFeeMethods(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch fee calculation methods:', error);
+      } finally {
+        setLoadingMethods(false);
+      }
+    };
+
+    fetchFeeMethods();
+  }, []);
+
+  // Fetch existing fee data in edit mode
+  useEffect(() => {
+    const fetchFeeData = async () => {
+      if (mode === 'edit' && certificateType?.id) {
+        try {
+          const baseUrl = getBaseUrl();
+          const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateType.id}/fee`);
+          const data = await response.json();
+
+          if (data.success && data.data) {
+            const apiData = data.data;
+            setState((prev) => ({
+              ...prev,
+              feeBasis: apiData.feeBasis || prev.feeBasis,
+              memberRate: apiData.memberRate?.toString() || prev.memberRate,
+              nonMemberRate: apiData.nonMemberRate?.toString() || prev.nonMemberRate,
+              memberAmount: apiData.memberAmount?.toString() || prev.memberAmount,
+              nonMemberAmount: apiData.nonMemberAmount?.toString() || prev.nonMemberAmount,
+              vatRate: apiData.vatRate?.toString() || prev.vatRate,
+              tiers: apiData.tiers?.map((t: any, i: number) => ({
+                id: `tier-${i}`,
+                minFob: t.minFob?.toString() || "0",
+                maxFob: t.maxFob?.toString() || "",
+                memberRate: t.memberRate?.toString() || "0",
+                nonMemberRate: t.nonMemberRate?.toString() || "0",
+              })) || prev.tiers,
+            }));
+          }
+        } catch (error) {
+          console.error('Failed to fetch fee data:', error);
+        }
+      }
+    };
+
+    fetchFeeData();
+  }, [mode, certificateType?.id]);
 
   const update = <K extends keyof FeeState>(key: K, value: FeeState[K]) =>
     setState((prev) => ({ ...prev, [key]: value }));
@@ -202,12 +300,148 @@ export default function FeeStructurePanel() {
     if (editingTierId === id) setEditingTierId(null);
   };
 
+  const handleSubmit = async () => {
+    console.log('handleSubmit called - mode:', mode, 'certificateType:', certificateType);
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      // In create mode, call the POST endpoint directly
+      if (mode === 'create' || !certificateType?.id) {
+        console.log('Creating new certificate type via POST endpoint');
+
+        // Get form data from parent if available
+        const formData = getFormData ? getFormData() : {};
+        console.log('formData from parent:', formData);
+
+        // Build the full payload for certificate type creation
+        let payload: any = {
+          code: formData.code,
+          name: formData.name ,
+          description: formData.description,
+          active: formData.active !== undefined ? formData.active : true,
+          applicableFields: formData.applicableFields,
+          requiredDocuments: formData.requiredDocuments,
+          feeStructure: JSON.stringify({
+            type: state.feeBasis,
+            memberRate: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.memberRate) || 0 : null,
+            nonMemberRate: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.nonMemberRate) || 0 : null,
+            memberAmount: state.feeBasis === 'FLAT' ? parseFloat(state.memberAmount) || 0 : null,
+            nonMemberAmount: state.feeBasis === 'FLAT' ? parseFloat(state.nonMemberAmount) || 0 : null,
+            vatRate: parseFloat(state.vatRate) || 0,
+            tiers: state.feeBasis === 'TIERED' ? state.tiers.map((t) => ({
+              minFob: parseFloat(t.minFob) || 0,
+              maxFob: t.maxFob === '' ? null : parseFloat(t.maxFob) || null,
+              memberRate: parseFloat(t.memberRate) || 0,
+              nonMemberRate: parseFloat(t.nonMemberRate) || 0,
+            })) : null,
+          }),
+          templateUrl: formData.templateUrl,
+          certNumberPrefix: formData.certNumberPrefix,
+          templateConfig: formData.templateConfig,
+        };
+
+        console.log('Payload to send:', payload);
+        const baseUrl = getBaseUrl();
+        const url = `${baseUrl}/api/v1/admin/certificate-types`;
+        console.log('Calling POST endpoint:', url);
+        const response = await apiFetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+        console.log('API response:', result);
+
+        if (!response.ok || result.success === false) {
+          const errorMessage = result.message || `Failed to create certificate type (Status: ${response.status})`;
+          throw new Error(errorMessage);
+        }
+
+        console.log('Certificate type created successfully:', result);
+        setSubmitError(null);
+        setSubmitSuccess('Certificate type created successfully!');
+        setTimeout(() => setSubmitSuccess(null), 5000);
+        if (onSubmit) onSubmit();
+        return;
+      }
+
+      // In edit mode, update only the fee structure using the correct endpoint
+      console.log('Proceeding with edit mode API call');
+      let payload: any = {
+        feeBasis: state.feeBasis,
+        vatRate: parseFloat(state.vatRate) || 0,
+      };
+
+      // Build payload based on fee basis
+      if (state.feeBasis === 'PERCENTAGE') {
+        payload.memberRate = parseFloat(state.memberRate) || 0;
+        payload.nonMemberRate = parseFloat(state.nonMemberRate) || 0;
+        payload.memberAmount = null;
+        payload.nonMemberAmount = null;
+      } else if (state.feeBasis === 'FLAT') {
+        payload.memberAmount = parseFloat(state.memberAmount) || 0;
+        payload.nonMemberAmount = parseFloat(state.nonMemberAmount) || 0;
+        payload.memberRate = null;
+        payload.nonMemberRate = null;
+      } else if (state.feeBasis === 'TIERED') {
+        payload.tiers = state.tiers.map((t) => ({
+          minFob: parseFloat(t.minFob) || 0,
+          maxFob: t.maxFob === '' ? null : parseFloat(t.maxFob) || null,
+          memberRate: parseFloat(t.memberRate) || 0,
+          nonMemberRate: parseFloat(t.nonMemberRate) || 0,
+        }));
+        payload.memberRate = null;
+        payload.nonMemberRate = null;
+        payload.memberAmount = null;
+        payload.nonMemberAmount = null;
+      }
+
+      console.log('Payload to send:', payload);
+      const baseUrl = getBaseUrl();
+      const url = `${baseUrl}/api/v1/admin/certificate-types/${certificateType.id}/fee`;
+      console.log('Calling API endpoint:', url);
+      const response = await apiFetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to update fee structure');
+      }
+
+      // Success
+      console.log('Fee structure updated successfully:', result);
+      if (onSubmit) onSubmit();
+    } catch (error) {
+      console.error('Failed to submit fee structure:', error);
+      setSubmitError(error instanceof Error ? error.message : 'Failed to update fee structure');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Expose data via ref
+  useImperativeHandle(ref, () => ({
+    getData: () => ({
+      feeStructure: state,
+    }),
+  }));
+
   const exchangeRate = EXCHANGE_RATES[state.currency] ?? 1;
   const convertedFob = SAMPLE_FOB_VALUE * exchangeRate;
 
   const applicableTier = useMemo(
-    () => (state.method === "tiered" ? findApplicableTier(state.tiers, SAMPLE_FOB_VALUE) : null),
-    [state.method, state.tiers]
+    () => (state.feeBasis === "TIERED" ? findApplicableTier(state.tiers, SAMPLE_FOB_VALUE) : null),
+    [state.feeBasis, state.tiers]
   );
 
   const calc = useMemo(() => {
@@ -219,24 +453,24 @@ export default function FeeStructurePanel() {
     let memberFeeRaw: number;
     let nonMemberFeeRaw: number;
 
-    if (state.method === "tiered") {
+    if (state.feeBasis === "TIERED") {
       memberRatePct = parseFloat(applicableTier?.memberRate ?? "0") || 0;
       nonMemberRatePct = parseFloat(applicableTier?.nonMemberRate ?? "0") || 0;
-      memberFeeRaw = convertedFob * (memberRatePct / 100);
-      nonMemberFeeRaw = convertedFob * (nonMemberRatePct / 100);
-    } else if (state.method === "percentage") {
+      memberFeeRaw = convertedFob * memberRatePct;
+      nonMemberFeeRaw = convertedFob * nonMemberRatePct;
+    } else if (state.feeBasis === "PERCENTAGE") {
       memberRatePct = parseFloat(state.memberRate) || 0;
       nonMemberRatePct = parseFloat(state.nonMemberRate) || 0;
-      memberFeeRaw = convertedFob * (memberRatePct / 100);
-      nonMemberFeeRaw = convertedFob * (nonMemberRatePct / 100);
+      memberFeeRaw = convertedFob * memberRatePct;
+      nonMemberFeeRaw = convertedFob * nonMemberRatePct;
     } else {
-      // fixed amount, already denominated in the selected currency
-      memberFeeRaw = parseFloat(state.memberRate) || 0;
-      nonMemberFeeRaw = parseFloat(state.nonMemberRate) || 0;
+      // FLAT amount, already denominated in the selected currency
+      memberFeeRaw = parseFloat(state.memberAmount) || 0;
+      nonMemberFeeRaw = parseFloat(state.nonMemberAmount) || 0;
     }
 
-    const memberVat = memberFeeRaw * (vatRate / 100);
-    const nonMemberVat = nonMemberFeeRaw * (vatRate / 100);
+    const memberVat = memberFeeRaw * vatRate;
+    const nonMemberVat = nonMemberFeeRaw * vatRate;
 
     const totalMember = applyRounding(memberFeeRaw + memberVat + processingFee, state.rounding);
     const totalNonMember = applyRounding(
@@ -267,27 +501,20 @@ export default function FeeStructurePanel() {
               Fee Calculation Method<span className="ml-0.5 text-red-500">*</span>
             </label>
             <div className="flex flex-wrap gap-8">
-              <RadioOption
-                label="Percentage of FOB Value"
-                checked={state.method === "percentage"}
-                onSelect={() => update("method", "percentage")}
-              />
-              <RadioOption
-                label="Fixed Amount"
-                checked={state.method === "fixed"}
-                onSelect={() => update("method", "fixed")}
-              />
-              <RadioOption
-                label="Tiered FOB Value"
-                checked={state.method === "tiered"}
-                onSelect={() => update("method", "tiered")}
-              />
+              {feeMethods.map((method) => (
+                <RadioOption
+                  key={method.code}
+                  label={method.name}
+                  checked={state.feeBasis === method.code}
+                  onSelect={() => update("feeBasis", method.code as CalcMethod)}
+                />
+              ))}
             </div>
           </div>
 
           <hr className="my-6 border-slate-100" />
 
-          {state.method === "tiered" ? (
+          {state.feeBasis === "TIERED" ? (
             <>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Tier Schedule<span className="ml-0.5 text-red-500">*</span>
@@ -337,11 +564,11 @@ export default function FeeStructurePanel() {
 
               <hr className="my-6 border-slate-100" />
             </>
-          ) : (
+          ) : state.feeBasis === "PERCENTAGE" ? (
             <>
               <div className="grid grid-cols-2 gap-4">
                 <Field
-                  label={state.method === "percentage" ? "Member Rate (%)" : "Member Fee"}
+                  label="Member Rate (%)"
                   required
                   hint="Applied to companies with active NACCIMA membership"
                 >
@@ -355,7 +582,7 @@ export default function FeeStructurePanel() {
                 </Field>
 
                 <Field
-                  label={state.method === "percentage" ? "Non-Member Rate (%)" : "Non-Member Fee"}
+                  label="Non-Member Rate (%)"
                   required
                   hint="Applied to companies without active membership"
                 >
@@ -371,10 +598,44 @@ export default function FeeStructurePanel() {
 
               <hr className="my-6 border-slate-100" />
             </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Field
+                  label="Member Fee"
+                  required
+                  hint="Applied to companies with active NACCIMA membership"
+                >
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={state.memberAmount}
+                    onChange={(e) => update("memberAmount", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+
+                <Field
+                  label="Non-Member Fee"
+                  required
+                  hint="Applied to companies without active membership"
+                >
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={state.nonMemberAmount}
+                    onChange={(e) => update("nonMemberAmount", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
+              <hr className="my-6 border-slate-100" />
+            </>
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            <Field label="VAT Rate (%)" required hint="Value Added Tax rate applied to the fee">
+            <Field label="VAT Rate" required hint="Value Added Tax rate as decimal (e.g., 0.075 for 7.5%)">
               <input
                 type="text"
                 inputMode="decimal"
@@ -430,7 +691,7 @@ export default function FeeStructurePanel() {
             <dl className="mt-3 space-y-2.5 text-sm">
               <SummaryRow label="FOB Value (USD)" value={formatUsd(String(SAMPLE_FOB_VALUE))} />
 
-              {state.method === "tiered" && (
+              {state.feeBasis === "TIERED" && (
                 <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2.5">
                   <dt className="font-medium text-emerald-700">Applicable Tier</dt>
                   <dd className="font-semibold text-emerald-700">
@@ -447,8 +708,8 @@ export default function FeeStructurePanel() {
               <SummaryRow
                 label="Applicable Rate"
                 value={
-                  state.method === "fixed"
-                    ? formatCurrency(parseFloat(state.memberRate) || 0, state.currency)
+                  state.feeBasis === "FLAT"
+                    ? formatCurrency(parseFloat(state.memberAmount) || 0, state.currency)
                     : `${calc.memberRatePct.toFixed(3)}%`
                 }
               />
@@ -477,7 +738,7 @@ export default function FeeStructurePanel() {
               )}
               <SummaryRow
                 label={
-                  state.method === "fixed"
+                  state.feeBasis === "FLAT"
                     ? "Certificate Fee"
                     : `Certificate Fee (${calc.memberRatePct.toFixed(3)}%)`
                 }
@@ -509,7 +770,7 @@ export default function FeeStructurePanel() {
           <div className="mt-6 flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
             <div>
-              {state.method === "tiered" ? (
+              {state.feeBasis === "TIERED" ? (
                 <>
                   <p className="text-sm text-blue-800">
                     The tier is selected using the original USD FOB value.
@@ -529,6 +790,20 @@ export default function FeeStructurePanel() {
         </section>
       </div>
 
+      {/* Error message */}
+      {submitError && (
+        <div className="mx-1 mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+          {submitError}
+        </div>
+      )}
+
+      {/* Success message */}
+      {submitSuccess && (
+        <div className="mx-1 mb-4 p-3 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+          {submitSuccess}
+        </div>
+      )}
+
       {/* Footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <span className="text-sm text-slate-500">Page 1 of 1</span>
@@ -541,15 +816,21 @@ export default function FeeStructurePanel() {
           </button>
           <button
             type="button"
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Changes
+            {isSubmitting ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>
     </div>
   );
-}
+});
+
+FeeStructurePanel.displayName = 'FeeStructurePanel';
+
+export default FeeStructurePanel;
 
 const inputClass =
   "w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
