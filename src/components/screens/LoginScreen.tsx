@@ -104,7 +104,7 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
         <div className="bg-gradient-to-br from-[#1a3a5c] to-[#0f2240] pb-30 px-[34px] flex flex-col justify-center">
           <div className="text-[34px] font-extrabold text-white mb-[5px]">NACCIMA</div>
           <div className="text-[14px] text-[#7ab8dc] mb-6 font-medium">E-Certificate Platform</div>
-          <div className="text-[14px] text-[#aac8e0] leading-relaxed mb-6">Apply for, track and receive your<br/>official NACCIMA export certificates.<br/><br/>All five certificate types — in one place.</div>
+          <div className="text-[14px] text-[#aac8e0] leading-relaxed mb-6">Apply for, track and receive your<br/>official NACCIMA export certificates.<br/><br/>All  certificate types — in one place.</div>
           <div className="flex flex-col gap-[7px]">
             <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ Certificate of Origin (COO) &amp; GSP</div>
             <div className="flex items-center gap-2 text-[15px] text-[#7ab8dc]">✅ ECOWAS &amp; Movement Certificates</div>

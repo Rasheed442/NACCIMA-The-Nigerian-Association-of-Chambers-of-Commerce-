@@ -20,6 +20,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const [certificates, setCertificates] = useState<any[]>([]);
   const [applicationsCount, setApplicationsCount] = useState(0);
   const [certificatesCount, setCertificatesCount] = useState(0);
+  const [issuedCertificatesCount, setIssuedCertificatesCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
         fetchAdminData();
       } else {
         fetchApplications();
+        fetchIssuedCertificates();
       }
     }
   }, [mounted, role]);
@@ -125,9 +127,40 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
     }
   };
 
+  const fetchIssuedCertificates = async () => {
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        return;
+      }
+
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/certificates/issued?page=0&size=1`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        setIssuedCertificatesCount(result.data.totalElements || 0);
+      }
+    } catch (err) {
+      console.error('Failed to fetch issued certificates:', err);
+    }
+  };
+
   const allCount = role === 'admin' ? applicationsCount : applications.length;
   const pendingPaymentCount = applications.filter(app => app.status === 'PENDING_PAYMENT').length;
-  const issuedCount = role === 'admin' ? certificatesCount : certificates.filter(cert => cert.status === 'ISSUED' || cert.status === 'VALID').length;
+  const underReviewCount = applications.filter(app => app.status === 'UNDER_REVIEW').length;
+  const issuedCount = role === 'admin' ? certificatesCount : issuedCertificatesCount;
 
   if (!mounted) {
     return (
@@ -223,15 +256,15 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath)}>
         <span className="text-[13px] w-[15px] text-center">📄</span> All Applications {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{allCount}</span>}
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath + '?status=PENDING_PAYMENT' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath + '?status=PENDING_PAYMENT')}>
         <span className="text-[13px] w-[15px] text-center">🕐</span> Pending Payment {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{pendingPaymentCount}</span>}
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
-        <span className="text-[13px] w-[15px] text-center">🔍</span> Under Review
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath + '?status=UNDER_REVIEW' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath + '?status=UNDER_REVIEW')}>
+        <span className="text-[13px] w-[15px] text-center">🔍</span> Under Review {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{underReviewCount}</span>}
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
       <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/issued-certs' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/issued-certs')}>
-        <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{issuedCount}</span>}
+        <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs 
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium text-[#8a9aba] uppercase tracking-[0.8px] pt-3">Account</div>
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push(companyProfilePath)}>

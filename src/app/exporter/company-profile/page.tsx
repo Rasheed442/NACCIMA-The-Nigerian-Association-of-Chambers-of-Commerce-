@@ -5,6 +5,7 @@ import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { useRouter } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
 
 interface CompanyProfile {
   companyId: string;
@@ -39,6 +40,7 @@ export default function CompanyProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [yearDropdownOpen, setYearDropdownOpen] = useState(false);
 
   // Form state for editable fields
   const [formData, setFormData] = useState({
@@ -163,6 +165,15 @@ export default function CompanyProfilePage() {
   const handleLogout = () => {
     setShowLogoutModal(false);
     router.push('/');
+  };
+
+  const getYears = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let year = currentYear; year >= 1900; year--) {
+      years.push(year);
+    }
+    return years;
   };
 
   if (isLoading) {
@@ -308,12 +319,35 @@ export default function CompanyProfilePage() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[13px] font-semibold text-[#374151]">Year of Incorporation <span className="text-[#e53e3e]">*</span></label>
-                  <input 
-                    className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
-                    type="number"
-                    value={formData.yearOfIncorporation}
-                    onChange={(e) => setFormData({ ...formData, yearOfIncorporation: e.target.value })}
-                  />
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="w-full px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)] flex items-center justify-between"
+                      onClick={() => setYearDropdownOpen(!yearDropdownOpen)}
+                    >
+                      <span>{formData.yearOfIncorporation || 'Select year'}</span>
+                      <ChevronDown size={14} className="text-[#6b7280]" />
+                    </button>
+                    {yearDropdownOpen && (
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg z-10 max-h-[200px] overflow-y-auto w-full">
+                        <div
+                          className="px-[10px] py-[7px] hover:bg-[#f1f4f9] cursor-pointer text-[12px] text-[#6b7280]"
+                          onClick={() => { setFormData({ ...formData, yearOfIncorporation: '' }); setYearDropdownOpen(false); }}
+                        >
+                          Select year
+                        </div>
+                        {getYears().map((year) => (
+                          <div
+                            key={year}
+                            className="px-[10px] py-[7px] hover:bg-[#f1f4f9] cursor-pointer text-[12px] text-[#1a2236]"
+                            onClick={() => { setFormData({ ...formData, yearOfIncorporation: year.toString() }); setYearDropdownOpen(false); }}
+                          >
+                            {year}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

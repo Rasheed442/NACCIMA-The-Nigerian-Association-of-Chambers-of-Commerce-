@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
@@ -36,6 +36,7 @@ interface Application {
 
 export default function MyApplications() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,6 +60,11 @@ export default function MyApplications() {
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
+
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    setFilterStatus(statusParam || '');
+  }, [searchParams]);
 
   useEffect(() => {
     fetchApplications();
@@ -90,9 +96,12 @@ export default function MyApplications() {
       });
 
       const result = await response.json();
+      console.log('Certificate types response:', result);
 
-      if (response.ok && result.data) {
-        setCertificateTypes(Array.isArray(result.data) ? result.data : [result.data]);
+      if (response.ok) {
+        // Handle both direct array and wrapped response
+        const types = Array.isArray(result) ? result : (result.data && Array.isArray(result.data) ? result.data : []);
+        setCertificateTypes(types);
       }
     } catch (err) {
       console.error('Failed to fetch certificate types:', err);
@@ -354,7 +363,7 @@ export default function MyApplications() {
                   onClick={() => setCertTypeDropdownOpen(!certTypeDropdownOpen)}
                 >
                   <span className="flex-1 text-left">
-                    {filterCertType === '' ? 'All Certificate Types' : filterCertType}
+                    {filterCertType === '' ? 'All Certificate Types' : certificateTypes.find(c => c.code === filterCertType)?.name || filterCertType}
                   </span>
                   <ChevronDown size={14} />
                 </button>
@@ -366,7 +375,7 @@ export default function MyApplications() {
                     >
                       All Certificate Types
                     </div>
-                    {certificateTypes.map((cert) => (
+                    {Array.isArray(certificateTypes) && certificateTypes.map((cert) => (
                       <div 
                         key={cert.id}
                         className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"

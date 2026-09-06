@@ -25,6 +25,8 @@ interface CertificateField {
   applicable: boolean;
   required: boolean;
   readOnly: boolean;
+  repeatable: boolean;
+  templateComponent: string;
 }
 
 interface CertificateTypeFields {
@@ -126,6 +128,8 @@ export default function NewApplication() {
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
   const [destinationDropdownOpen, setDestinationDropdownOpen] = useState(false);
   const [manufacturingDropdownOpen, setManufacturingDropdownOpen] = useState(false);
+  const [destinationSearchQuery, setDestinationSearchQuery] = useState('');
+  const [manufacturingSearchQuery, setManufacturingSearchQuery] = useState('');
   const destinationRef = useRef<HTMLDivElement>(null);
   const manufacturingRef = useRef<HTMLDivElement>(null);
   const importerEmailRef = useRef<HTMLInputElement>(null);
@@ -140,19 +144,7 @@ export default function NewApplication() {
   const marksNoRef = useRef<HTMLInputElement>(null);
   const ecowasNumberRef = useRef<HTMLInputElement>(null);
   const criteriaRef = useRef<HTMLInputElement>(null);
-  const [goodsLineItems, setGoodsLineItems] = useState<GoodsLineItem[]>([
-    {
-      id: '1',
-      hsCode: '',
-      description: '',
-      marksNo: '',
-      quantity: '',
-      grossWeight: '',
-      nomenclature: '',
-      unit: '',
-      value: '',
-    }
-  ]);
+  const [goodsLineItems, setGoodsLineItems] = useState<GoodsLineItem[]>([]);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [isLoadingRate, setIsLoadingRate] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, File>>({});
@@ -164,6 +156,7 @@ export default function NewApplication() {
   const [isSavingApplication, setIsSavingApplication] = useState(false);
   const [isSavingGoods, setIsSavingGoods] = useState(false);
   const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
+  const [isSavingAll, setIsSavingAll] = useState(false);
   const [selectedTransportModeDetails, setSelectedTransportModeDetails] = useState<TransportMode | null>(null);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
@@ -277,7 +270,8 @@ export default function NewApplication() {
         throw new Error(result.message || 'Failed to fetch certificate fields.');
       }
 
-      setCertificateFields(result);
+      setCertificateFields(result.data);
+      console.log('Certificate fields:', result.data?.fields?.map((f: { code: string; name: string; category: string }) => ({ code: f.code, name: f.name, category: f.category })));
     } catch (err) {
       console.error('Failed to fetch certificate fields:', err);
     } finally {
@@ -450,6 +444,221 @@ export default function NewApplication() {
     return field ? field.readOnly : false;
   };
 
+  const getFieldLabel = (fieldCode: string) => {
+    if (!certificateFields) return fieldCode;
+    const field = certificateFields?.fields?.find(f => f.code === fieldCode);
+    return field ? field.name : fieldCode;
+  };
+
+  const getFormDataKey = (fieldCode: string): string => {
+    const fieldKeyMap: Record<string, string> = {
+      'TIN': 'tin',
+      'IMPORTER_EMAIL': 'importerEmail',
+      'CONSIGNEE': 'consigneeName',
+      'CONSIGNEE_ADDRESS': 'consigneeAddress',
+      'CARRIER': 'carrier',
+      'DESTINATION': 'destinationCountry',
+      'DESTINATION_PORT': 'destinationPort',
+      'COUNTRY_OF_MANUFACTURING': 'countryOfManufacturing',
+      'TOTAL_VALUE_FOB': 'totalValueFOB',
+      'BULK_PRODUCT_QTY_MT': 'bulkProductQty',
+      'MARKS_NO': 'marksNo',
+      'ECOWAS_NUMBER': 'ecowasNumber',
+      'CRITERIA': 'criteria',
+      'SHIPPER_NAME': 'shipperName',
+      'SHIPPER_ADDRESS': 'shipperAddress',
+    };
+    return fieldKeyMap[fieldCode] || fieldCode.toLowerCase();
+  };
+
+  const renderDynamicField = (field: CertificateField) => {
+    const formDataKey = getFormDataKey(field.code);
+    const fieldValue = formData[formDataKey as keyof typeof formData] || '';
+    
+    if (!field.applicable) return null;
+
+    // Special handling for country dropdowns
+    if (field.code === 'DESTINATION') {
+      const filteredCountries = countries.filter(country => 
+        country.name.toLowerCase().includes(destinationSearchQuery.toLowerCase())
+      );
+      return (
+        <div key={field.code} className="flex flex-col gap-1">
+          <label className="text-[11px] font-semibold text-[#374151]">
+            {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
+          </label>
+          <div ref={destinationRef as any} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setDestinationDropdownOpen(!destinationDropdownOpen);
+                setDestinationSearchQuery('');
+              }}
+              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors.destinationCountry ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+              disabled={isLoadingCountries}
+            >
+              <span>{formData.destinationCountry || '-- Select Country --'}</span>
+              <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${destinationDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {destinationDropdownOpen && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg">
+                <div className="p-2 border-b border-[#d1d5db]">
+                  <input
+                    type="text"
+                    placeholder="Search countries..."
+                    value={destinationSearchQuery}
+                    onChange={(e) => setDestinationSearchQuery(e.target.value)}
+                    className="w-full px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] focus:outline-none focus:border-[#3a7bd5]"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="max-h-60 overflow-auto">
+                  {filteredCountries.map((country) => (
+                    <button
+                      key={country.code}
+                      type="button"
+                      onClick={() => {
+                        setFormData({...formData, destinationCountry: country.name});
+                        setDestinationDropdownOpen(false);
+                        setDestinationSearchQuery('');
+                        if (formErrors.destinationCountry) setFormErrors({...formErrors, destinationCountry: ''});
+                      }}
+                      className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
+                    >
+                      <span>{country.name}</span>
+                      {formData.destinationCountry === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
+                    </button>
+                  ))}
+                  {filteredCountries.length === 0 && (
+                    <div className="px-[10px] py-[7px] text-[12px] text-[#6a7a9a]">No countries found</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {formErrors.destinationCountry && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationCountry}</div>}
+        </div>
+      );
+    }
+
+    if (field.code === 'COUNTRY_OF_MANUFACTURING') {
+      const filteredCountries = countries.filter(country => 
+        country.name.toLowerCase().includes(manufacturingSearchQuery.toLowerCase())
+      );
+      return (
+        <div key={field.code} className="flex flex-col gap-1">
+          <label className="text-[11px] font-semibold text-[#374151]">
+            {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
+          </label>
+          <div ref={manufacturingRef as any} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setManufacturingDropdownOpen(!manufacturingDropdownOpen);
+                setManufacturingSearchQuery('');
+              }}
+              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors.countryOfManufacturing ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+              disabled={isLoadingCountries}
+            >
+              <span>{formData.countryOfManufacturing || '-- Select Country --'}</span>
+              <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${manufacturingDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {manufacturingDropdownOpen && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg">
+                <div className="p-2 border-b border-[#d1d5db]">
+                  <input
+                    type="text"
+                    placeholder="Search countries..."
+                    value={manufacturingSearchQuery}
+                    onChange={(e) => setManufacturingSearchQuery(e.target.value)}
+                    className="w-full px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] focus:outline-none focus:border-[#3a7bd5]"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="max-h-60 overflow-auto">
+                  {filteredCountries.map((country) => (
+                    <button
+                      key={country.code}
+                      type="button"
+                      onClick={() => {
+                        setFormData({...formData, countryOfManufacturing: country.name});
+                        setManufacturingDropdownOpen(false);
+                        setManufacturingSearchQuery('');
+                        if (formErrors.countryOfManufacturing) setFormErrors({...formErrors, countryOfManufacturing: ''});
+                      }}
+                      className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
+                    >
+                      <span>{country.name}</span>
+                      {formData.countryOfManufacturing === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
+                    </button>
+                  ))}
+                  {filteredCountries.length === 0 && (
+                    <div className="px-[10px] py-[7px] text-[12px] text-[#6a7a9a]">No countries found</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {formErrors.countryOfManufacturing && <div className="text-[10px] text-[#e53e3e]">{formErrors.countryOfManufacturing}</div>}
+        </div>
+      );
+    }
+
+    // Special handling for FOB value with USD prefix
+    if (field.code === 'TOTAL_VALUE_FOB') {
+      return (
+        <div key={field.code} className="flex flex-col gap-1">
+          <label className="text-[11px] font-semibold text-[#374151]">
+            {field.name} in USD {field.required && <span className="text-[#e53e3e]">*</span>} <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">USD for CoO</span>
+          </label>
+          <div className="flex items-center gap-1">
+            <span className="text-[13px] font-bold text-[#92400e]">$</span>
+            <input
+              ref={totalValueFOBRef}
+              className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.totalValueFOB ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+              placeholder="0.00"
+              value={formData.totalValueFOB}
+              onChange={(e) => {
+                const formatted = formatNumberWithCommas(e.target.value);
+                setFormData({...formData, totalValueFOB: formatted});
+                if (formErrors.totalValueFOB) setFormErrors({...formErrors, totalValueFOB: ''});
+              }}
+            />
+          </div>
+          <div className="text-[10px] text-[#6b7280]">FOB value in US Dollars. Converted to NGN at prevailing rate for fee calculation.</div>
+          {formErrors.totalValueFOB && <div className="text-[10px] text-[#e53e3e]">{formErrors.totalValueFOB}</div>}
+        </div>
+      );
+    }
+
+    // Default text input
+    return (
+      <div key={field.code} className="flex flex-col gap-1">
+        <label className="text-[11px] font-semibold text-[#374151]">
+          {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
+        </label>
+        {field.readOnly ? (
+          <input 
+            className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" 
+            value={fieldValue} 
+            readOnly 
+          />
+        ) : (
+          <input
+            className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors[formDataKey] ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+            placeholder={field.name}
+            value={fieldValue}
+            onChange={(e) => {
+              setFormData({...formData, [formDataKey]: e.target.value});
+              if (formErrors[formDataKey]) setFormErrors({...formErrors, [formDataKey]: ''});
+            }}
+          />
+        )}
+        {formErrors[formDataKey] && <div className="text-[10px] text-[#e53e3e]">{formErrors[formDataKey]}</div>}
+      </div>
+    );
+  };
+
   const getSelectedTransportMode = () => {
     return selectedTransportModeDetails || transportModes.find(tm => tm.code === transportMode);
   };
@@ -536,63 +745,71 @@ export default function NewApplication() {
     // If certificate fields aren't loaded yet, validate all fields as required
     const fieldsLoaded = certificateFields && certificateFields.fields;
 
-    // Validate required fields based on certificate type configuration
-    if (!fieldsLoaded || isFieldRequired('IMPORTER_EMAIL')) {
+    // Dynamically validate required fields based on certificate type configuration
+    if (fieldsLoaded) {
+      certificateFields.fields.forEach(field => {
+        // Skip fields that are already filled from other sources (company profile, transport mode selection)
+        if (field.code === 'TIN' || field.code === 'SHIPPER_NAME' || field.code === 'SHIPPER_ADDRESS' || field.code === 'MODE_OF_TRANSPORT') {
+          return;
+        }
+
+        // Skip HS_CODE as it's part of goods line items, not shipment details
+        if (field.code === 'HS_CODE') {
+          return;
+        }
+
+        if (field.category === 'APPLICATION' && field.required && field.applicable) {
+          const formDataKey = getFormDataKey(field.code);
+          const fieldValue = formData[formDataKey as keyof typeof formData];
+          
+          if (!fieldValue || (typeof fieldValue === 'string' && !fieldValue.trim())) {
+            errors[formDataKey] = `${field.name} is required`;
+          }
+          
+          // Special validation for email fields
+          if (field.code === 'IMPORTER_EMAIL' && fieldValue) {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue as string)) {
+              errors[formDataKey] = 'Please enter a valid email address';
+            }
+          }
+          
+          // Special validation for FOB value
+          if (field.code === 'TOTAL_VALUE_FOB' && fieldValue) {
+            const cleanValue = (fieldValue as string).replace(/,/g, '').trim();
+            if (!cleanValue) {
+              errors[formDataKey] = 'Total Value (FOB) is required';
+            }
+          }
+        }
+      });
+    } else {
+      // Fallback validation if fields aren't loaded - validate all known fields
       if (!formData.importerEmail.trim()) {
         errors.importerEmail = 'Importer Email is required';
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.importerEmail)) {
         errors.importerEmail = 'Please enter a valid email address';
       }
-    }
-    if (!fieldsLoaded || isFieldRequired('CONSIGNEE')) {
       if (!formData.consigneeName.trim()) {
         errors.consigneeName = 'Consignee Name is required';
       }
-    }
-    if (!fieldsLoaded || isFieldRequired('CONSIGNEE_ADDRESS')) {
       if (!formData.consigneeAddress.trim()) {
         errors.consigneeAddress = 'Consignee Address is required';
       }
-    }
-    if (!fieldsLoaded || isFieldRequired('CARRIER')) {
       if (!formData.carrier.trim()) {
         errors.carrier = 'Carrier is required';
       }
-    }
-    if (!fieldsLoaded || isFieldRequired('DESTINATION')) {
       if (!formData.destinationCountry.trim()) {
         errors.destinationCountry = 'Destination Country is required';
       }
-    }
-    if (!fieldsLoaded || isFieldRequired('COUNTRY_OF_MANUFACTURING')) {
       if (!formData.countryOfManufacturing.trim()) {
         errors.countryOfManufacturing = 'Country of Manufacturing is required';
       }
-    }
-    if (!fieldsLoaded || isFieldRequired('TOTAL_VALUE_FOB')) {
       const cleanValue = formData.totalValueFOB.replace(/,/g, '').trim();
       if (!cleanValue) {
         errors.totalValueFOB = 'Total Value (FOB) is required';
       }
-    }
-    if (!fieldsLoaded || isFieldRequired('BULK_PRODUCT_QTY_MT')) {
       if (!formData.bulkProductQty.trim()) {
         errors.bulkProductQty = 'Bulk Product Qty is required';
-      }
-    }
-    if (!fieldsLoaded || isFieldRequired('MARKS_NO')) {
-      if (isFieldApplicable('MARKS_NO') && !formData.marksNo.trim()) {
-        errors.marksNo = 'Marks / No. is required';
-      }
-    }
-    if (!fieldsLoaded || isFieldRequired('ECOWAS_NUMBER')) {
-      if (isFieldApplicable('ECOWAS_NUMBER') && !formData.ecowasNumber.trim()) {
-        errors.ecowasNumber = 'ECOWAS Number is required';
-      }
-    }
-    if (!fieldsLoaded || isFieldRequired('CRITERIA')) {
-      if (isFieldApplicable('CRITERIA') && !formData.criteria.trim()) {
-        errors.criteria = 'Criteria is required';
       }
     }
 
@@ -734,12 +951,14 @@ export default function NewApplication() {
   const saveApplicationDetails = async () => {
     if (!applicationId) {
       setValidationError('Application ID not found');
-      return false;
+      return { success: false, errors: ['Application ID not found'] };
     }
 
     // Validate shipment details before saving
-    if (!validateStep2()) {
-      return false;
+    const isValid = validateStep2();
+    if (!isValid) {
+      const errorMessages = Object.values(formErrors);
+      return { success: false, errors: errorMessages };
     }
 
     setIsSavingApplication(true);
@@ -760,6 +979,8 @@ export default function NewApplication() {
         destinationCountry: formData.destinationCountry,
         destinationPort: formData.destinationPort,
         countryOfMfg: formData.countryOfManufacturing,
+        ecowasNumber: formData.ecowasNumber || '',
+        criteria: formData.criteria || '',
       };
 
       if (formData.bulkProductQty && formData.bulkProductQty.trim() !== '' && !isNaN(parseFloat(formData.bulkProductQty))) {
@@ -777,31 +998,63 @@ export default function NewApplication() {
       const result = await response.json();
 
       if (response.ok) {
-        setSuccessMessage('Shipment details saved successfully');
-        setShowSuccessModal(true);
-        return true;
+        return { success: true, errors: [] };
       } else {
         setValidationError(result.message || 'Failed to save application details');
-        return false;
+        return { success: false, errors: [result.message || 'Failed to save application details'] };
       }
     } catch (err) {
       console.error('Failed to save application details:', err);
       setValidationError('Failed to save application details. Please try again.');
-      return false;
+      return { success: false, errors: ['Failed to save application details. Please try again.'] };
     } finally {
       setIsSavingApplication(false);
+    }
+  };
+
+  const saveAllDetails = async () => {
+    setIsSavingAll(true);
+    setValidationError(null);
+
+    try {
+      // Step 1: Save shipment details
+      const shipmentResult = await saveApplicationDetails();
+      if (!shipmentResult.success) {
+        setValidationError(shipmentResult.errors.join(', '));
+        return false;
+      }
+
+      // Step 2: Save goods items
+      const goodsResult = await saveGoodsItems();
+      if (!goodsResult.success) {
+        setValidationError(goodsResult.errors.join(', '));
+        return false;
+      }
+
+      // All successful
+      setSuccessMessage('All details saved successfully');
+      setShowSuccessModal(true);
+      return true;
+    } catch (err) {
+      console.error('Failed to save all details:', err);
+      setValidationError('Failed to save details. Please try again.');
+      return false;
+    } finally {
+      setIsSavingAll(false);
     }
   };
 
   const saveGoodsItems = async () => {
     if (!applicationId) {
       setValidationError('Application ID not found');
-      return false;
+      return { success: false, errors: ['Application ID not found'] };
     }
 
     // Validate goods items before saving
-    if (!validateGoodsItems()) {
-      return false;
+    const isValid = validateGoodsItems();
+    if (!isValid) {
+      const errorMessages = Object.values(formErrors);
+      return { success: false, errors: errorMessages };
     }
 
     setIsSavingGoods(true);
@@ -819,10 +1072,10 @@ export default function NewApplication() {
           marksNo: item.marksNo,
           description: item.description,
           unit: item.unit,
-          quantity: parseFloat(item.quantity) || 0,
-          grossWeight: parseFloat(item.grossWeight) || 0,
+          quantity: parseFloat(item.quantity.replace(/,/g, '')) || 0,
+          grossWeight: parseFloat(item.grossWeight.replace(/,/g, '')) || 0,
           nomenclature: item.nomenclature,
-          value: parseFloat(item.value) || 0,
+          value: parseFloat(item.value.replace(/,/g, '')) || 0,
         })),
       };
 
@@ -837,28 +1090,46 @@ export default function NewApplication() {
       const result = await response.json();
 
       if (response.ok) {
-        setSuccessMessage('Goods line items saved successfully');
-        setShowSuccessModal(true);
-        return true;
+        return { success: true, errors: [] };
       } else {
         setValidationError(result.message || 'Failed to save goods items');
-        return false;
+        return { success: false, errors: [result.message || 'Failed to save goods items'] };
       }
     } catch (err) {
       console.error('Failed to save goods items:', err);
       setValidationError('Failed to save goods items. Please try again.');
-      return false;
+      return { success: false, errors: ['Failed to save goods items. Please try again.'] };
     } finally {
       setIsSavingGoods(false);
     }
   };
 
+  const isStep2Valid = () => {
+    // Validate transport mode selection
+    if (!transportMode) {
+      return false;
+    }
+
+    // Validate Goods Line Items
+    const hasEmptyLineItems = goodsLineItems.some(item =>
+      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight
+    );
+    if (hasEmptyLineItems) {
+      return false;
+    }
+
+    // Validate Supporting Documents
+    const requiredDocs = getSelectedTransportMode()?.documents?.filter(d => d.required) || [];
+    const missingDocs = requiredDocs.filter(d => !uploadedDocuments[d.code]);
+    if (missingDocs.length > 0) {
+      return false;
+    }
+
+    return true;
+  };
+
   const handleContinueToStep3 = async () => {
     setValidationError(null);
-
-    if (!validateStep2()) {
-      return;
-    }
 
     // Validate transport mode selection
     if (!transportMode) {
@@ -876,16 +1147,52 @@ export default function NewApplication() {
     }
 
     // Validate Supporting Documents
-    const requiredDocs = getSelectedTransportMode()?.documents.filter(d => d.required) || [];
+    const requiredDocs = getSelectedTransportMode()?.documents?.filter(d => d.required) || [];
     const missingDocs = requiredDocs.filter(d => !uploadedDocuments[d.code]);
     if (missingDocs.length > 0) {
       setValidationError(`Please upload the following required documents: ${missingDocs.map(d => d.name).join(', ')}`);
       return;
     }
 
-    fetchExchangeRate();
-    setStep(3);
-    fetchReviewData();
+    // Save all details before proceeding
+    setIsSavingAll(true);
+    try {
+      // Step 1: Save shipment details
+      const shipmentResult = await saveApplicationDetails();
+      if (!shipmentResult.success) {
+        setValidationError(shipmentResult.errors.join(', '));
+        return;
+      }
+
+      // Step 2: Save goods items
+      const goodsResult = await saveGoodsItems();
+      if (!goodsResult.success) {
+        setValidationError(goodsResult.errors.join(', '));
+        return;
+      }
+
+      // Step 3: Upload all documents
+      const docEntries = Object.entries(uploadedDocuments);
+      for (const [docCode, file] of docEntries) {
+        try {
+          await uploadDocumentToServer(docCode, file);
+        } catch (err) {
+          console.error(`Failed to upload document ${docCode}:`, err);
+          setValidationError(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          return;
+        }
+      }
+
+      // All successful, proceed to step 3
+      fetchExchangeRate();
+      setStep(3);
+      fetchReviewData();
+    } catch (err) {
+      console.error('Failed to save details:', err);
+      setValidationError('Failed to save details. Please try again.');
+    } finally {
+      setIsSavingAll(false);
+    }
   };
 
   const fetchExchangeRate = async () => {
@@ -1011,103 +1318,73 @@ export default function NewApplication() {
   };
 
   const removeLineItem = (id: string) => {
-    if (goodsLineItems.length === 1) {
-      // Keep at least one empty row
-      setGoodsLineItems([{
-        id: '1',
-        hsCode: '',
-        description: '',
-        marksNo: '',
-        quantity: '',
-        grossWeight: '',
-        nomenclature: '',
-        unit: '',
-        value: '',
-      }]);
-    } else {
-      setGoodsLineItems(goodsLineItems.filter(item => item.id !== id));
-    }
+    setGoodsLineItems(goodsLineItems.filter(item => item.id !== id));
   };
 
   const handleDocumentUpload = async (docCode: string, file: File) => {
-    if (!applicationId) {
-      setUploadError('Application ID not found. Please select a certificate type first.');
-      return;
-    }
+    // Just store the file locally, don't upload yet
+    setUploadedDocuments(prev => ({ ...prev, [docCode]: file }));
+    setUploadError(null);
+  };
 
-    if (!transportMode) {
-      setUploadError('Please select a mode of transport before uploading documents.');
-      return;
+  const uploadDocumentToServer = async (docCode: string, file: File) => {
+    if (!applicationId) {
+      throw new Error('Application ID not found');
     }
 
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
-      setUploadError('Please log in to upload documents');
-      return;
+      throw new Error('Please log in to upload documents');
     }
 
-    setUploadingDoc(docCode);
-    setUploadError(null);
-
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        setUploadError('API URL not configured');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('documentType', docCode);
-      formData.append('file', file);
-
-      console.log('Uploading document:', { docCode, fileName: file.name, fileSize: file.size });
-
-      const uploadResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const uploadResult = await uploadResponse.json();
-      console.log('Upload response:', uploadResponse.status, uploadResult);
-
-      if (uploadResponse.ok && uploadResult.data) {
-        // After successful upload, save the document via PUT endpoint
-        const saveResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            documentType: uploadResult.data.documentType,
-            fileName: uploadResult.data.fileName,
-            fileUrl: uploadResult.data.fileUrl,
-          }),
-        });
-
-        const saveResult = await saveResponse.json();
-        console.log('Save document response:', saveResponse.status, saveResult);
-
-        if (saveResponse.ok) {
-          setUploadedDocuments(prev => ({ ...prev, [docCode]: file }));
-        } else {
-          setUploadError(`Failed to save document: ${saveResult.message || 'Unknown error'} (${saveResponse.status})`);
-        }
-      } else {
-        setUploadError(`Failed to upload document: ${uploadResult.message || uploadResult.error || 'Unknown error'} (${uploadResponse.status})`);
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-      setUploadError('Failed to upload document');
-    } finally {
-      setUploadingDoc(null);
+    const baseUrl = getBaseUrl();
+    if (!baseUrl) {
+      throw new Error('API URL not configured');
     }
+
+    // Upload document
+    const formData = new FormData();
+    formData.append('documentType', docCode);
+    formData.append('file', file);
+
+    console.log('Uploading document:', { docCode, fileName: file.name, fileSize: file.size });
+
+    const uploadResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const uploadResult = await uploadResponse.json();
+    console.log('Upload response:', uploadResponse.status, uploadResult);
+
+    if (!uploadResponse.ok || !uploadResult.data) {
+      throw new Error(uploadResult.message || uploadResult.error || 'Failed to upload document');
+    }
+
+    // After successful upload, save the document via PUT endpoint
+    const saveResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        documentType: uploadResult.data.documentType,
+        fileName: uploadResult.data.fileName,
+        fileUrl: uploadResult.data.fileUrl,
+      }),
+    });
+
+    const saveResult = await saveResponse.json();
+    console.log('Save document response:', saveResponse.status, saveResult);
+
+    if (!saveResponse.ok) {
+      throw new Error(saveResult.message || 'Failed to save document');
+    }
+
+    return true;
   };
 
   const handleFileSelect = (docCode: string) => {
-    if (!transportMode) {
-      setUploadError('Please select a mode of transport before uploading documents.');
-      return;
-    }
     if (fileInputRef.current) {
       fileInputRef.current.onchange = (e) => {
         const target = e.target as HTMLInputElement;
@@ -1190,9 +1467,15 @@ export default function NewApplication() {
                     <span className="text-[13px] font-semibold text-[#64748b]">Payment</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
-                  ★ NACCIMA Member — member rates apply to your application
-                </div>
+                {companyProfile?.membershipActive ? (
+                  <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+                    ★ NACCIMA Member — member rates apply to your application
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
+                    ⚠ Not a NACCIMA Member — non-member rates apply to your application
+                  </div>
+                )}
 
                 {certError && (
                   <div className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">
@@ -1207,7 +1490,7 @@ export default function NewApplication() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    {certificateTypes.filter(cert => cert.active).map((cert) => {
+                    {certificateTypes?.filter(cert => cert.active).map((cert) => {
                       const display = getCertificateDisplay(cert);
                       return (
                         <div
@@ -1283,20 +1566,8 @@ export default function NewApplication() {
                         <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6] font-mono tracking-widest" value={companyProfile?.tin || ''} readOnly />
                         <div className="text-[10px] text-[#6b7280]">🔒 From your company profile — cannot be changed</div>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold text-[#374151]">Importer Email {isFieldRequired('IMPORTER_EMAIL') && <span className="text-[#e53e3e]">*</span>}</label>
-                        <input
-                          ref={importerEmailRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.importerEmail ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          placeholder="importer@overseas.com"
-                          value={formData.importerEmail}
-                          onChange={(e) => {
-                            setFormData({...formData, importerEmail: e.target.value});
-                            if (formErrors.importerEmail) setFormErrors({...formErrors, importerEmail: ''});
-                          }}
-                        />
-                        {formErrors.importerEmail && <div className="text-[10px] text-[#e53e3e]">{formErrors.importerEmail}</div>}
-                      </div>
+                      {certificateFields?.fields?.filter(field => field.code === 'IMPORTER_EMAIL' && field.applicable)
+                        .map(field => renderDynamicField(field))}
                       <div className="flex flex-col gap-1">
                         <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Name <span className="text-[#e53e3e]">*</span></label>
                         <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value={companyProfile?.companyName || ''} readOnly />
@@ -1350,206 +1621,35 @@ export default function NewApplication() {
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">3</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Consignee & Shipment Details</div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Consignee Name {isFieldRequired('CONSIGNEE') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input
-                        ref={consigneeNameRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeName ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                        placeholder="Receiving company or person"
-                        value={formData.consigneeName}
-                        onChange={(e) => {
-                          setFormData({...formData, consigneeName: e.target.value});
-                          if (formErrors.consigneeName) setFormErrors({...formErrors, consigneeName: ''});
-                        }}
-                      />
-                      {formErrors.consigneeName && <div className="text-[10px] text-[#e53e3e]">{formErrors.consigneeName}</div>}
+                  {isLoadingFields ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-[12px] text-[#6a7a9a]">Loading form fields...</div>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Carrier {isFieldRequired('CARRIER') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input
-                        ref={carrierRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.carrier ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                        placeholder="e.g. Maersk Line"
-                        value={formData.carrier}
-                        onChange={(e) => {
-                          setFormData({...formData, carrier: e.target.value});
-                          if (formErrors.carrier) setFormErrors({...formErrors, carrier: ''});
-                        }}
-                      />
-                      {formErrors.carrier && <div className="text-[10px] text-[#e53e3e]">{formErrors.carrier}</div>}
-                    </div>
-                    <div className="flex flex-col gap-1 col-span-2">
-                      <label className="text-[11px] font-semibold text-[#374151]">Consignee Address {isFieldRequired('CONSIGNEE_ADDRESS') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input
-                        ref={consigneeAddressRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.consigneeAddress ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                        placeholder="Full address of consignee at destination"
-                        value={formData.consigneeAddress}
-                        onChange={(e) => {
-                          setFormData({...formData, consigneeAddress: e.target.value});
-                          if (formErrors.consigneeAddress) setFormErrors({...formErrors, consigneeAddress: ''});
-                        }}
-                      />
-                      {formErrors.consigneeAddress && <div className="text-[10px] text-[#e53e3e]">{formErrors.consigneeAddress}</div>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Destination Country {isFieldRequired('DESTINATION') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <div ref={destinationRef as any} className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setDestinationDropdownOpen(!destinationDropdownOpen)}
-                          className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors.destinationCountry ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          disabled={isLoadingCountries}
-                        >
-                          <span>{formData.destinationCountry || '-- Select Country --'}</span>
-                          <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${destinationDropdownOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {destinationDropdownOpen && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg max-h-60 overflow-auto">
-                            {countries.map((country) => (
-                              <button
-                                key={country.code}
-                                type="button"
-                                onClick={() => {
-                                  setFormData({...formData, destinationCountry: country.name});
-                                  setDestinationDropdownOpen(false);
-                                  if (formErrors.destinationCountry) setFormErrors({...formErrors, destinationCountry: ''});
-                                }}
-                                className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
-                              >
-                                <span>{country.name}</span>
-                                {formData.destinationCountry === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {formErrors.destinationCountry && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationCountry}</div>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Destination Port</label>
-                      <input
-                        ref={destinationPortRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.destinationPort ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                        placeholder="e.g., Tema"
-                        value={formData.destinationPort}
-                        onChange={(e) => {
-                          setFormData({...formData, destinationPort: e.target.value});
-                          if (formErrors.destinationPort) setFormErrors({...formErrors, destinationPort: ''});
-                        }}
-                      />
-                      {formErrors.destinationPort && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationPort}</div>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Country of Manufacturing {isFieldRequired('COUNTRY_OF_MANUFACTURING') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <div ref={manufacturingRef as any} className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setManufacturingDropdownOpen(!manufacturingDropdownOpen)}
-                          className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.countryOfManufacturing ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          disabled={isLoadingCountries}
-                        >
-                          <span>{formData.countryOfManufacturing || '-- Select Country --'}</span>
-                          <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${manufacturingDropdownOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {manufacturingDropdownOpen && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg max-h-60 overflow-auto">
-                            {countries.map((country) => (
-                              <button
-                                key={country.code}
-                                type="button"
-                                onClick={() => {
-                                  setFormData({...formData, countryOfManufacturing: country.name});
-                                  setManufacturingDropdownOpen(false);
-                                  if (formErrors.countryOfManufacturing) setFormErrors({...formErrors, countryOfManufacturing: ''});
-                                }}
-                                className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
-                              >
-                                <span>{country.name}</span>
-                                {formData.countryOfManufacturing === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {formErrors.countryOfManufacturing && <div className="text-[10px] text-[#e53e3e]">{formErrors.countryOfManufacturing}</div>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Total Value (FOB) in USD {isFieldRequired('TOTAL_VALUE_FOB') && <span className="text-[#e53e3e]">*</span>} <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">USD for CoO</span></label>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[13px] font-bold text-[#92400e]">$</span>
-                        <input
-                          ref={totalValueFOBRef}
-                          className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.totalValueFOB ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          placeholder="0.00"
-                          value={formData.totalValueFOB}
-                          onChange={(e) => {
-                            const formatted = formatNumberWithCommas(e.target.value);
-                            setFormData({...formData, totalValueFOB: formatted});
-                            if (formErrors.totalValueFOB) setFormErrors({...formErrors, totalValueFOB: ''});
-                          }}
-                        />
-                      </div>
-                      <div className="text-[10px] text-[#6b7280]">FOB value in US Dollars. Converted to NGN at prevailing rate for fee calculation.</div>
-                      {formErrors.totalValueFOB && <div className="text-[10px] text-[#e53e3e]">{formErrors.totalValueFOB}</div>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Bulk Product Qty (MT) {isFieldRequired('BULK_PRODUCT_QTY_MT') && <span className="text-[#e53e3e]">*</span>}</label>
-                      <input
-                        ref={bulkProductQtyRef}
-                        className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.bulkProductQty ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                        placeholder="300"
-                        value={formData.bulkProductQty}
-                        onChange={(e) => {
-                          setFormData({...formData, bulkProductQty: e.target.value});
-                          if (formErrors.bulkProductQty) setFormErrors({...formErrors, bulkProductQty: ''});
-                        }}
-                      />
-                      {formErrors.bulkProductQty && <div className="text-[10px] text-[#e53e3e]">{formErrors.bulkProductQty}</div>}
-                    </div>
-                    {isFieldApplicable('ECOWAS_NUMBER') && (
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.code !== 'TIN' && field.code !== 'IMPORTER_EMAIL' && field.code !== 'SHIPPER_NAME' && field.code !== 'SHIPPER_ADDRESS' && field.code !== 'MODE_OF_TRANSPORT' && field.code !== 'DESTINATION_PORT')
+                        .map(field => renderDynamicField(field))}
                       <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold text-[#374151]">ECOWAS Number {isFieldRequired('ECOWAS_NUMBER') && <span className="text-[#e53e3e]">*</span>}</label>
+                        <label className="text-[11px] font-semibold text-[#374151]">Destination Port <span className="text-[#e53e3e]">*</span></label>
                         <input
-                          ref={ecowasNumberRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.ecowasNumber ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          placeholder="ECOWAS Number"
-                          value={formData.ecowasNumber}
+                          ref={destinationPortRef}
+                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.destinationPort ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+                          placeholder="Enter port name"
+                          value={formData.destinationPort}
                           onChange={(e) => {
-                            setFormData({...formData, ecowasNumber: e.target.value});
-                            if (formErrors.ecowasNumber) setFormErrors({...formErrors, ecowasNumber: ''});
+                            setFormData({...formData, destinationPort: e.target.value});
+                            if (formErrors.destinationPort) setFormErrors({...formErrors, destinationPort: ''});
                           }}
                         />
-                        {formErrors.ecowasNumber && <div className="text-[10px] text-[#e53e3e]">{formErrors.ecowasNumber}</div>}
+                        {formErrors.destinationPort && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationPort}</div>}
                       </div>
-                    )}
-                    {isFieldApplicable('CRITERIA') && (
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold text-[#374151]">Criteria {isFieldRequired('CRITERIA') && <span className="text-[#e53e3e]">*</span>}</label>
-                        <input
-                          ref={criteriaRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.criteria ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          placeholder="Criteria"
-                          value={formData.criteria}
-                          onChange={(e) => {
-                            setFormData({...formData, criteria: e.target.value});
-                            if (formErrors.criteria) setFormErrors({...formErrors, criteria: ''});
-                          }}
-                        />
-                        {formErrors.criteria && <div className="text-[10px] text-[#e53e3e]">{formErrors.criteria}</div>}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex justify-end mt-4">
-                    <button
-                      className="inline-flex items-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={saveApplicationDetails}
-                      disabled={isSavingApplication}
-                    >
-                      {isSavingApplication ? 'Saving...' : 'Save Shipment Details'}
-                    </button>
-                  </div>
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.code !== 'TIN' && field.code !== 'IMPORTER_EMAIL' && field.code !== 'SHIPPER_NAME' && field.code !== 'SHIPPER_ADDRESS' && field.code !== 'MODE_OF_TRANSPORT' && field.code !== 'DESTINATION_PORT').length === 0 && (
+                        <div className="col-span-2 text-[12px] text-[#6a7a9a]">
+                          No applicable fields for this certificate type.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 4: HS Code Lookup */}
@@ -1609,88 +1709,107 @@ export default function NewApplication() {
                         </tr>
                       </thead>
                       <tbody>
-                        {goodsLineItems.map((item, index) => (
-                          <tr key={item.id} className="hover:bg-[#f8faff]">
-                            <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                value={item.hsCode}
-                                onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
-                                placeholder="Code"
-                              />
+                        {goodsLineItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="px-4 py-8 text-center">
+                              <div className="flex flex-col items-center gap-2">
+                                <span className="text-[24px]">📦</span>
+                                <span className="text-[12px] text-[#6a7a9a]">Add Line Items</span>
+                              </div>
                             </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
-                                value={item.description}
-                                onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                                placeholder="Description"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                value={item.marksNo}
-                                onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
-                                placeholder="Marks"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
-                                value={item.quantity}
-                                onChange={(e) => updateLineItem(item.id, 'quantity', e.target.value)}
-                                placeholder="1000"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                value={item.grossWeight}
-                                onChange={(e) => updateLineItem(item.id, 'grossWeight', e.target.value)}
-                                placeholder="200"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
-                                value={item.nomenclature}
-                                onChange={(e) => updateLineItem(item.id, 'nomenclature', e.target.value)}
-                                placeholder="Nomenclature"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
-                                value={item.unit}
-                                onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
-                                placeholder="KG"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5]">
-                              <input
-                                className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
-                                value={item.value}
-                                onChange={(e) => updateLineItem(item.id, 'value', e.target.value)}
-                                placeholder="0.00"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => removeLineItem(item.id)}>✕</td>
                           </tr>
-                        ))}
+                        ) : (
+                          goodsLineItems.map((item, index) => (
+                            <tr key={item.id} className="hover:bg-[#f8faff]">
+                              <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  value={item.hsCode}
+                                  onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
+                                  placeholder="Code"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
+                                  value={item.description}
+                                  onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                                  placeholder="Description"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  value={item.marksNo}
+                                  onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
+                                  placeholder="Marks"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/,/g, '');
+                                    if (/^\d*$/.test(value)) {
+                                      updateLineItem(item.id, 'quantity', formatNumberWithCommas(value));
+                                    }
+                                  }}
+                                  placeholder="1,000"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  value={item.grossWeight}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/,/g, '');
+                                    if (/^\d*$/.test(value)) {
+                                      updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
+                                    }
+                                  }}
+                                  placeholder="200"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
+                                  value={item.nomenclature}
+                                  onChange={(e) => updateLineItem(item.id, 'nomenclature', e.target.value)}
+                                  placeholder="Nomenclature"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
+                                  value={item.unit}
+                                  onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
+                                  placeholder="KG"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
+                                  value={item.value}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/,/g, '');
+                                    if (/^\d*\.?\d*$/.test(value)) {
+                                      updateLineItem(item.id, 'value', formatNumberWithCommas(value));
+                                    }
+                                  }}
+                                  placeholder="0.00"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => removeLineItem(item.id)}>✕</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
-                  <div className="flex justify-between items-center mt-4">
+                  <div className="flex justify-start items-center mt-4">
                     <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem}>➕ Add Line Item</button>
-                    <button
-                      className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={saveGoodsItems}
-                      disabled={isSavingGoods || goodsLineItems.some(item => !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight)}
-                    >
-                      {isSavingGoods ? 'Saving...' : 'Save Goods Items'}
-                    </button>
                   </div>
                 </div>
 
@@ -1723,7 +1842,10 @@ export default function NewApplication() {
                         >
                           {isUploading ? (
                             <>
-                              <span className="block mb-1">⏳</span>
+                              <svg className="animate-spin h-5 w-5 text-[#6a7a9a] mx-auto mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
                               <span className="block">Uploading...</span>
                             </>
                           ) : isUploaded ? (
@@ -1765,7 +1887,7 @@ export default function NewApplication() {
                   {(() => {
                     const transportMode = getSelectedTransportMode();
                     if (!transportMode) return null;
-                    const missingDocs = transportMode.documents.filter(d => d.required && !uploadedDocuments[d.code]);
+                    const missingDocs = transportMode.documents?.filter(d => d.required && !uploadedDocuments[d.code]);
                     if (missingDocs.length === 0) return null;
                     return (
                       <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
@@ -1779,7 +1901,23 @@ export default function NewApplication() {
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(1)}>← Back</button>
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
-                  <button className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={handleContinueToStep3}>Continue →</button>
+                  <button 
+                    className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60" 
+                    onClick={handleContinueToStep3}
+                    disabled={isSavingAll || !isStep2Valid()}
+                  >
+                    {isSavingAll ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Saving...
+                      </>
+                    ) : (
+                      'Continue →'
+                    )}
+                  </button>
                 </div>
                 {validationError && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mt-3">
