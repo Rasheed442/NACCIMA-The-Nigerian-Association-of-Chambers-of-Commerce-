@@ -24,6 +24,10 @@ interface Application {
   assignedTo?: string;
 }
 
+// Avoid encoding pasted whitespace (for example, a leading tab) into the API
+// query. A phrase such as "GSP Certificate" is sent as one clean search term.
+const normalizeSearchQuery = (value: string) => value.replace(/\s+/g, ' ').trim();
+
 export default function AdminApplications() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -58,7 +62,7 @@ export default function AdminApplications() {
     fetchApplications();
     fetchCertificateTypes();
     fetchTransportModes();
-  }, [currentPage, filterStatus, filterCertType, filterCompanyId, searchQuery, filterFromDate, filterToDate]);
+  }, [currentPage, filterStatus, filterCertType, filterCompanyId, filterFromDate, filterToDate]);
 
   const fetchCertificateTypes = async () => {
     setIsLoadingFilters(true);
@@ -77,8 +81,15 @@ export default function AdminApplications() {
 
       const result = await response.json();
 
-      if (response.ok && result.data) {
-        setCertificateTypes(Array.isArray(result.data) ? result.data : [result.data]);
+      if (response.ok) {
+        // The certificate-types endpoint may return either a direct array or
+        // an array wrapped in `data`, as it does on the exporter page.
+        const types = Array.isArray(result)
+          ? result
+          : Array.isArray(result.data)
+            ? result.data
+            : [];
+        setCertificateTypes(types);
       }
     } catch (err) {
       console.error('Failed to fetch certificate types:', err);
@@ -129,7 +140,8 @@ export default function AdminApplications() {
       if (filterStatus) params.append('status', filterStatus);
       if (filterCertType) params.append('certificateTypeId', filterCertType);
       if (filterCompanyId) params.append('companyId', filterCompanyId);
-      if (searchQuery) params.append('search', searchQuery);
+      // Search is intentionally applied in the browser below. Do not send it
+      // to the backend as a query parameter.
       if (filterFromDate) params.append('from', new Date(filterFromDate).toISOString());
       if (filterToDate) params.append('to', new Date(filterToDate).toISOString());
 
@@ -230,7 +242,18 @@ export default function AdminApplications() {
   };
 
   const getFilteredApplications = () => {
-    return applications;
+    const normalizedSearch = normalizeSearchQuery(searchQuery).toLowerCase();
+    if (!normalizedSearch) return applications;
+
+    return applications.filter((application) =>
+      [
+        application.applicationId,
+        application.companyName,
+        application.tin,
+        application.certificateType,
+        application.status,
+      ].some((value) => value?.toLowerCase().includes(normalizedSearch))
+    );
   };
 
   const filteredApps = getFilteredApplications();
@@ -280,7 +303,9 @@ export default function AdminApplications() {
                   onClick={() => setCertTypeDropdownOpen(!certTypeDropdownOpen)}
                 >
                   <span className="flex-1 text-left">
-                    {filterCertType === '' ? 'All Certificate Types' : filterCertType}
+                    {filterCertType === ''
+                      ? 'All Certificate Types'
+                      : certificateTypes.find(cert => cert.id === filterCertType)?.name || filterCertType}
                   </span>
                   <ChevronDown size={14} />
                 </button>
@@ -288,7 +313,7 @@ export default function AdminApplications() {
                   <div className="absolute top-full left-0 mt-1 bg-white border border-[#d1d5db] rounded-[4px] shadow-lg z-10 min-w-[180px]">
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterCertType(''); setCertTypeDropdownOpen(false); }}
+                      onClick={() => { setFilterCertType(''); setCurrentPage(0); setCertTypeDropdownOpen(false); }}
                     >
                       All Certificate Types
                     </div>
@@ -296,7 +321,13 @@ export default function AdminApplications() {
                       <div 
                         key={cert.id}
                         className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                        onClick={() => { setFilterCertType(cert.code); setCertTypeDropdownOpen(false); }}
+                        onClick={() => {
+                          // The admin endpoint filters with certificateTypeId,
+                          // so retain the ID while presenting the human-readable name.
+                          setFilterCertType(cert.id);
+                          setCurrentPage(0);
+                          setCertTypeDropdownOpen(false);
+                        }}
                       >
                         {cert.name}
                       </div>
@@ -419,7 +450,10 @@ export default function AdminApplications() {
                 placeholder="Search by company name..."
                 className="px-3 py-2 border border-[#d1d5db] rounded-[4px] placeholder:text-[13px] text-[13px] flex-1"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(normalizeSearchQuery(e.target.value));
+                  setCurrentPage(0);
+                }}
               />
               <button className="px-4 py-2 bg-[#1a4a8a] text-white rounded-[4px] text-[12px] font-medium hover:bg-[#153c70]">
                 Filter

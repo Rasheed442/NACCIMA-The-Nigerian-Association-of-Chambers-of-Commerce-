@@ -17,11 +17,26 @@ interface CertificateType {
   active: boolean;
   applicableFields: string[];
   requiredDocuments: string;
-  feeStructure: any;
+  feeStructure: {
+    type: 'FLAT' | 'PERCENTAGE';
+    vatRate: number;
+    memberAmount?: number;
+    nonMemberAmount?: number;
+    memberRate?: number;
+    nonMemberRate?: number;
+  };
   templateUrl: string;
   certNumberPrefix: string;
   applicationCount: number;
   templateConfig: string;
+  numberingConfig?: {
+    method?: string;
+    padding?: number;
+    incrementStep?: number;
+    resetFrequency?: string;
+    separator?: string;
+    format?: string;
+  };
 }
 
 export default function EditCertificateType() {
@@ -37,12 +52,6 @@ export default function EditCertificateType() {
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
-
-  useEffect(() => {
-    if (params.id) {
-      fetchCertificateType(params.id as string);
-    }
-  }, [params.id]);
 
   const fetchCertificateType = async (id: string) => {
     setIsLoading(true);
@@ -76,6 +85,16 @@ export default function EditCertificateType() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!params.id) return;
+
+    const fetchTimer = window.setTimeout(() => {
+      void fetchCertificateType(params.id as string);
+    }, 0);
+
+    return () => window.clearTimeout(fetchTimer);
+  }, [params.id]);
 
   const handleLogout = () => {
     setShowLogoutModal(false);

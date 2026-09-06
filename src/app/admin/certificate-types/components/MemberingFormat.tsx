@@ -31,6 +31,10 @@ interface NumberingState {
   resetFrequency: ResetFrequency;
   includePrefix: boolean;
   useYear: boolean;
+  useMonth: boolean;
+  useDay: boolean;
+  useHour: boolean;
+  useMinute: boolean;
   resetAnnually: boolean;
   allowManualOverride: boolean;
   separator: string;
@@ -53,14 +57,39 @@ const RESET_OPTIONS: { value: ResetFrequency; label: string }[] = [
 
 const STEP_OPTIONS = [1, 2, 5, 10];
 
-function formatCertificateNumber(
-  state: NumberingState,
-  numericValue: number
-): string {
+function buildFormat(state: NumberingState): string {
+  const tokens = [
+    state.includePrefix && "{PREFIX}",
+    state.useYear && "{YEAR}",
+    state.useDay && "{DAY}",
+    state.useMonth && "{MONTH}",
+    state.useHour && "{HOUR}",
+    state.useMinute && "{MIN}",
+    "{SEQUENCE}",
+  ].filter((token): token is string => Boolean(token));
+
+  return tokens.join(state.separator);
+}
+
+function formatCertificateNumber(state: NumberingState, numericValue: number): string {
+  const now = new Date();
   const padded = String(numericValue).padStart(state.padding, "0");
-  const prefixPart = state.includePrefix ? state.prefix : "";
-  const yearPart = state.useYear ? `${new Date().getFullYear()}/` : "";
-  return `${prefixPart}${yearPart}${padded}`;
+  // Prefixes such as "CO/" are already common in the existing data. Avoid
+  // duplicating the separator when a date/time token follows the prefix.
+  const prefix = state.separator && state.prefix.endsWith(state.separator)
+    ? state.prefix.slice(0, -state.separator.length)
+    : state.prefix;
+  const replacements: Record<string, string> = {
+    "{PREFIX}": prefix,
+    "{YEAR}": String(now.getFullYear()),
+    "{DAY}": String(now.getDate()).padStart(2, "0"),
+    "{MONTH}": String(now.getMonth() + 1).padStart(2, "0"),
+    "{HOUR}": String(now.getHours()).padStart(2, "0"),
+    "{MIN}": String(now.getMinutes()).padStart(2, "0"),
+    "{SEQUENCE}": padded,
+  };
+
+  return buildFormat(state).replace(/\{PREFIX\}|\{YEAR\}|\{DAY\}|\{MONTH\}|\{HOUR\}|\{MIN\}|\{SEQUENCE\}/g, (token) => replacements[token]);
 }
 
 function Select<T extends string | number>({
@@ -147,6 +176,10 @@ const CertificateNumberingPanel = forwardRef<MemberingFormatRef, MemberingFormat
     resetFrequency: "never",
     includePrefix: true,
     useYear: false,
+    useMonth: false,
+    useDay: false,
+    useHour: false,
+    useMinute: false,
     resetAnnually: false,
     allowManualOverride: false,
     separator: "",
@@ -165,6 +198,12 @@ const CertificateNumberingPanel = forwardRef<MemberingFormatRef, MemberingFormat
         resetFrequency: config.resetFrequency.toLowerCase() as ResetFrequency || prev.resetFrequency,
         separator: config.separator || "",
         format: config.format || prev.format,
+        includePrefix: config.format?.includes("{PREFIX}") ?? prev.includePrefix,
+        useYear: config.format?.includes("{YEAR}") ?? prev.useYear,
+        useDay: config.format?.includes("{DAY}") ?? prev.useDay,
+        useMonth: config.format?.includes("{MONTH}") ?? prev.useMonth,
+        useHour: config.format?.includes("{HOUR}") ?? prev.useHour,
+        useMinute: config.format?.includes("{MIN}") ?? prev.useMinute,
       }));
     }
   }, [certificateType?.numberingConfig]);
@@ -204,13 +243,28 @@ const CertificateNumberingPanel = forwardRef<MemberingFormatRef, MemberingFormat
         incrementStep: state.incrementStep,
         resetFrequency: state.resetFrequency,
         separator: state.separator,
-        format: state.format,
+        format: buildFormat(state),
       },
     }),
   }));
 
   const update = <K extends keyof NumberingState>(key: K, value: NumberingState[K]) =>
     setState((prev) => ({ ...prev, [key]: value }));
+
+  const updateTimeToken = (
+    key: "useYear" | "useMonth" | "useDay" | "useHour" | "useMinute",
+    enabled: boolean
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      [key]: enabled,
+      // Use the API's conventional delimiter for newly selected date/time
+      // tokens, while still respecting a separator the admin explicitly chose.
+      separator: enabled && !prev.separator ? "/" : prev.separator,
+    }));
+  };
+
+  const numberingFormat = useMemo(() => buildFormat(state), [state]);
 
   const baseNumeric = useMemo(() => {
     const parsed = parseInt(state.currentNumber.replace(/\D/g, ""), 10);
@@ -277,11 +331,12 @@ const CertificateNumberingPanel = forwardRef<MemberingFormatRef, MemberingFormat
             <Field label="Format Pattern">
               <input
                 type="text"
-                value={state.format}
-                onChange={(e) => update("format", e.target.value)}
-                placeholder="{PREFIX}{SEQUENCE}"
-                className={inputClass}
+                value={numberingFormat}
+                readOnly
+                aria-label="Generated numbering format"
+                className={`${inputClass} cursor-default bg-[#f8fafc]`}
               />
+              <p className="mt-1 text-xs text-[#64748b]">Generated from the settings below.</p>
             </Field>
 
             <Field label="Current Number" required hint="The next number to be issued.">
@@ -338,8 +393,28 @@ const CertificateNumberingPanel = forwardRef<MemberingFormatRef, MemberingFormat
             />
             <Checkbox
               checked={state.useYear}
-              onChange={(v) => update("useYear", v)}
+              onChange={(v) => updateTimeToken("useYear", v)}
               label="Use Year in Numbering"
+            />
+            <Checkbox
+              checked={state.useMonth}
+              onChange={(v) => updateTimeToken("useMonth", v)}
+              label="Use Month in Numbering"
+            />
+            <Checkbox
+              checked={state.useDay}
+              onChange={(v) => updateTimeToken("useDay", v)}
+              label="Use Day in Numbering"
+            />
+            <Checkbox
+              checked={state.useHour}
+              onChange={(v) => updateTimeToken("useHour", v)}
+              label="Use Hour in Numbering"
+            />
+            <Checkbox
+              checked={state.useMinute}
+              onChange={(v) => updateTimeToken("useMinute", v)}
+              label="Use Minute in Numbering"
             />
             <Checkbox
               checked={state.resetAnnually}

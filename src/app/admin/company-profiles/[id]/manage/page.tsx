@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
@@ -21,7 +21,11 @@ interface Company {
   membershipStatus: 'NON_MEMBER' | 'MEMBER';
   membershipActive: boolean;
   applicationCount: number;
-  membershipHistory: any[];
+  membershipHistory: MembershipHistory[];
+}
+
+interface MembershipHistory {
+  comment?: string;
 }
 
 export default function AdminCompanyManage() {
@@ -56,11 +60,7 @@ export default function AdminCompanyManage() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
-  useEffect(() => {
-    fetchCompany();
-  }, [companyId]);
-
-  const fetchCompany = async () => {
+  const fetchCompany = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     
@@ -103,7 +103,15 @@ export default function AdminCompanyManage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [companyId]);
+
+  useEffect(() => {
+    const fetchTimer = window.setTimeout(() => {
+      void fetchCompany();
+    }, 0);
+
+    return () => window.clearTimeout(fetchTimer);
+  }, [fetchCompany]);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -199,10 +207,6 @@ export default function AdminCompanyManage() {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleCancel = () => {
-    router.push(`/admin/company-profiles/${companyId}`);
   };
 
   if (isLoading) {
@@ -304,7 +308,7 @@ export default function AdminCompanyManage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-[13px] text-[#6a7a9a] font-medium mb-1">Shipper's Name</label>
+                        <label className="block text-[13px] text-[#6a7a9a] font-medium mb-1">Shipper&apos;s Name</label>
                         <input
                           type="text"
                           value={formData.companyName}
@@ -324,7 +328,7 @@ export default function AdminCompanyManage() {
                     </div>
                     <div className="text-[10.5px] text-[#065f46] mt-3">To correct these fields, make the change here and record the reason — the action will be logged in the audit trail.</div>
                     <button className="mt-2 px-3 py-1.5 border font-semibold  border-green-400 rounded-[4px] text-[11px] text-[#1a2236] hover:bg-[#f3f4f9]">
-                      ✏️ Override NRS Fields (Admin only)
+                      ✏️ Revolke NRS Fields (Admin only)
                     </button>
                   </div>
                 </div>
@@ -462,7 +466,7 @@ export default function AdminCompanyManage() {
                 <div className="text-[11.5px] font-semibold text-[#1a2236] mb-3">Membership Change Log</div>
                 <div className="text-[11px] flex flex-col gap-2">
                   {company?.membershipHistory && company.membershipHistory.length > 0 ? (
-                    company.membershipHistory.map((history: any, index: number) => (
+                    company.membershipHistory.map((history, index) => (
                       <div key={index} className="bg-[#f8fafd] p-2 rounded-[4px] text-[#6a7a9a]">
                         {history.comment || 'No comment'}
                       </div>

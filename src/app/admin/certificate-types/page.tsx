@@ -46,10 +46,6 @@ export default function AdminCertificateTypes() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
-  useEffect(() => {
-    fetchCertificateTypes();
-  }, []);
-
   const fetchCertificateTypes = async () => {
     setIsLoading(true);
     setError(null);
@@ -83,6 +79,14 @@ export default function AdminCertificateTypes() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const fetchTimer = window.setTimeout(() => {
+      void fetchCertificateTypes();
+    }, 0);
+
+    return () => window.clearTimeout(fetchTimer);
+  }, []);
 
   const handleLogout = () => {
     setShowLogoutModal(false);

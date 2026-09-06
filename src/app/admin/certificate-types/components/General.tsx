@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useCallback, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useCallback, useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { apiFetch, getBaseUrl } from "@/utils/api";
 
 type Status = "active" | "inactive" | "draft";
@@ -28,6 +28,16 @@ interface FormState {
 
 interface GeneralProps {
   onTabChange?: (tabId: string) => void;
+  certificateType?: {
+    id?: string;
+    name?: string;
+    code?: string;
+    description?: string;
+    active?: boolean;
+    certNumberPrefix?: string;
+    templateUrl?: string;
+    templateConfig?: string | { page?: { index?: number; width?: number; height?: number } };
+  };
 }
 
 export interface GeneralData {
@@ -91,7 +101,7 @@ async function inspectPdf(file: File): Promise<{ pageSize: PageSize; pageCount: 
   return { pageSize, pageCount };
 }
 
-const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange }, ref) => {
+const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificateType }, ref) => {
   const [form, setForm] = useState<FormState>({
     displayName: "",
     code: "",
@@ -115,10 +125,46 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange }, ref) => {
   const [pageIndexDropdownOpen, setPageIndexDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Populate the General tab from the certificate type selected for editing.
+  // A saved template URL is treated as an existing template file so it is not
+  // required to be uploaded again before saving other edits.
+  useEffect(() => {
+    if (!certificateType) return;
+
+    let page: { index?: number; width?: number; height?: number } | undefined;
+    try {
+      const config = typeof certificateType.templateConfig === 'string'
+        ? JSON.parse(certificateType.templateConfig)
+        : certificateType.templateConfig;
+      page = config?.page;
+    } catch {
+      page = undefined;
+    }
+
+    const templateFileName = certificateType.templateUrl
+      ? decodeURIComponent(certificateType.templateUrl.split('/').pop()?.split('?')[0] || 'Saved template.pdf')
+      : '';
+
+    setForm(current => ({
+      ...current,
+      displayName: certificateType.name || '',
+      code: certificateType.code || '',
+      certPrefix: certificateType.certNumberPrefix || '',
+      description: certificateType.description || '',
+      status: certificateType.active === false ? 'inactive' : 'active',
+      templateFileName,
+      templateUrl: certificateType.templateUrl || '',
+      pageIndex: page?.index || 0,
+      pageSize: page?.width && page?.height
+        ? { width: page.width, height: page.height, units: 'pt' }
+        : null,
+    }));
+  }, [certificateType]);
+
   const meta = {
-    createdBy: "Director-General",
-    createdOn: "May 24, 2025 10:30 AM",
-    lastUpdated: "May 24, 2025 10:30 AM",
+    createdBy: "---",
+    createdOn: "-----",
+    lastUpdated: "-----",
   };
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -161,8 +207,10 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange }, ref) => {
       const formData = new FormData();
       formData.append('file', file);
 
-      // Use a placeholder ID for now - this should be replaced with actual certificate type ID
-      const certificateTypeId = '50000000-0000-0000-0000-000000000002';
+      // In edit mode, always upload against the record being edited.  Keep the
+      // existing create-flow placeholder until the API supports uploading a
+      // template before the certificate type record has been created.
+      const certificateTypeId = certificateType?.id || '50000000-0000-0000-0000-000000000002';
       const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateTypeId}/template`, {
         method: 'POST',
         body: formData,

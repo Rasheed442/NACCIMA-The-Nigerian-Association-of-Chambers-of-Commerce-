@@ -189,11 +189,14 @@ function kindPalette(kind: FieldKind) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Paper geometry (PDF points, A4 landscape)                           */
+/* Paper geometry (PDF points, shared create/edit fallback)            */
 /* ------------------------------------------------------------------ */
 
-const PAPER_W = 842;
-const PAPER_H = 595;
+// These match the page dimensions persisted by getFormData when no PDF page
+// metadata is available. Keeping one fallback prevents a new certificate's
+// canvas from appearing larger than the same certificate in edit mode.
+const PAPER_W = 608.16;
+const PAPER_H = 1008.48;
 const GRID_STEP = 8;
 
 /* ------------------------------------------------------------------ */
@@ -336,8 +339,9 @@ const TABS = [
 ];
 
 const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(({ mode = 'create', certificateType }, ref) => {
-  console.log('TemplateDesigner props - mode:', mode, 'certificateType:', certificateType);
-  const [activeTab, setActiveTab] = useState('template-designer');
+  // New certificate types need their required details and template uploaded
+  // before fields can be placed, so begin the create flow on General.
+  const [activeTab, setActiveTab] = useState(mode === 'create' ? 'general' : 'template-designer');
 
   // Refs for child components
   const generalRef = useRef<GeneralRef>(null);
@@ -345,19 +349,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const requiredDocumentsRef = useRef<RequiredDocumentsRef>(null);
   const memberingFormatRef = useRef<MemberingFormatRef>(null);
   const feeChargesRef = useRef<FeeChargesRef>(null);
-  const [elements, setElements] = useState<FieldElement[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('template-designer-elements-v2');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          return [];
-        }
-      }
-    }
-    return [];
-  });
+  const [elements, setElements] = useState<FieldElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.9);
   const [gridOn, setGridOn] = useState(true);
@@ -373,6 +365,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const [apiFields, setApiFields] = useState<ApiField[]>([]);
   const [loadingFields, setLoadingFields] = useState(true);
   const [certificateTypeCode, setCertificateTypeCode] = useState<string>('');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSavingCertificate, setIsSavingCertificate] = useState(false);
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
@@ -431,6 +425,57 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       window.removeEventListener('template-data-uploaded', handleTemplateEvent as EventListener);
     };
   }, []);
+
+  // When editing a certificate type, preload its already-uploaded PDF instead
+  // of waiting for a new upload from the General tab.
+  useEffect(() => {
+    const templateUrl = certificateType?.templateUrl;
+    if (!templateUrl) {
+      setTemplateDataUrl(null);
+      return;
+    }
+
+    const baseUrl = getBaseUrl();
+    const resolvedTemplateUrl = /^https?:\/\//i.test(templateUrl) || templateUrl.startsWith('data:')
+      ? templateUrl
+      : `${baseUrl}${templateUrl.startsWith('/') ? '' : '/'}${templateUrl}`;
+
+    setTemplateDataUrl(resolvedTemplateUrl);
+
+    try {
+      const config = typeof certificateType.templateConfig === 'string'
+        ? JSON.parse(certificateType.templateConfig)
+        : certificateType.templateConfig;
+      const page = config?.page;
+      if (Number.isFinite(page?.width) && Number.isFinite(page?.height)) {
+        setTemplatePageSize({ width: page.width, height: page.height });
+      }
+    } catch {
+      // A template preview can still be shown when no saved page metadata exists.
+    }
+  }, [certificateType?.id, certificateType?.templateUrl, certificateType?.templateConfig]);
+
+  // The canvas must be populated from the record being edited.  This also
+  // prevents fields from a previous certificate type leaking in through the
+  // old, shared localStorage key.
+  useEffect(() => {
+    if (!certificateType) {
+      setElements([]);
+      setSelectedId(null);
+      return;
+    }
+
+    try {
+      const config = typeof certificateType.templateConfig === 'string'
+        ? JSON.parse(certificateType.templateConfig)
+        : certificateType.templateConfig;
+      setElements(Array.isArray(config?.elements) ? config.elements : []);
+      setSelectedId(null);
+    } catch {
+      setElements([]);
+      setSelectedId(null);
+    }
+  }, [certificateType?.id, certificateType?.templateConfig]);
 
   // Fetch fields from API
   useEffect(() => {
@@ -634,10 +679,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     return () => document.removeEventListener('keydown', onKey);
   }, [selectedId, deleteElement, undo, redo]);
 
-  useEffect(() => {
-    localStorage.setItem('template-designer-elements-v2', JSON.stringify(elements));
-  }, [elements]);
-
   // Expose data via ref
   useImperativeHandle(ref, () => ({
     getData: () => ({
@@ -648,9 +689,50 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     }),
   }), [elements, templatePageSize]);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1200);
+  const handleSave = async () => {
+    const validationErrors = generalRef.current?.validate() ?? {};
+    if (Object.keys(validationErrors).length > 0) {
+      setActiveTab('general');
+      setSaveError('Complete the required General fields before saving.');
+      return;
+    }
+
+    if (mode !== 'edit' || !certificateType?.id) {
+      setSaveError('Use the Save Changes button in Fees & Charges to create a new certificate type.');
+      return;
+    }
+
+    setIsSavingCertificate(true);
+    setSaveError(null);
+    try {
+      const formData = getFormData();
+      const response = await apiFetch(`${getBaseUrl()}/api/v1/admin/certificate-types/${certificateType.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: formData.code,
+          name: formData.name,
+          description: formData.description,
+          active: formData.active,
+          applicableFields: formData.applicableFields,
+          requiredDocuments: formData.requiredDocuments,
+          numberingConfig: formData.numberingConfig,
+          templateUrl: formData.templateUrl,
+          certNumberPrefix: formData.certNumberPrefix,
+          templateConfig: formData.templateConfig,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success === false) {
+        throw new Error(result.message || 'Failed to update certificate type.');
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1200);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to update certificate type.');
+    } finally {
+      setIsSavingCertificate(false);
+    }
   };
 
   const handleSubmitCertificateType = () => {
@@ -706,6 +788,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         height: generalData?.pageSize?.height || 1008.48,
       },
       fields,
+      // Retain the complete canvas model so it can be reopened and edited.
+      elements,
     };
 
     // Convert templateConfig to JSON string
@@ -855,11 +939,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         <div className="flex items-end gap-2">
           <div className="flex flex-col">
             <label className="text-[13px] text-[#6a7a9a] font-medium">Certificate type</label>
-            <select className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] min-w-[200px]">
-              <option>Certificate of origin (NACCIMA-CO)</option>
-              <option>Certificate of inspection</option>
-              <option>Phytosanitary certificate</option>
-            </select>
+            <div className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] min-w-[200px] bg-[#f8fafd] text-[#3a4560]">
+              {certificateType ? `${certificateType.name} (${certificateType.code})` : 'New certificate type'}
+            </div>
           </div>
           <button className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] font-medium hover:bg-[#f4f5f7] flex items-center gap-1">
             Preview PDF
@@ -869,8 +951,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               saved ? 'bg-[#1f8a44] text-white' : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
             }`}
             onClick={handleSave}
+            disabled={isSavingCertificate}
+            aria-busy={isSavingCertificate}
           >
-            <FiSave size={14} /> {saved ? 'Saved' : 'Save changes'}
+            <FiSave size={14} /> {isSavingCertificate ? 'Saving…' : saved ? 'Saved' : 'Save changes'}
           </button>
           <button className="p-2 border border-[#d1d5db] rounded hover:bg-[#f4f5f7]">
             <FiMoreVertical size={16} />
@@ -896,11 +980,16 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       </div>
 
       <div className="flex-1 overflow-auto bg-[#f9fafb]">
+        {saveError && (
+          <div className="mx-6 mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+            {saveError}
+          </div>
+        )}
         <div className={activeTab === 'general' ? '' : 'hidden'}>
-          <General ref={generalRef} onTabChange={setActiveTab} />
+          <General ref={generalRef} onTabChange={setActiveTab} certificateType={certificateType} />
         </div>
         <div className={activeTab === 'applicable-fields' ? '' : 'hidden'}>
-          <ApplicableFields ref={applicableFieldsRef} onTabChange={setActiveTab} />
+          <ApplicableFields ref={applicableFieldsRef} onTabChange={setActiveTab} certificateType={certificateType} />
         </div>
         <div className={activeTab === 'required-documents' ? '' : 'hidden'}>
           <RequiredDocuments ref={requiredDocumentsRef} certificateType={certificateType} onTabChange={setActiveTab} />

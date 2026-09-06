@@ -27,6 +27,7 @@ interface CertificateField {
   readOnly: boolean;
   repeatable: boolean;
   templateComponent: string;
+  options?: Array<string | { code?: string; value?: string; name?: string; label?: string }>;
 }
 
 interface CertificateTypeFields {
@@ -94,12 +95,36 @@ interface ExchangeRate {
   retrievedAt: string;
 }
 
-function getBaseApiUrl(): string {
-  const rawBaseUrl = process.env.NEXT_PUBLIC_API || '';
-  if (!rawBaseUrl) {
-    return '';
-  }
-  return rawBaseUrl.replace(/\/+$/, '');
+interface ReviewData {
+  application?: {
+    certificateType?: string;
+    shipperName?: string;
+    tin?: string;
+    consignee?: string;
+    destinationCountry?: string;
+    modeOfTransport?: string;
+    carrier?: string;
+    countryOfMfg?: string;
+    bulkQtyMt?: number;
+    totalValueFob?: number | string;
+    goods?: Array<{
+      id: string;
+      hsCode?: string;
+      description?: string;
+      quantity?: number | string;
+      grossWeight?: number | string;
+      nomenclature?: string;
+      value?: number | string;
+    }>;
+  };
+  membershipStatus?: string;
+  documents?: Array<{
+    id: string;
+    documentType: string;
+    fileName: string;
+  }>;
+  validationErrors?: string[];
+  canSubmit?: boolean;
 }
 
 export default function NewApplication() {
@@ -111,7 +136,7 @@ export default function NewApplication() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  const [reviewData, setReviewData] = useState<any>(null);
+  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [isLoadingReview, setIsLoadingReview] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoadingCerts, setIsLoadingCerts] = useState(true);
@@ -145,6 +170,7 @@ export default function NewApplication() {
   const ecowasNumberRef = useRef<HTMLInputElement>(null);
   const criteriaRef = useRef<HTMLInputElement>(null);
   const [goodsLineItems, setGoodsLineItems] = useState<GoodsLineItem[]>([]);
+  const lineItemIdRef = useRef(0);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [isLoadingRate, setIsLoadingRate] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, File>>({});
@@ -161,21 +187,7 @@ export default function NewApplication() {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  // Application form fields
-  const [formData, setFormData] = useState({
-    importerEmail: '',
-    consigneeName: '',
-    consigneeAddress: '',
-    carrier: '',
-    destinationCountry: '',
-    destinationPort: '',
-    countryOfManufacturing: 'Nigeria',
-    totalValueFOB: '',
-    bulkProductQty: '',
-    marksNo: '',
-    ecowasNumber: '',
-    criteria: '',
-  });
+  const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string | boolean | string[]>>({});
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -198,20 +210,7 @@ export default function NewApplication() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    fetchCertificateTypes();
-    fetchTransportModes();
-    fetchCountries();
-    fetchCompanyProfile();
-  }, []);
-
-  useEffect(() => {
-    if (selectedCert) {
-      fetchCertificateFields(selectedCert);
-    }
-  }, [selectedCert]);
-
-  const fetchCertificateTypes = async () => {
+  async function fetchCertificateTypes() {
     setIsLoadingCerts(true);
     setCertError('');
 
@@ -240,9 +239,9 @@ export default function NewApplication() {
     } finally {
       setIsLoadingCerts(false);
     }
-  };
+  }
 
-  const fetchCertificateFields = async (certificateId: string) => {
+  async function fetchCertificateFields(certificateId: string) {
     setIsLoadingFields(true);
 
     try {
@@ -277,9 +276,9 @@ export default function NewApplication() {
     } finally {
       setIsLoadingFields(false);
     }
-  };
+  }
 
-  const fetchTransportModes = async () => {
+  async function fetchTransportModes() {
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
@@ -301,9 +300,9 @@ export default function NewApplication() {
     } catch (err) {
       console.error('Failed to fetch transport modes:', err);
     }
-  };
+  }
 
-  const fetchCountries = async () => {
+  async function fetchCountries() {
     setIsLoadingCountries(true);
     try {
       const baseUrl = getBaseUrl();
@@ -328,9 +327,9 @@ export default function NewApplication() {
     } finally {
       setIsLoadingCountries(false);
     }
-  };
+  }
 
-  const fetchCompanyProfile = async () => {
+  async function fetchCompanyProfile() {
     setIsLoadingProfile(true);
     try {
       const baseUrl = getBaseUrl();
@@ -355,7 +354,28 @@ export default function NewApplication() {
     } finally {
       setIsLoadingProfile(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    const initialFetchTimer = window.setTimeout(() => {
+      void fetchCertificateTypes();
+      void fetchTransportModes();
+      void fetchCountries();
+      void fetchCompanyProfile();
+    }, 0);
+
+    return () => window.clearTimeout(initialFetchTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCert) return;
+
+    const fieldsFetchTimer = window.setTimeout(() => {
+      void fetchCertificateFields(selectedCert);
+    }, 0);
+
+    return () => window.clearTimeout(fieldsFetchTimer);
+  }, [selectedCert]);
 
   const searchHsCodes = async (query: string) => {
     if (!query || query.length < 2) {
@@ -450,30 +470,88 @@ export default function NewApplication() {
     return field ? field.name : fieldCode;
   };
 
-  const getFormDataKey = (fieldCode: string): string => {
-    const fieldKeyMap: Record<string, string> = {
-      'TIN': 'tin',
-      'IMPORTER_EMAIL': 'importerEmail',
-      'CONSIGNEE': 'consigneeName',
-      'CONSIGNEE_ADDRESS': 'consigneeAddress',
-      'CARRIER': 'carrier',
-      'DESTINATION': 'destinationCountry',
-      'DESTINATION_PORT': 'destinationPort',
-      'COUNTRY_OF_MANUFACTURING': 'countryOfManufacturing',
-      'TOTAL_VALUE_FOB': 'totalValueFOB',
-      'BULK_PRODUCT_QTY_MT': 'bulkProductQty',
-      'MARKS_NO': 'marksNo',
-      'ECOWAS_NUMBER': 'ecowasNumber',
-      'CRITERIA': 'criteria',
-      'SHIPPER_NAME': 'shipperName',
-      'SHIPPER_ADDRESS': 'shipperAddress',
+  const getDynamicFieldValue = (field: CertificateField): string | boolean | string[] => {
+    if (field.repeatable) return dynamicFieldValues[field.code] || [''];
+
+    const profileValues: Record<string, string> = {
+      TIN: companyProfile?.tin || '',
+      SHIPPER_NAME: companyProfile?.companyName || '',
+      SHIPPER_ADDRESS: companyProfile?.address || '',
+      MODE_OF_TRANSPORT: transportMode || '',
     };
-    return fieldKeyMap[fieldCode] || fieldCode.toLowerCase();
+    if (field.code in profileValues) return profileValues[field.code];
+
+    return dynamicFieldValues[field.code] || '';
+  };
+
+  const setDynamicFieldValue = (field: CertificateField, value: string | boolean | string[]) => {
+    setDynamicFieldValues(current => ({ ...current, [field.code]: value }));
+
+    if (formErrors[field.code]) {
+      setFormErrors(current => ({ ...current, [field.code]: '' }));
+    }
+  };
+
+  /**
+   * The certificate-type configuration is the source of truth for application
+   * update fields. The API expects each configured field's code as the key,
+   * rather than the UI's form-data key.
+   */
+  const buildApplicationFieldsPayload = (): Record<string, string | number | boolean | string[]> => {
+    const fields: Record<string, string | number | boolean | string[]> = {};
+    const systemManagedFields = new Set([
+      'TIN',
+      'SHIPPER_NAME',
+      'SHIPPER_ADDRESS',
+      'MODE_OF_TRANSPORT',
+    ]);
+
+    certificateFields?.fields
+      .filter(field =>
+        field.category === 'APPLICATION' &&
+        field.applicable &&
+        !field.readOnly &&
+        !systemManagedFields.has(field.code)
+      )
+      .forEach(field => {
+        const value = getDynamicFieldValue(field);
+        if (field.repeatable) {
+          const values = (value as string[]).map(item => item.trim()).filter(Boolean);
+          if (values.length) fields[field.code] = values;
+          return;
+        }
+        if (typeof value === 'boolean') {
+          fields[field.code] = value;
+          return;
+        }
+        // `getDynamicFieldValue` can also return a string array for repeatable
+        // fields. Those are handled above, so narrow the remaining value
+        // before applying string operations.
+        if (typeof value !== 'string' || !value.trim()) return;
+
+        if (field.templateComponent === 'NUMBER') {
+          const numericValue = Number(value.replace(/,/g, ''));
+          if (!Number.isNaN(numericValue)) {
+            fields[field.code] = numericValue;
+          }
+          return;
+        }
+
+        fields[field.code] = value.trim();
+      });
+
+    // Temporary fallback while testing certificate configurations that do not
+    // yet include DESTINATION_PORT in their returned field list.
+    const destinationPort = dynamicFieldValues.DESTINATION_PORT;
+    if (typeof destinationPort === 'string' && destinationPort.trim() && !fields.DESTINATION_PORT) {
+      fields.DESTINATION_PORT = destinationPort.trim();
+    }
+
+    return fields;
   };
 
   const renderDynamicField = (field: CertificateField) => {
-    const formDataKey = getFormDataKey(field.code);
-    const fieldValue = formData[formDataKey as keyof typeof formData] || '';
+    const formDataKey = field.code;
     
     if (!field.applicable) return null;
 
@@ -487,17 +565,17 @@ export default function NewApplication() {
           <label className="text-[11px] font-semibold text-[#374151]">
             {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
           </label>
-          <div ref={destinationRef as any} className="relative">
+          <div ref={destinationRef} className="relative">
             <button
               type="button"
               onClick={() => {
                 setDestinationDropdownOpen(!destinationDropdownOpen);
                 setDestinationSearchQuery('');
               }}
-              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors.destinationCountry ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors[field.code] ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
               disabled={isLoadingCountries}
             >
-              <span>{formData.destinationCountry || '-- Select Country --'}</span>
+              <span>{String(getDynamicFieldValue(field)) || '-- Select Country --'}</span>
               <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${destinationDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {destinationDropdownOpen && (
@@ -518,15 +596,15 @@ export default function NewApplication() {
                       key={country.code}
                       type="button"
                       onClick={() => {
-                        setFormData({...formData, destinationCountry: country.name});
+                        setDynamicFieldValue(field, country.name);
                         setDestinationDropdownOpen(false);
                         setDestinationSearchQuery('');
-                        if (formErrors.destinationCountry) setFormErrors({...formErrors, destinationCountry: ''});
+                        if (formErrors[field.code]) setFormErrors(current => ({ ...current, [field.code]: '' }));
                       }}
                       className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
                     >
                       <span>{country.name}</span>
-                      {formData.destinationCountry === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
+                      {getDynamicFieldValue(field) === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
                     </button>
                   ))}
                   {filteredCountries.length === 0 && (
@@ -536,7 +614,7 @@ export default function NewApplication() {
               </div>
             )}
           </div>
-          {formErrors.destinationCountry && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationCountry}</div>}
+          {formErrors[field.code] && <div className="text-[10px] text-[#e53e3e]">{formErrors[field.code]}</div>}
         </div>
       );
     }
@@ -550,17 +628,17 @@ export default function NewApplication() {
           <label className="text-[11px] font-semibold text-[#374151]">
             {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
           </label>
-          <div ref={manufacturingRef as any} className="relative">
+          <div ref={manufacturingRef} className="relative">
             <button
               type="button"
               onClick={() => {
                 setManufacturingDropdownOpen(!manufacturingDropdownOpen);
                 setManufacturingSearchQuery('');
               }}
-              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors.countryOfManufacturing ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between ${formErrors[field.code] ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
               disabled={isLoadingCountries}
             >
-              <span>{formData.countryOfManufacturing || '-- Select Country --'}</span>
+              <span>{String(getDynamicFieldValue(field)) || '-- Select Country --'}</span>
               <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${manufacturingDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {manufacturingDropdownOpen && (
@@ -581,15 +659,15 @@ export default function NewApplication() {
                       key={country.code}
                       type="button"
                       onClick={() => {
-                        setFormData({...formData, countryOfManufacturing: country.name});
+                        setDynamicFieldValue(field, country.name);
                         setManufacturingDropdownOpen(false);
                         setManufacturingSearchQuery('');
-                        if (formErrors.countryOfManufacturing) setFormErrors({...formErrors, countryOfManufacturing: ''});
+                        if (formErrors[field.code]) setFormErrors(current => ({ ...current, [field.code]: '' }));
                       }}
                       className="w-full px-[10px] py-[7px] text-[12px] text-[#1a2236] hover:bg-[#f1f4f9] flex items-center justify-between"
                     >
                       <span>{country.name}</span>
-                      {formData.countryOfManufacturing === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
+                      {getDynamicFieldValue(field) === country.name && <Check className="w-4 h-4 text-[#3a7bd5]" />}
                     </button>
                   ))}
                   {filteredCountries.length === 0 && (
@@ -599,7 +677,7 @@ export default function NewApplication() {
               </div>
             )}
           </div>
-          {formErrors.countryOfManufacturing && <div className="text-[10px] text-[#e53e3e]">{formErrors.countryOfManufacturing}</div>}
+          {formErrors[field.code] && <div className="text-[10px] text-[#e53e3e]">{formErrors[field.code]}</div>}
         </div>
       );
     }
@@ -615,44 +693,86 @@ export default function NewApplication() {
             <span className="text-[13px] font-bold text-[#92400e]">$</span>
             <input
               ref={totalValueFOBRef}
-              className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.totalValueFOB ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+              className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors[field.code] ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
               placeholder="0.00"
-              value={formData.totalValueFOB}
+              value={String(getDynamicFieldValue(field))}
               onChange={(e) => {
                 const formatted = formatNumberWithCommas(e.target.value);
-                setFormData({...formData, totalValueFOB: formatted});
-                if (formErrors.totalValueFOB) setFormErrors({...formErrors, totalValueFOB: ''});
+                setDynamicFieldValue(field, formatted);
               }}
             />
           </div>
           <div className="text-[10px] text-[#6b7280]">FOB value in US Dollars. Converted to NGN at prevailing rate for fee calculation.</div>
-          {formErrors.totalValueFOB && <div className="text-[10px] text-[#e53e3e]">{formErrors.totalValueFOB}</div>}
+          {formErrors[field.code] && <div className="text-[10px] text-[#e53e3e]">{formErrors[field.code]}</div>}
         </div>
       );
     }
 
-    // Default text input
+    const value = getDynamicFieldValue(field);
+    const inputClassName = `px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] focus:outline-none focus:border-[#3a7bd5] ${field.readOnly ? 'border-[#d1d5db] bg-[#f3f4f6]' : formErrors[formDataKey] ? 'border-[#fca5a5] bg-white' : 'border-[#d1d5db] bg-white'}`;
+    const renderInput = (inputValue: string | boolean, onChange: (value: string | boolean) => void, key?: string) => {
+      if (field.templateComponent === 'MULTI_LINE_TEXT') {
+        return <textarea key={key} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)} />;
+      }
+
+      if (field.templateComponent === 'CHECKBOX') {
+        return (
+          <label key={key} className="flex items-center gap-2 text-[12px] text-[#1a2236]">
+            <input type="checkbox" checked={inputValue === true || inputValue === 'true'} disabled={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.checked)} />
+            {field.name}
+          </label>
+        );
+      }
+
+      if (field.templateComponent === 'DROPDOWN' && field.options?.length) {
+        return (
+          <select key={key} className={inputClassName} value={String(inputValue)} disabled={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)}>
+            <option value="">-- Select {field.name} --</option>
+            {field.options.map((option, index) => {
+              const optionValue = typeof option === 'string' ? option : option.value || option.code || option.name || option.label || '';
+              const optionLabel = typeof option === 'string' ? option : option.label || option.name || optionValue;
+              return <option key={`${optionValue}-${index}`} value={optionValue}>{optionLabel}</option>;
+            })}
+          </select>
+        );
+      }
+
+      const inputType = field.templateComponent === 'NUMBER'
+        ? 'number'
+        : field.templateComponent === 'DATE'
+          ? 'date'
+          : field.templateComponent === 'EMAIL'
+            ? 'email'
+            : 'text';
+      return <input key={key} type={inputType} step={inputType === 'number' ? 'any' : undefined} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)} />;
+    };
+
+    // templateComponent controls the input element. For repeatable fields,
+    // retain every entered value instead of collapsing them into one string.
     return (
       <div key={field.code} className="flex flex-col gap-1">
         <label className="text-[11px] font-semibold text-[#374151]">
           {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
         </label>
-        {field.readOnly ? (
-          <input 
-            className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" 
-            value={fieldValue} 
-            readOnly 
-          />
+        {field.repeatable ? (
+          <>
+            {(value as string[]).map((item, index) => (
+              <div key={`${field.code}-${index}`} className="flex gap-2">
+                {renderInput(item, nextValue => {
+                  const nextValues = [...(value as string[])];
+                  nextValues[index] = String(nextValue);
+                  setDynamicFieldValue(field, nextValues);
+                })}
+                {!field.readOnly && (value as string[]).length > 1 && <button type="button" className="text-[11px] text-[#dc2626]" onClick={() => setDynamicFieldValue(field, (value as string[]).filter((_, itemIndex) => itemIndex !== index))}>Remove</button>}
+              </div>
+            ))}
+            {!field.readOnly && <button type="button" className="self-start text-[11px] font-semibold text-[#3a7bd5]" onClick={() => setDynamicFieldValue(field, [...(value as string[]), ''])}>+ Add another</button>}
+          </>
         ) : (
-          <input
-            className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors[formDataKey] ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-            placeholder={field.name}
-            value={fieldValue}
-            onChange={(e) => {
-              setFormData({...formData, [formDataKey]: e.target.value});
-              if (formErrors[formDataKey]) setFormErrors({...formErrors, [formDataKey]: ''});
-            }}
-          />
+          renderInput(
+            typeof value === 'string' || typeof value === 'boolean' ? value : '',
+            nextValue => setDynamicFieldValue(field, nextValue)
+          )
         )}
         {formErrors[formDataKey] && <div className="text-[10px] text-[#e53e3e]">{formErrors[formDataKey]}</div>}
       </div>
@@ -708,6 +828,7 @@ export default function NewApplication() {
 
       const payload = {
         modeOfTransport: code,
+        fields: {},
       };
 
       const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
@@ -748,34 +869,34 @@ export default function NewApplication() {
     // Dynamically validate required fields based on certificate type configuration
     if (fieldsLoaded) {
       certificateFields.fields.forEach(field => {
-        // Skip fields that are already filled from other sources (company profile, transport mode selection)
-        if (field.code === 'TIN' || field.code === 'SHIPPER_NAME' || field.code === 'SHIPPER_ADDRESS' || field.code === 'MODE_OF_TRANSPORT') {
-          return;
-        }
-
         // Skip HS_CODE as it's part of goods line items, not shipment details
         if (field.code === 'HS_CODE') {
           return;
         }
 
         if (field.category === 'APPLICATION' && field.required && field.applicable) {
-          const formDataKey = getFormDataKey(field.code);
-          const fieldValue = formData[formDataKey as keyof typeof formData];
+          const formDataKey = field.code;
+          const fieldValue = getDynamicFieldValue(field);
+          const isEmpty = Array.isArray(fieldValue)
+            ? fieldValue.every(value => !value.trim())
+            : typeof fieldValue === 'boolean'
+              ? !fieldValue
+              : !fieldValue.trim();
           
-          if (!fieldValue || (typeof fieldValue === 'string' && !fieldValue.trim())) {
+          if (isEmpty) {
             errors[formDataKey] = `${field.name} is required`;
           }
           
           // Special validation for email fields
-          if (field.code === 'IMPORTER_EMAIL' && fieldValue) {
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue as string)) {
+          if (field.code === 'IMPORTER_EMAIL' && typeof fieldValue === 'string' && fieldValue) {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue)) {
               errors[formDataKey] = 'Please enter a valid email address';
             }
           }
           
           // Special validation for FOB value
-          if (field.code === 'TOTAL_VALUE_FOB' && fieldValue) {
-            const cleanValue = (fieldValue as string).replace(/,/g, '').trim();
+          if (field.code === 'TOTAL_VALUE_FOB' && typeof fieldValue === 'string' && fieldValue) {
+            const cleanValue = fieldValue.replace(/,/g, '').trim();
             if (!cleanValue) {
               errors[formDataKey] = 'Total Value (FOB) is required';
             }
@@ -783,34 +904,7 @@ export default function NewApplication() {
         }
       });
     } else {
-      // Fallback validation if fields aren't loaded - validate all known fields
-      if (!formData.importerEmail.trim()) {
-        errors.importerEmail = 'Importer Email is required';
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.importerEmail)) {
-        errors.importerEmail = 'Please enter a valid email address';
-      }
-      if (!formData.consigneeName.trim()) {
-        errors.consigneeName = 'Consignee Name is required';
-      }
-      if (!formData.consigneeAddress.trim()) {
-        errors.consigneeAddress = 'Consignee Address is required';
-      }
-      if (!formData.carrier.trim()) {
-        errors.carrier = 'Carrier is required';
-      }
-      if (!formData.destinationCountry.trim()) {
-        errors.destinationCountry = 'Destination Country is required';
-      }
-      if (!formData.countryOfManufacturing.trim()) {
-        errors.countryOfManufacturing = 'Country of Manufacturing is required';
-      }
-      const cleanValue = formData.totalValueFOB.replace(/,/g, '').trim();
-      if (!cleanValue) {
-        errors.totalValueFOB = 'Total Value (FOB) is required';
-      }
-      if (!formData.bulkProductQty.trim()) {
-        errors.bulkProductQty = 'Bulk Product Qty is required';
-      }
+      errors.configuration = 'The certificate field configuration is still loading. Please try again.';
     }
 
     setFormErrors(errors);
@@ -920,6 +1014,19 @@ export default function NewApplication() {
     return formattedInteger + decimalPart;
   };
 
+  const formatCurrency = (value: number | string | null | undefined, currency: 'NGN' | 'USD') => {
+    const numericValue = typeof value === 'number'
+      ? value
+      : Number(String(value ?? 0).replace(/,/g, ''));
+
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number.isFinite(numericValue) ? numericValue : 0);
+  };
+
   const smoothScrollToElement = (element: HTMLElement, duration: number = 1000) => {
     const targetPosition = element.getBoundingClientRect().top + window.pageYOffset - window.innerHeight / 2 + element.offsetHeight / 2;
     const startPosition = window.pageYOffset;
@@ -970,22 +1077,10 @@ export default function NewApplication() {
         throw new Error('API base URL is not configured.');
       }
 
-      const payload: any = {
-        importerEmail: formData.importerEmail,
-        consignee: formData.consigneeName,
-        consigneeAddress: formData.consigneeAddress,
-        carrier: formData.carrier,
+      const payload = {
         modeOfTransport: transportMode,
-        destinationCountry: formData.destinationCountry,
-        destinationPort: formData.destinationPort,
-        countryOfMfg: formData.countryOfManufacturing,
-        ecowasNumber: formData.ecowasNumber || '',
-        criteria: formData.criteria || '',
+        fields: buildApplicationFieldsPayload(),
       };
-
-      if (formData.bulkProductQty && formData.bulkProductQty.trim() !== '' && !isNaN(parseFloat(formData.bulkProductQty))) {
-        payload.bulkQtyMt = parseFloat(formData.bulkProductQty);
-      }
 
       const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
         method: 'PUT',
@@ -1304,7 +1399,7 @@ export default function NewApplication() {
 
   const addLineItem = () => {
     const newItem: GoodsLineItem = {
-      id: Date.now().toString(),
+      id: `goods-${goodsLineItems.length}`,
       hsCode: '',
       description: '',
       marksNo: '',
@@ -1414,8 +1509,9 @@ export default function NewApplication() {
 
   const handleHsCodeSelect = (hs: HSCode) => {
     // Add new line item with selected HS code
+    lineItemIdRef.current += 1;
     const newItem: GoodsLineItem = {
-      id: Date.now().toString(),
+      id: lineItemIdRef.current.toString(),
       hsCode: hs.cetCode,
       description: hs.description,
       marksNo: '',
@@ -1544,9 +1640,15 @@ export default function NewApplication() {
                     <span className="text-[10px] font-semibold text-[#64748b]">Payment</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
-                  ★ NACCIMA Member — member rates apply to your application
-                </div>
+                 {companyProfile?.membershipActive ? (
+                  <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+                    ★ NACCIMA Member — member rates apply to your application
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
+                    ⚠ Not a NACCIMA Member — non-member rates apply to your application
+                  </div>
+                )}
 
                 {/* Section 1: Shipper/Exporter Details */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
@@ -1555,38 +1657,27 @@ export default function NewApplication() {
                     <div className="text-[13px] font-bold text-[#1a2236]">Shipper / Exporter Details</div>
                     <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">NRS-Verified · Read-Only</span>
                   </div>
-                  {isLoadingProfile ? (
+                  {isLoadingFields || isLoadingProfile ? (
                     <div className="flex items-center justify-center py-8">
-                      <div className="text-[12px] text-[#6a7a9a]">Loading company profile...</div>
+                      <div className="text-[12px] text-[#6a7a9a]">Loading exporter fields...</div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold text-[#374151]">TIN <span className="text-[#e53e3e]">*</span></label>
-                        <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6] font-mono tracking-widest" value={companyProfile?.tin || ''} readOnly />
-                        <div className="text-[10px] text-[#6b7280]">🔒 From your company profile — cannot be changed</div>
-                      </div>
-                      {certificateFields?.fields?.filter(field => field.code === 'IMPORTER_EMAIL' && field.applicable)
+                      {certificateFields?.fields
+                        ?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly)
                         .map(field => renderDynamicField(field))}
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Name <span className="text-[#e53e3e]">*</span></label>
-                        <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value={companyProfile?.companyName || ''} readOnly />
-                        <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified name — contact Admin to correct</div>
-                      </div>
-                      <div className="flex flex-col gap-1 col-span-2">
-                        <label className="text-[11px] font-semibold text-[#374151]">Shipper&apos;s Address <span className="text-[#e53e3e]">*</span></label>
-                        <input className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6]" value={companyProfile?.address || ''} readOnly />
-                        <div className="text-[10px] text-[#6b7280]">🔒 NRS-verified address — contact Admin to correct</div>
-                      </div>
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly).length === 0 && (
+                        <div className="col-span-2 text-[12px] text-[#6a7a9a]">No applicable exporter fields for this certificate type.</div>
+                      )}
                     </div>
                   )}
                 </div>
 
                 {/* Section 2: Mode of Transport */}
-                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                <div className={`bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4 ${isFieldApplicable('MODE_OF_TRANSPORT') ? '' : 'hidden'}`}>
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
-                    <div className="text-[13px] font-bold text-[#1a2236]">Mode of Transport <span className="text-[#e53e3e]">*</span></div>
+                    <div className="text-[13px] font-bold text-[#1a2236]">{getFieldLabel('MODE_OF_TRANSPORT')} {isFieldRequired('MODE_OF_TRANSPORT') && <span className="text-[#e53e3e]">*</span>}</div>
                     {isSavingTransportMode && <span className="text-[10px] text-[#6a7a9a]">Saving…</span>}
                     <span className="text-[10px] bg-[#dbeafe] text-[#1e40af] px-2 py-[2px] rounded-[10px] font-semibold">New in v2.2</span>
                   </div>
@@ -1627,23 +1718,20 @@ export default function NewApplication() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-4">
-                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.code !== 'TIN' && field.code !== 'IMPORTER_EMAIL' && field.code !== 'SHIPPER_NAME' && field.code !== 'SHIPPER_ADDRESS' && field.code !== 'MODE_OF_TRANSPORT' && field.code !== 'DESTINATION_PORT')
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT')
                         .map(field => renderDynamicField(field))}
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[11px] font-semibold text-[#374151]">Destination Port <span className="text-[#e53e3e]">*</span></label>
-                        <input
-                          ref={destinationPortRef}
-                          className={`px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors.destinationPort ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
-                          placeholder="Enter port name"
-                          value={formData.destinationPort}
-                          onChange={(e) => {
-                            setFormData({...formData, destinationPort: e.target.value});
-                            if (formErrors.destinationPort) setFormErrors({...formErrors, destinationPort: ''});
-                          }}
-                        />
-                        {formErrors.destinationPort && <div className="text-[10px] text-[#e53e3e]">{formErrors.destinationPort}</div>}
-                      </div>
-                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.code !== 'TIN' && field.code !== 'IMPORTER_EMAIL' && field.code !== 'SHIPPER_NAME' && field.code !== 'SHIPPER_ADDRESS' && field.code !== 'MODE_OF_TRANSPORT' && field.code !== 'DESTINATION_PORT').length === 0 && (
+                      {!certificateFields?.fields?.some(field => field.code === 'DESTINATION_PORT' && field.applicable) && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[11px] font-semibold text-[#374151]">Destination Port</label>
+                          <input
+                            className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] border-[#d1d5db]"
+                            placeholder="Enter destination port"
+                            value={typeof dynamicFieldValues.DESTINATION_PORT === 'string' ? dynamicFieldValues.DESTINATION_PORT : ''}
+                            onChange={(event) => setDynamicFieldValues(current => ({ ...current, DESTINATION_PORT: event.target.value }))}
+                          />
+                        </div>
+                      )}
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT').length === 0 && (
                         <div className="col-span-2 text-[12px] text-[#6a7a9a]">
                           No applicable fields for this certificate type.
                         </div>
@@ -1979,7 +2067,7 @@ export default function NewApplication() {
                       <div className="grid grid-cols-4 gap-2">
                         <div className="text-[11px]"><span className="text-[#6a7a9a]">Consignee</span><br/><span className="text-[#1a2236]">{reviewData.application?.consignee || '—'}</span></div>
                         <div className="text-[11px]"><span className="text-[#6a7a9a]">Destination</span><br/><span className="text-[#1a2236]">{reviewData.application?.destinationCountry || '—'}</span></div>
-                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Mode of Transport</span><br/><span className="text-[#1a2236]">{getTransportModeIcon(reviewData.application?.modeOfTransport)} {reviewData.application?.modeOfTransport || '—'}</span></div>
+                        <div className="text-[11px]"><span className="text-[#6a7a9a]">Mode of Transport</span><br/><span className="text-[#1a2236]">{getTransportModeIcon(reviewData.application?.modeOfTransport || '')} {reviewData.application?.modeOfTransport || '—'}</span></div>
                         <div className="text-[11px]"><span className="text-[#6a7a9a]">Carrier</span><br/><span className="text-[#1a2236]">{reviewData.application?.carrier || '—'}</span></div>
                         <div className="text-[11px]"><span className="text-[#6a7a9a]">Country of Mfg</span><br/><span className="text-[#1a2236]">{reviewData.application?.countryOfMfg || '—'}</span></div>
                         <div className="text-[11px]"><span className="text-[#6a7a9a]">Bulk Qty (MT)</span><br/><span className="text-[#1a2236]">{reviewData.application?.bulkQtyMt || '—'} MT</span></div>
@@ -2001,7 +2089,7 @@ export default function NewApplication() {
                           </tr>
                         </thead>
                         <tbody>
-                          {reviewData.application?.goods?.map((item: any, index: number) => (
+                          {reviewData.application?.goods?.map((item, index) => (
                             <tr key={item.id} className="hover:bg-[#f8faff]">
                               <td className="px-2 py-2 border-b border-[#edf0f5]">{index + 1}</td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]"><span className="font-mono font-bold text-[#1a4a8a]">{item.hsCode || '—'}</span></td>
@@ -2025,7 +2113,7 @@ export default function NewApplication() {
                       <div>
                         <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Supporting Documents</div>
                         <div className="space-y-1 mb-3">
-                          {reviewData.documents?.map((doc: any) => (
+                          {reviewData.documents?.map((doc) => (
                             <div key={doc.id} className="flex items-center gap-2 text-[11.5px] text-[#065f46]">✅ {doc.documentType} — {doc.fileName}</div>
                           ))}
                           {(!reviewData.documents || reviewData.documents.length === 0) && (
@@ -2036,14 +2124,14 @@ export default function NewApplication() {
                       <div>
                         <div className="bg-[#fef3c7] border border-[#fbbf24] rounded-[8px] p-4 mb-3">
                           <div className="text-[11px] font-bold text-[#92400e] mb-2">💱 FOB Value Conversion (Certificate of Origin)</div>
-                          <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">${reviewData.application?.totalValueFob || '0.00'}</span></div>
+                          <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.application?.totalValueFob, 'USD')}</span></div>
                           {isLoadingRate ? (
                             <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="text-[#9ca3af]">Loading...</span></div>
                           ) : exchangeRate ? (
                             <>
-                              <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">₦{exchangeRate.rate.toFixed(2)}</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(exchangeRate.rate, 'NGN')}</span></div>
                               <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>{new Date(exchangeRate.retrievedAt).toLocaleDateString()} (Source: {exchangeRate.source})</span></div>
-                              <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 mt-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">₦{((reviewData.application?.totalValueFob || 0) * exchangeRate.rate).toFixed(2)}</span></div>
+                              <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 mt-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate), 'NGN')}</span></div>
                             </>
                           ) : (
                             <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="text-[#e53e3e]">Failed to load</span></div>
@@ -2053,10 +2141,10 @@ export default function NewApplication() {
                           <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
                           {exchangeRate ? (
                             <>
-                              <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee (0.11% × ₦{((reviewData.application?.totalValueFob || 0) * exchangeRate.rate).toFixed(2)})</span><span className="font-semibold text-[#1a2236]">₦{(((reviewData.application?.totalValueFob || 0) * exchangeRate.rate) * 0.0011).toFixed(2)}</span></div>
-                              <div className="flex justify-between text-[11px] mb-1"><span>Processing Fee</span><span className="font-semibold text-[#1a2236]">₦2,500.00</span></div>
-                              <div className="flex justify-between text-[11px] mb-1"><span>VAT (7.5%)</span><span className="font-semibold text-[#1a2236]">₦{(((((reviewData.application?.totalValueFob || 0) * exchangeRate.rate) * 0.0011) + 2500) * 0.075).toFixed(2)}</span></div>
-                              <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 mt-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">₦{(((((reviewData.application?.totalValueFob || 0) * exchangeRate.rate) * 0.0011) + 2500) * 1.075).toFixed(2)}</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee (0.11% × {formatCurrency(Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate, 'NGN')})</span><span className="font-semibold text-[#1a2236]">{formatCurrency((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011, 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>Processing Fee</span><span className="font-semibold text-[#1a2236]">{formatCurrency(2500, 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>VAT (7.5%)</span><span className="font-semibold text-[#1a2236]">{formatCurrency((((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011) + 2500) * 0.075, 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 mt-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">{formatCurrency((((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011) + 2500) * 1.075, 'NGN')}</span></div>
                             </>
                           ) : (
                             <div className="text-[11px] text-[#e53e3e]">Exchange rate not loaded</div>

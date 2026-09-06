@@ -36,14 +36,18 @@ interface DashboardData {
   generatedAt: string;
 }
 
+interface CompanyProfile {
+  companyName: string;
+  tin: string;
+}
+
 export default function ExporterDashboard() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showWelcomeToast, setShowWelcomeToast] = useState(false);
   const [recentApplications, setRecentApplications] = useState<Application[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(true);
-  const [companyProfile, setCompanyProfile] = useState<any>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
 
@@ -56,28 +60,21 @@ export default function ExporterDashboard() {
   useEffect(() => {
     const shouldShowToast = localStorage.getItem('showWelcomeToast');
     if (shouldShowToast === 'true') {
-      setShowWelcomeToast(true);
       localStorage.removeItem('showWelcomeToast');
-      const timer = setTimeout(() => setShowWelcomeToast(false), 4000);
-      return () => clearTimeout(timer);
+      let hideTimer: ReturnType<typeof setTimeout> | undefined;
+      const showTimer = setTimeout(() => {
+        setShowWelcomeToast(true);
+        hideTimer = setTimeout(() => setShowWelcomeToast(false), 4000);
+      }, 0);
+
+      return () => {
+        clearTimeout(showTimer);
+        if (hideTimer) clearTimeout(hideTimer);
+      };
     }
   }, []);
-
-  useEffect(() => {
-    fetchDashboardData();
-    fetchCompanyProfile();
-  }, []);
-
-  const getBaseApiUrl = () => {
-    const rawBaseUrl = process.env.NEXT_PUBLIC_API;
-    if (!rawBaseUrl) {
-      return '';
-    }
-    return rawBaseUrl.replace(/\/$/, '');
-  };
 
   const fetchCompanyProfile = async () => {
-    setIsLoadingProfile(true);
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
@@ -99,8 +96,6 @@ export default function ExporterDashboard() {
       }
     } catch (err) {
       console.error('Failed to fetch company profile:', err);
-    } finally {
-      setIsLoadingProfile(false);
     }
   };
 
@@ -135,6 +130,15 @@ export default function ExporterDashboard() {
       setIsLoadingApps(false);
     }
   };
+
+  useEffect(() => {
+    const fetchTimer = setTimeout(() => {
+      fetchDashboardData();
+      fetchCompanyProfile();
+    }, 0);
+
+    return () => clearTimeout(fetchTimer);
+  }, []);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -209,33 +213,53 @@ export default function ExporterDashboard() {
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             <div className="text-[22px] font-bold text-[#1a2236] mb-[3px]">Welcome, {companyProfile?.companyName || 'Loading...'}</div>
-            <div className="text-[13px] text-[#6a7a9a] mb-[18px]">TIN: {companyProfile?.tin || 'Loading...'} &nbsp;|&nbsp; Last login: Today, 10:24 AM</div>
+            <div className="text-[13px] text-[#6a7a9a] mb-[18px]">TIN: {companyProfile?.tin || 'Loading...'} &nbsp;|&nbsp; Last login: Today, &apos;---&apos;</div>
             {dashboardData?.membership?.member && (
               <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
                 ★NACCIMA Member rates apply
               </div>
             )}
             <div className="flex gap-3 mb-[18px]">
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow shadow-md">
+              <button
+                type="button"
+                onClick={() => router.push('/my-applications')}
+                className="flex-1 cursor-pointer rounded border border-[#dde3ee] bg-white px-[14px] py-[14px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                aria-label="View all applications"
+              >
                 <div className="text-[26px] font-extrabold text-[#2c5282] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.activeApplications || 0}</div>
                 <div className="text-[15px] text-[#6a7a9a] font-medium">Active Applications</div>
                 <div className="text-[13px] text-[#059669] mt-[3px] flex items-center gap-1 pt-2"><FaArrowUp /> {dashboardData?.newApplicationsThisWeek || 0} new this week</div>
-              </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow shadow-md">
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/my-applications?status=PENDING_PAYMENT')}
+                className="flex-1 cursor-pointer rounded-[8px] border border-[#dde3ee] bg-white px-[14px] py-[12px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                aria-label="View applications pending payment"
+              >
                 <div className="text-[26px] font-extrabold text-[#92400e] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.pendingPayment || 0}</div>
                 <div className="text-[15px] text-[#6a7a9a] font-medium">Pending Payment</div>
                 <div className="text-[13px] text-[#059669] mt-[3px] pt-2">Action required</div>
-              </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow shadow-md">
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/my-applications?status=UNDER_REVIEW')}
+                className="flex-1 cursor-pointer rounded-[8px] border border-[#dde3ee] bg-white px-[14px] py-[12px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                aria-label="View applications under review"
+              >
                 <div className="text-[26px] font-extrabold text-[#1a2236] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.underReview || 0}</div>
                 <div className="text-[15px] text-[#6a7a9a] font-medium">Under Review</div>
                 <div className="text-[13px] text-[#059669] mt-[3px]">Avg. {dashboardData?.averageReviewDays?.toFixed(1) || '0'} days</div>
-              </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow shadow-md">
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/my-applications?status=ISSUED')}
+                className="flex-1 cursor-pointer rounded-[8px] border border-[#dde3ee] bg-white px-[14px] py-[12px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                aria-label="View issued certificates"
+              >
                 <div className="text-[26px] font-extrabold text-[#065f46] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.certificatesIssued || 0}</div>
                 <div className="text-[15px] text-[#6a7a9a] font-medium">Certificates Issued</div>
                 <div className="text-[13px] text-[#059669] mt-[3px] pt-2 flex items-center gap-1"><FaArrowUp /> {dashboardData?.certificatesIssuedThisMonth || 0} this month</div>
-              </div>
+              </button>
             </div>
             <div className="flex items-center justify-between my-[13px] pt-[18px]">
               <div className="text-[19px] font-medium text-[#1a2236]">Recent Applications</div>
@@ -307,7 +331,7 @@ export default function ExporterDashboard() {
             <span className="text-[18px]">👋</span>
             <div>
               <div className="text-[13px] font-bold">Welcome back!</div>
-              <div className="text-[11px] opacity-90">You're now logged into your dashboard</div>
+              <div className="text-[11px] opacity-90">You&apos;re now logged into your dashboard</div>
             </div>
           </div>
         </div>

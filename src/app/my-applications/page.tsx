@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { FiPlus } from 'react-icons/fi';
 import { ChevronDown } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 
@@ -34,7 +33,23 @@ interface Application {
   assignedTo?: string;
 }
 
-export default function MyApplications() {
+interface CertificateType {
+  id: string;
+  code: string;
+  name: string;
+}
+
+interface TransportMode {
+  code: string;
+  name: string;
+}
+
+// Search text is sent to / matched against application data as a single,
+// human-readable phrase. This removes pasted tabs, line breaks, and repeated
+// spaces before they can become encoded query characters such as `%09`.
+const normalizeSearchQuery = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+function MyApplicationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -51,8 +66,8 @@ export default function MyApplications() {
   const [certTypeDropdownOpen, setCertTypeDropdownOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [transportDropdownOpen, setTransportDropdownOpen] = useState(false);
-  const [certificateTypes, setCertificateTypes] = useState<any[]>([]);
-  const [transportModes, setTransportModes] = useState<any[]>([]);
+  const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
+  const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
 
   useEffect(() => {
@@ -63,22 +78,9 @@ export default function MyApplications() {
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
-    setFilterStatus(statusParam || '');
+    const statusUpdateTimer = window.setTimeout(() => setFilterStatus(statusParam || ''), 0);
+    return () => window.clearTimeout(statusUpdateTimer);
   }, [searchParams]);
-
-  useEffect(() => {
-    fetchApplications();
-    fetchCertificateTypes();
-    fetchTransportModes();
-  }, []);
-
-  const getBaseApiUrl = () => {
-    const rawBaseUrl = process.env.NEXT_PUBLIC_API;
-    if (!rawBaseUrl) {
-      return '';
-    }
-    return rawBaseUrl.replace(/\/+$/, '');
-  };
 
   const fetchCertificateTypes = async () => {
     setIsLoadingFilters(true);
@@ -168,6 +170,16 @@ export default function MyApplications() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const fetchTimer = window.setTimeout(() => {
+      void fetchApplications();
+      void fetchCertificateTypes();
+      void fetchTransportModes();
+    }, 0);
+
+    return () => window.clearTimeout(fetchTimer);
+  }, []);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -284,11 +296,6 @@ export default function MyApplications() {
 
   const stats = getStats();
 
-  const totalPages = Math.ceil(applications.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = applications.slice(indexOfFirstItem, indexOfLastItem);
-
   const getTransportIcon = (mode: string) => {
     const icons: Record<string, string> = {
       'SEA': '🚢',
@@ -301,10 +308,14 @@ export default function MyApplications() {
 
   const getFilteredApplications = () => {
     return applications.filter(app => {
-      const matchesSearch = searchQuery === '' || 
-        app.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        app.shipperName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        app.tin?.toLowerCase().includes(searchQuery.toLowerCase());
+      const normalizedSearch = normalizeSearchQuery(searchQuery).toLowerCase();
+      const matchesSearch = normalizedSearch === '' ||
+        app.id.toLowerCase().includes(normalizedSearch) ||
+        app.shipperName?.toLowerCase().includes(normalizedSearch) ||
+        app.companyName?.toLowerCase().includes(normalizedSearch) ||
+        app.tin?.toLowerCase().includes(normalizedSearch) ||
+        app.certificateType?.toLowerCase().includes(normalizedSearch) ||
+        app.status.toLowerCase().includes(normalizedSearch);
       const matchesStatus = filterStatus === '' || app.status === filterStatus;
       const matchesCertType = filterCertType === '' || app.certificateType === filterCertType;
       const matchesTransport = filterTransport === '' || app.modeOfTransport === filterTransport;
@@ -472,7 +483,10 @@ export default function MyApplications() {
                 placeholder="Search by ID....."
                 className="px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] flex-1"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(normalizeSearchQuery(e.target.value));
+                  setCurrentPage(1);
+                }}
               />
               <button className="px-4 py-2 bg-[#1a4a8a] text-white rounded-[4px] text-[12px] font-medium hover:bg-[#153c70]">
                 Filter
@@ -554,5 +568,13 @@ export default function MyApplications() {
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
     </div>
+  );
+}
+
+export default function MyApplications() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-[#6a7a9a]">Loading applications...</div>}>
+      <MyApplicationsContent />
+    </Suspense>
   );
 }

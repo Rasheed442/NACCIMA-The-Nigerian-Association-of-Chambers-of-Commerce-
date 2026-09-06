@@ -17,26 +17,10 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
-  const [certificates, setCertificates] = useState<any[]>([]);
   const [applicationsCount, setApplicationsCount] = useState(0);
   const [certificatesCount, setCertificatesCount] = useState(0);
   const [issuedCertificatesCount, setIssuedCertificatesCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted) {
-      if (role === 'admin') {
-        fetchAdminData();
-      } else {
-        fetchApplications();
-        fetchIssuedCertificates();
-      }
-    }
-  }, [mounted, role]);
 
   const getBaseApiUrl = () => {
     const rawBaseUrl = process.env.NEXT_PUBLIC_API;
@@ -157,6 +141,26 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
     }
   };
 
+  useEffect(() => {
+    const mountTimer = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(mountTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    const fetchTimer = window.setTimeout(() => {
+      if (role === 'admin') {
+        void fetchAdminData();
+      } else {
+        void fetchApplications();
+        void fetchIssuedCertificates();
+      }
+    }, 0);
+
+    return () => window.clearTimeout(fetchTimer);
+  }, [mounted, role]);
+
   const allCount = role === 'admin' ? applicationsCount : applications.length;
   const pendingPaymentCount = applications.filter(app => app.status === 'PENDING_PAYMENT').length;
   const underReviewCount = applications.filter(app => app.status === 'UNDER_REVIEW').length;
@@ -270,9 +274,9 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push(companyProfilePath)}>
         <span className="text-[13px] w-[15px] text-center">🏢</span> Company Profile
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/my-documents' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/my-documents')}>
+      {/* <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/my-documents' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/my-documents')}>
         <span className="text-[13px] w-[15px] text-center">📁</span> My Documents
-      </div>
+      </div> */}
     </>
   );
 

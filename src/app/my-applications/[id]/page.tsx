@@ -59,49 +59,55 @@ export default function ApplicationDetail() {
   }, []);
 
   useEffect(() => {
-    fetchTrackingData();
+    let isCancelled = false;
+
+    const loadTrackingData = async () => {
+      await Promise.resolve();
+      if (isCancelled) return;
+
+      setError(null);
+
+      try {
+        const baseUrl = getBaseUrl();
+        if (!baseUrl) {
+          setError('API URL not configured');
+          return;
+        }
+
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/tracking`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const result = await response.json();
+
+        if (isCancelled) return;
+
+        if (response.ok && result.data) {
+          setTrackingData(result.data);
+        } else {
+          setError(result.message || 'Failed to fetch tracking data');
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          console.error('Failed to fetch tracking data:', err);
+          setError('Failed to fetch tracking data');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadTrackingData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [applicationId]);
-
-  const getBaseApiUrl = () => {
-    const rawBaseUrl = process.env.NEXT_PUBLIC_API;
-    if (!rawBaseUrl) {
-      return '';
-    }
-    return rawBaseUrl.replace(/\/$/, '');
-  };
-
-  const fetchTrackingData = async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        setError('API URL not configured');
-        return;
-      }
-
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/tracking`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.data) {
-        setTrackingData(result.data);
-      } else {
-        setError(result.message || 'Failed to fetch tracking data');
-      }
-    } catch (err) {
-      console.error('Failed to fetch tracking data:', err);
-      setError('Failed to fetch tracking data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleLogout = () => {
     setShowLogoutModal(false);

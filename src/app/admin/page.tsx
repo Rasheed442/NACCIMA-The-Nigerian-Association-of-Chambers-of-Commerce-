@@ -138,10 +138,6 @@ export default function AdminPage() {
     }
   };
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
   const transformedCertificateData = useMemo(() => {
     if (!dashboardData) return certificateData;
     return dashboardData.applicationsByCertificateType.map((item) => ({
@@ -159,18 +155,19 @@ export default function AdminPage() {
       REJECTED: 'Rejected',
       CERTIFICATE_ISSUED: 'Issued',
     };
-    const statusColorMapping: Record<string, string> = {
-      SUBMITTED: '#10b981',
-      UNDER_REVIEW: '#f59e0b',
-      APPROVED: '#1d4ed8',
-      REJECTED: '#ef4444',
-      CERTIFICATE_ISSUED: '#1d4ed8',
-    };
     return dashboardData.statusBreakdown.map((item) => ({
       name: statusMapping[item.status] || item.status,
       value: item.count,
     }));
   }, [dashboardData]);
+
+  useEffect(() => {
+    const fetchTimer = window.setTimeout(() => {
+      void fetchDashboardData();
+    }, 0);
+
+    return () => window.clearTimeout(fetchTimer);
+  }, []);
 
   const transformedRecentActivity = useMemo(() => {
     if (!dashboardData) return recentActivity;
@@ -275,7 +272,12 @@ export default function AdminPage() {
             </div>
 
             <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="rounded border border-[#e5e7eb] bg-white p-5 shadow-sm ring-1 ring-transparent transition hover:ring-[#cbd5e1]">
+              <button
+                type="button"
+                onClick={() => router.push('/admin/my-applications')}
+                className="rounded border border-[#e5e7eb] bg-white p-5 shadow-sm ring-1 ring-transparent text-left transition hover:ring-[#1d4ed8] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1d4ed8] focus:ring-offset-2"
+                aria-label="View all applications"
+              >
                 <div className="h-1.5 w-14 rounded-full bg-[#1d4ed8] mb-4" />
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -286,7 +288,7 @@ export default function AdminPage() {
                   </div>
                   <div className="inline-flex items-center rounded bg-[#eff6ff] px-3 py-1 text-[12px] font-medium text-[#1d4ed8]">2026</div>
                 </div>
-              </div>
+              </button>
               <div className="rounded border border-[#e5e7eb] bg-white p-5 shadow-sm ring-1 ring-transparent transition hover:ring-[#cbd5e1]">
                 <div className="h-1.5 w-14 rounded-full bg-[#059669] mb-4" />
                 <div className="flex items-center justify-between gap-4">

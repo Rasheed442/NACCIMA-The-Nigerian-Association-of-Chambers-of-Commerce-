@@ -45,7 +45,7 @@ interface RequiredDocumentsProps {
     id: string;
     code: string;
     name: string;
-    requiredDocuments?: Record<string, string[]>;
+    requiredDocuments?: Record<string, string[]> | string;
   } | null;
   onTabChange?: (tabId: string) => void;
 }
@@ -154,8 +154,24 @@ const RequiredDocumentsPanel = forwardRef<RequiredDocumentsRef, RequiredDocument
         const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateType.id}`);
         const data = await response.json();
 
-        if (data.success && data.data?.requiredDocuments) {
-          const apiDocs = data.data.requiredDocuments;
+        const record = data.data || data;
+        if (record?.requiredDocuments) {
+          let apiDocs = record.requiredDocuments;
+          if (typeof apiDocs === 'string') {
+            try {
+              apiDocs = JSON.parse(apiDocs);
+            } catch {
+              apiDocs = [];
+            }
+          }
+
+          // Older records store one flat document list.  Show it under a
+          // general mode rather than discarding it on the edit screen.
+          if (Array.isArray(apiDocs)) {
+            apiDocs = { GENERAL: apiDocs };
+          }
+
+          if (!apiDocs || typeof apiDocs !== 'object') return;
           
           // Convert API response to TransportMode format
           const transportModes: TransportMode[] = Object.entries(apiDocs).map(([key, docs]) => {
@@ -172,6 +188,8 @@ const RequiredDocumentsPanel = forwardRef<RequiredDocumentsRef, RequiredDocument
               icon = Ship;
               accent = "violet";
               subtitle = "Sea Transport";
+            } else if (modeKey === "general") {
+              subtitle = "All transport modes";
             }
 
             return {

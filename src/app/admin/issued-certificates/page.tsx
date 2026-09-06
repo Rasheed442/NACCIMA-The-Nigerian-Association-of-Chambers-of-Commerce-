@@ -36,6 +36,7 @@ export default function AdminIssuedCertificates() {
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(0);
+  const [totalCertificates, setTotalCertificates] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -43,10 +44,6 @@ export default function AdminIssuedCertificates() {
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
-
-  useEffect(() => {
-    fetchCertificates();
-  }, [currentPage, searchQuery]);
 
   const fetchCertificates = async () => {
     setIsLoading(true);
@@ -78,6 +75,7 @@ export default function AdminIssuedCertificates() {
         const certs = Array.isArray(result.data.content) ? result.data.content : [result.data.content];
         setCertificates(certs);
         setTotalPages(result.data.totalPages || 0);
+        setTotalCertificates(result.data.totalElements || 0);
       } else {
         setError(result.message || 'Failed to fetch certificates');
       }
@@ -88,6 +86,14 @@ export default function AdminIssuedCertificates() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const fetchTimer = window.setTimeout(() => {
+      void fetchCertificates();
+    }, 0);
+
+    return () => window.clearTimeout(fetchTimer);
+  }, [currentPage, searchQuery]);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -135,7 +141,7 @@ export default function AdminIssuedCertificates() {
             {/* Summary Cards */}
             <div className="flex gap-3 mb-4">
               <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#059669] mb-[2px]">{certificates.length}</div>
+                <div className="text-[24px] font-extrabold text-[#059669] mb-[2px]">{totalCertificates}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Total Issued</div>
               </div>
               <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">

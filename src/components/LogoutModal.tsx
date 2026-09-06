@@ -1,14 +1,41 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface LogoutModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
 }
 
 export default function LogoutModal({ isOpen, onClose, onConfirm }: LogoutModalProps) {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleConfirm = async () => {
+    if (isLoggingOut) return;
+
+    setIsLoggingOut(true);
+    try {
+      await onConfirm();
+    } finally {
+      // Some pages only navigate to `/` on logout. Clear the shared auth
+      // session here and use a hard redirect so `/` cannot send a still-signed
+      // in user back to the dashboard.
+      [
+        'accessToken',
+        'refreshToken',
+        'accessTokenExpiresAt',
+        'refreshTokenExpiresAt',
+        'userId',
+        'companyId',
+        'userData',
+        'userRole',
+      ].forEach(key => localStorage.removeItem(key));
+
+      window.location.replace('/login');
+    }
+  };
+
   if (!isOpen) {
     return null;
   }
@@ -26,10 +53,11 @@ export default function LogoutModal({ isOpen, onClose, onConfirm }: LogoutModalP
             Cancel
           </button>
           <button
-            className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#e53e3e] text-white hover:bg-[#dc2626]"
-            onClick={onConfirm}
+            className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#e53e3e] text-white hover:bg-[#dc2626] disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={handleConfirm}
+            disabled={isLoggingOut}
           >
-            Log Out
+            {isLoggingOut ? 'Logging out…' : 'Log Out'}
           </button>
         </div>
       </div>

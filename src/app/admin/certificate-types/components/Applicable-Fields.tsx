@@ -240,6 +240,9 @@ const COLUMN_COUNT = 3;
 
 interface ApplicableFieldsProps {
   onTabChange?: (tabId: string) => void;
+  certificateType?: {
+    applicableFields?: string[] | string;
+  } | null;
 }
 
 export interface ApplicableFieldsData {
@@ -250,7 +253,7 @@ export interface ApplicableFieldsRef {
   getData: () => ApplicableFieldsData;
 }
 
-const ApplicableFieldsPanel = forwardRef<ApplicableFieldsRef, ApplicableFieldsProps>(({ onTabChange }, ref) => {
+const ApplicableFieldsPanel = forwardRef<ApplicableFieldsRef, ApplicableFieldsProps>(({ onTabChange, certificateType }, ref) => {
   const [fields, setFields] = useState<FieldDef[]>(FALLBACK_FIELDS);
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() => {
@@ -303,6 +306,30 @@ const ApplicableFieldsPanel = forwardRef<ApplicableFieldsRef, ApplicableFieldsPr
 
     fetchFields();
   }, []);
+
+  // Keep each certificate type's saved applicability choices when opening the
+  // edit screen, instead of reusing the previous browser-local draft.
+  useEffect(() => {
+    if (!certificateType?.applicableFields) return;
+
+    const savedFields = certificateType.applicableFields;
+    let applicable: string[];
+    if (typeof savedFields === 'string') {
+      try {
+        const parsed = JSON.parse(savedFields);
+        applicable = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        applicable = savedFields.split(',').map((field: string) => field.trim()).filter(Boolean);
+      }
+    } else {
+      applicable = savedFields;
+    }
+
+    const selected = new Set(applicable);
+    setEnabled((current) =>
+      Object.fromEntries(Object.keys(current).map((id) => [id, selected.has(id)]))
+    );
+  }, [certificateType?.applicableFields]);
 
   const enabledCount = useMemo(
     () => Object.values(enabled).filter(Boolean).length,
