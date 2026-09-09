@@ -100,6 +100,8 @@ export default function VettingReviewPage() {
   const [activeTab, setActiveTab] = useState<'details' | 'items' | 'documents'>('details');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [selfAssigning, setSelfAssigning] = useState(false);
+  const [isSelfAssigned, setIsSelfAssigned] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -108,30 +110,43 @@ export default function VettingReviewPage() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
-  const fetchApplicationDetails = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const baseUrl = getBaseUrl();
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}`);
-      const data = await response.json();
-      if (data.success) {
-        setApplicationData(data.data);
-      } else {
-        setError('Failed to load application details');
-      }
-    } catch (err) {
-      console.error('Failed to fetch application details:', err);
-      setError('Failed to load application details');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let isMounted = true;
+
     if (applicationId) {
-      fetchApplicationDetails();
+      const loadApplication = async () => {
+        setLoading(true);
+        setError('');
+
+        try {
+          const baseUrl = getBaseUrl();
+          const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}`);
+          const data = await response.json();
+
+          if (!isMounted) return;
+
+          if (data.success) {
+            setApplicationData(data.data);
+          } else {
+            setError('Failed to load application details');
+          }
+        } catch (err) {
+          if (!isMounted) return;
+          console.error('Failed to fetch application details:', err);
+          setError('Failed to load application details');
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
+        }
+      };
+
+      loadApplication();
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [applicationId]);
 
   const handleLogout = () => {
@@ -140,9 +155,49 @@ export default function VettingReviewPage() {
     router.push('/login');
   };
 
+  const handleSelfAssign = async () => {
+    if (isSelfAssigned) return true;
+
+    setSelfAssigning(true);
+    setError('');
+
+    try {
+      const baseUrl = getBaseUrl();
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}/self-assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          comment: 'Taking this application for review.',
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && (data.success !== false)) {
+        setIsSelfAssigned(true);
+        return true;
+      }
+
+      setError(data.message || 'Failed to self-assign this application.');
+      return false;
+    } catch (err) {
+      console.error('Failed to self-assign application:', err);
+      setError('Failed to self-assign this application.');
+      return false;
+    } finally {
+      setSelfAssigning(false);
+    }
+  };
+
   const handleDecision = async (decision: 'APPROVE' | 'REJECT' | 'REQUEST_INFO') => {
     if (!comment.trim()) {
       setError('Comment is required for all actions');
+      return;
+    }
+
+    const assigned = await handleSelfAssign();
+    if (!assigned) {
       return;
     }
 
@@ -162,7 +217,7 @@ export default function VettingReviewPage() {
       });
 
       const data = await response.json();
-      if (data.success) {
+      if (response.ok && data.success !== false) {
         router.push('/vetting-queue');
       } else {
         setError(data.message || 'Failed to submit decision');
@@ -485,6 +540,17 @@ export default function VettingReviewPage() {
                   <Scale className="w-5 h-5 text-gray-600" />
                   <h2 className="text-sm font-semibold text-gray-900">Review Decision</h2>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleSelfAssign}
+                  disabled={selfAssigning || isSelfAssigned}
+                  className="mb-4 w-full flex items-center justify-center gap-2 rounded-lg border border-[#dbe2ee] bg-[#f8fafd] px-3 py-2 text-sm font-semibold text-[#1a2236] hover:bg-[#edf4ff] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  {selfAssigning ? 'Assigning...' : isSelfAssigned ? 'Self-assigned for review' : 'Self assign application'}
+                </button>
+
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
@@ -498,7 +564,7 @@ export default function VettingReviewPage() {
                 <div className="space-y-2 mt-4">
                   <button
                     onClick={() => handleDecision('APPROVE')}
-                    disabled={submitting}
+                    disabled={submitting || selfAssigning}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle className="w-4 h-4" />
@@ -506,7 +572,7 @@ export default function VettingReviewPage() {
                   </button>
                   <button
                     onClick={() => handleDecision('REQUEST_INFO')}
-                    disabled={submitting}
+                    disabled={submitting || selfAssigning}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ClipboardList className="w-4 h-4" />
@@ -514,7 +580,7 @@ export default function VettingReviewPage() {
                   </button>
                   <button
                     onClick={() => handleDecision('REJECT')}
-                    disabled={submitting}
+                    disabled={submitting || selfAssigning}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <XCircle className="w-4 h-4" />
@@ -535,7 +601,7 @@ export default function VettingReviewPage() {
                   ) : (
                     history.map((item, index) => (
                       <div key={item.id || index} className="flex gap-3">
-                        <div className="flex-shrink-0">
+                        <div className="shrink-0">
                           <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
                             <CheckCircle className="w-3 h-3 text-blue-600" />
                           </div>
