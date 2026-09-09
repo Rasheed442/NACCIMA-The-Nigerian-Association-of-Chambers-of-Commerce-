@@ -1683,8 +1683,30 @@ export default function NewApplication() {
                 )}
 
                 {isLoadingCerts ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="text-[14px] text-[#6a7a9a]">Loading certificate types...</div>
+                  <div className="mb-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="h-[10px] w-[34%] rounded-full bg-[#edf3fb] animate-pulse" />
+                      <div className="h-[10px] w-[18%] rounded-full bg-[#edf3fb] animate-pulse" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      {[...Array(4)].map((_, index) => (
+                        <div
+                          key={index}
+                          className="rounded-[12px] border border-[#e6edf9] bg-white p-4 shadow-[0_2px_8px_rgba(26,34,54,0.04)] animate-pulse"
+                        >
+                          <div className="mb-3 flex items-center justify-between">
+                            <div className="h-[26px] w-[26px] rounded-full bg-[#edf3fb]" />
+                            <div className="h-[9px] w-[52px] rounded-full bg-[#edf3fb]" />
+                          </div>
+                          <div className="mb-2 h-[12px] w-[52%] rounded-full bg-[#edf3fb]" />
+                          <div className="mb-3 space-y-2">
+                            <div className="h-[10px] w-full rounded-full bg-[#f3f7fc]" />
+                            <div className="h-[10px] w-[75%] rounded-full bg-[#f3f7fc]" />
+                          </div>
+                          <div className="h-[8px] w-[36%] rounded-full bg-[#edf3fb]" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-4 mb-4">

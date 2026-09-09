@@ -205,6 +205,62 @@ export default function ExporterDashboard() {
     return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
+  const MetricCardSkeleton = () => (
+    <div className="flex-1 rounded-[8px] border border-[#e6edf9] bg-white px-[14px] py-[12px] shadow-[0_2px_6px_rgba(26,34,54,0.04)] animate-pulse">
+      <div className="h-[10px] w-[34%] rounded-full bg-[#edf3fb] mb-[10px]" />
+      <div className="h-[28px] w-[42%] rounded-full bg-[#edf3fb] mb-[10px]" />
+      <div className="h-[14px] w-[62%] rounded-full bg-[#f3f7fc]" />
+      <div className="mt-[10px] h-[10px] w-[28%] rounded-full bg-[#edf3fb]" />
+    </div>
+  );
+
+  const metricCards = [
+    {
+      key: 'active',
+      label: 'Active Applications',
+      value: dashboardData?.activeApplications || 0,
+      meta: `${dashboardData?.newApplicationsThisWeek || 0} new this week`,
+      color: 'text-[#2c5282]',
+      href: '/my-applications',
+      highlight: 'text-[#059669]',
+      accent: 'bg-[#eaf7f2]',
+      icon: <FaArrowUp className="text-[#059669]" />
+    },
+    {
+      key: 'pending',
+      label: 'Pending Payment',
+      value: dashboardData?.pendingPayment || 0,
+      meta: 'Action required',
+      color: 'text-[#92400e]',
+      href: '/my-applications?status=PENDING_PAYMENT',
+      highlight: 'text-[#92400e]',
+      accent: 'bg-[#fff1e6]',
+      icon: null
+    },
+    {
+      key: 'review',
+      label: 'Under Review',
+      value: dashboardData?.underReview || 0,
+      meta: `Avg. ${dashboardData?.averageReviewDays?.toFixed(1) || '0'} days`,
+      color: 'text-[#1a2236]',
+      href: '/my-applications?status=UNDER_REVIEW',
+      highlight: 'text-[#1a2236]',
+      accent: 'bg-[#f1f5ff]',
+      icon: null
+    },
+    {
+      key: 'issued',
+      label: 'Certificates Issued',
+      value: dashboardData?.certificatesIssued || 0,
+      meta: `${dashboardData?.certificatesIssuedThisMonth || 0} this month`,
+      color: 'text-[#065f46]',
+      href: '/my-applications?status=ISSUED',
+      highlight: 'text-[#059669]',
+      accent: 'bg-[#eaf7f2]',
+      icon: <FaArrowUp className="text-[#059669]" />
+    }
+  ];
+
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white  overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)] ">
@@ -220,46 +276,24 @@ export default function ExporterDashboard() {
               </div>
             )}
             <div className="flex gap-3 mb-[18px]">
-              <button
-                type="button"
-                onClick={() => router.push('/my-applications')}
-                className="flex-1 cursor-pointer rounded border border-[#dde3ee] bg-white px-[14px] py-[14px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
-                aria-label="View all applications"
-              >
-                <div className="text-[26px] font-extrabold text-[#2c5282] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.activeApplications || 0}</div>
-                <div className="text-[15px] text-[#6a7a9a] font-medium">Active Applications</div>
-                <div className="text-[13px] text-[#059669] mt-[3px] flex items-center gap-1 pt-2"><FaArrowUp /> {dashboardData?.newApplicationsThisWeek || 0} new this week</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push('/my-applications?status=PENDING_PAYMENT')}
-                className="flex-1 cursor-pointer rounded-[8px] border border-[#dde3ee] bg-white px-[14px] py-[12px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
-                aria-label="View applications pending payment"
-              >
-                <div className="text-[26px] font-extrabold text-[#92400e] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.pendingPayment || 0}</div>
-                <div className="text-[15px] text-[#6a7a9a] font-medium">Pending Payment</div>
-                <div className="text-[13px] text-[#059669] mt-[3px] pt-2">Action required</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push('/my-applications?status=UNDER_REVIEW')}
-                className="flex-1 cursor-pointer rounded-[8px] border border-[#dde3ee] bg-white px-[14px] py-[12px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
-                aria-label="View applications under review"
-              >
-                <div className="text-[26px] font-extrabold text-[#1a2236] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.underReview || 0}</div>
-                <div className="text-[15px] text-[#6a7a9a] font-medium">Under Review</div>
-                <div className="text-[13px] text-[#059669] mt-[3px]">Avg. {dashboardData?.averageReviewDays?.toFixed(1) || '0'} days</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push('/my-applications?status=ISSUED')}
-                className="flex-1 cursor-pointer rounded-[8px] border border-[#dde3ee] bg-white px-[14px] py-[12px] text-left shadow-md transition hover:border-[#1a4a8a] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
-                aria-label="View issued certificates"
-              >
-                <div className="text-[26px] font-extrabold text-[#065f46] mb-[2px]">{isLoadingDashboard ? '...' : dashboardData?.certificatesIssued || 0}</div>
-                <div className="text-[15px] text-[#6a7a9a] font-medium">Certificates Issued</div>
-                <div className="text-[13px] text-[#059669] mt-[3px] pt-2 flex items-center gap-1"><FaArrowUp /> {dashboardData?.certificatesIssuedThisMonth || 0} this month</div>
-              </button>
+              {isLoadingDashboard
+                ? metricCards.map((card) => <MetricCardSkeleton key={card.key} />)
+                : metricCards.map((card) => (
+                    <button
+                      key={card.key}
+                      type="button"
+                      onClick={() => router.push(card.href)}
+                      className="flex-1 cursor-pointer rounded-[8px] border border-[#dde3ee] bg-white px-[14px] py-[12px] text-left shadow-[0_2px_8px_rgba(26,34,54,0.08)] transition hover:border-[#1a4a8a] hover:shadow-[0_6px_18px_rgba(26,74,138,0.14)] focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                      aria-label={`View ${card.label}`}
+                    >
+                      <div className={`text-[26px] font-extrabold ${card.color} mb-[2px]`}>{card.value}</div>
+                      <div className="text-[15px] text-[#6a7a9a] font-medium">{card.label}</div>
+                      <div className={`text-[13px] ${card.highlight} mt-[3px] ${card.icon ? 'pt-2 flex items-center gap-1' : 'pt-2'}`}>
+                        {card.icon}
+                        <span>{card.meta}</span>
+                      </div>
+                    </button>
+                  ))}
             </div>
             <div className="flex items-center justify-between my-[13px] pt-[18px]">
               <div className="text-[19px] font-medium text-[#1a2236]">Recent Applications</div>
@@ -280,8 +314,15 @@ export default function ExporterDashboard() {
                 <tbody>
                   {isLoadingApps ? (
                     <tr>
-                      <td colSpan={6} className="px-[11px] py-[8px] border-b border-[#edf0f5] text-center text-[#6a7a9a]">
-                        Loading recent applications...
+                      <td colSpan={6} className="px-[11px] py-[10px] border-b border-[#edf0f5]">
+                        <div className="flex items-center justify-center gap-3 rounded-[8px] border border-[#edf0f5] bg-[#f8fafc] px-4 py-5 text-[#4a5a7a]">
+                          <div className="flex gap-1">
+                            <span className="h-2 w-2 rounded-full bg-[#9eb7d6] animate-pulse" />
+                            <span className="h-2 w-2 rounded-full bg-[#9eb7d6] animate-pulse [animation-delay:120ms]" />
+                            <span className="h-2 w-2 rounded-full bg-[#9eb7d6] animate-pulse [animation-delay:240ms]" />
+                          </div>
+                          <span className="text-[13px] font-medium">Gathering your recent applications...</span>
+                        </div>
                       </td>
                     </tr>
                   ) : recentApplications.length === 0 ? (
