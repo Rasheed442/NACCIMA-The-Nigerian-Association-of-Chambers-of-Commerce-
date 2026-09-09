@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useEffect, useState, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
@@ -127,8 +127,10 @@ interface ReviewData {
   canSubmit?: boolean;
 }
 
-export default function NewApplication() {
+function NewApplicationContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const paymentIframeRef = useRef<HTMLIFrameElement | null>(null);
   const [step, setStep] = React.useState(1);
   const [transportMode, setTransportMode] = React.useState<string | null>(null);
   const [isSavingTransportMode, setIsSavingTransportMode] = useState(false);
@@ -196,6 +198,36 @@ export default function NewApplication() {
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    const reference = searchParams.get('reference');
+
+    if (status === 'success' || reference) {
+      router.replace('/my-applications');
+    }
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!showPaymentModal || !paymentIframeRef.current) {
+      return;
+    }
+
+    const iframe = paymentIframeRef.current;
+    const handleIframeLoad = () => {
+      try {
+        const iframeUrl = iframe.contentWindow?.location.href || '';
+        if (iframeUrl.includes('status=success') || /[?&](status=success|reference=)/.test(iframeUrl)) {
+          router.replace('/my-applications');
+        }
+      } catch {
+        // ignore cross-origin navigation while the Paystack checkout is still loading
+      }
+    };
+
+    iframe.addEventListener('load', handleIframeLoad);
+    return () => iframe.removeEventListener('load', handleIframeLoad);
+  }, [router, showPaymentModal]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -1353,6 +1385,14 @@ export default function NewApplication() {
     }
   };
 
+  const closePaymentModal = () => {
+    setShowPaymentModal(false);
+    setPaymentCheckoutUrl('');
+    if (typeof window !== 'undefined') {
+      window.location.assign('/my-applications');
+    }
+  };
+
   const openPaystackModal = async (paymentData: Record<string, unknown>) => {
     if (typeof window === 'undefined') {
       return false;
@@ -1434,8 +1474,10 @@ export default function NewApplication() {
           },
           callback: (response: { reference?: string }) => {
             const resolvedRef = response?.reference || reference;
-            setShowSuccessModal(true);
+            closePaymentModal();
+            setShowSuccessModal(false);
             setSuccessMessage(`Payment successful. Reference: ${resolvedRef}`);
+            router.replace('/my-applications');
           },
           onClose: () => {
             setValidationError('Payment popup closed before completion. You can retry the payment from your application.');
@@ -2369,23 +2411,26 @@ export default function NewApplication() {
       </div>
       {showPaymentModal && paymentCheckoutUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/70 p-4">
-          <div className="relative w-full max-w-[1100px] h-[90vh] rounded-[14px] overflow-hidden border border-[#dbe2ee] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
-            <div className="flex items-center justify-between border-b border-[#edf0f5] px-[16px] py-[12px] bg-[#f8fafd]">
+          <div className="relative w-full max-w-[800px] h-[80vh] rounded-[14px] overflow-auto border border-[#dbe2ee] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
+            <div className="flex items-center justify-between border-b border-[#edf0f5] px-[23px] py-[8px] bg-[#f8fafd]">
               <div>
-                <div className="text-[14px] font-bold text-[#1a2236]">Paystack Checkout</div>
+                <div className="text-[18px] font-bold text-[#1a2236]">Payment</div>
                 <div className="text-[11px] text-[#6a7a9a]">Secure payment in progress</div>
               </div>
               <button
-                className="px-[10px] py-[6px] rounded-[6px] border border-[#d1d5db] bg-white text-[11px] font-semibold text-[#374151] hover:bg-[#f1f4f9]"
-                onClick={() => {
-                  setShowPaymentModal(false);
-                  setPaymentCheckoutUrl('');
+                type="button"
+                className="px-[10px] py-[6px] cursor-pointer rounded-[6px] border border-[#d1d5db] bg-white text-[11px] font-semibold text-[#374151] hover:bg-[#f1f4f9]"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  closePaymentModal();
                 }}
               >
                 Close
               </button>
             </div>
             <iframe
+              ref={paymentIframeRef}
               src={paymentCheckoutUrl}
               title="Paystack Payment"
               className="w-full h-full border-0"
@@ -2397,5 +2442,13 @@ export default function NewApplication() {
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
       <SuccessModal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)} message={successMessage} />
     </div>
+  );
+}
+
+export default function NewApplicationPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-[12px] text-[#6a7a9a]">Loading application...</div>}>
+      <NewApplicationContent />
+    </Suspense>
   );
 }

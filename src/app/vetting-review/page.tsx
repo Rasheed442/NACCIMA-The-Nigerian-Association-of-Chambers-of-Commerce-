@@ -138,6 +138,39 @@ export default function VettingReviewPage() {
     return icons[transport] || <FileText className="w-4 h-4" />;
   };
 
+  const handleReviewAction = async (app: ReviewApplication) => {
+    if (app.status === 'PAID') {
+      try {
+        const baseUrl = getBaseUrl();
+        if (!baseUrl) {
+          throw new Error('API base URL is not configured');
+        }
+
+        const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${app.applicationId}/self-assign`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            comment: 'Taking this application for review.',
+          }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok || payload?.success === false) {
+          console.error('Failed to self-assign application:', payload?.message || 'Unknown error');
+          return;
+        }
+      } catch (err) {
+        console.error('Self-assign failed:', err);
+        return;
+      }
+    }
+
+    router.push(`/vetting-review/${app.applicationId}`);
+  };
+
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
@@ -253,9 +286,9 @@ export default function VettingReviewPage() {
                           <td className="px-4 py-3">
                             <button
                               className="inline-flex items-center gap-1 rounded-md bg-[#1a4a8a] px-2.5 py-1.75 text-[11px] font-semibold text-white transition-colors hover:bg-[#153c70]"
-                              onClick={() => router.push(`/vetting-review/${app.applicationId}`)}
+                              onClick={() => handleReviewAction(app)}
                             >
-                              Review
+                              {app.status === 'PAID' ? 'Assign & Review' : 'Review'}
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </td>

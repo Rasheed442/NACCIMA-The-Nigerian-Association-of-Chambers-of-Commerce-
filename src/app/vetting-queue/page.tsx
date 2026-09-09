@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/static-components */
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -93,6 +94,39 @@ export default function VettingQueuePage() {
     router.push('/login');
   };
 
+  const handleReviewAction = async (app: Application) => {
+    if (app.status === 'PAID') {
+      try {
+        const baseUrl = getBaseUrl();
+        if (!baseUrl) {
+          throw new Error('API base URL is not configured');
+        }
+
+        const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${app.applicationId}/self-assign`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            comment: 'Taking this application for review.',
+          }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok || payload?.success === false) {
+          console.error('Failed to self-assign application:', payload?.message || 'Unknown error');
+          return;
+        }
+      } catch (err) {
+        console.error('Self-assign failed:', err);
+        return;
+      }
+    }
+
+    router.push(`/vetting-review/${app.applicationId}`);
+  };
+
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
       UNDER_REVIEW: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Under Review', icon: <Clock className="w-3 h-3" /> },
@@ -163,22 +197,28 @@ export default function VettingQueuePage() {
     { value: 'land', label: 'Land' },
   ];
 
-  const getSelectedLabel = (options: typeof certTypeOptions, value: string) => {
-    return options.find(opt => opt.value === value)?.label || options[0].label;
+  type DropdownOption = {
+    value: string;
+    label: string;
+  };
+
+  const getSelectedLabel = (options: DropdownOption[], value: string) => {
+    return options.find(opt => opt.value === value)?.label || options[0]?.label || 'Select';
   };
 
   const CustomDropdown = ({ 
     options, 
     value, 
     onChange, 
-    width 
+    width,
+    dropdownKey,
   }: { 
-    options: typeof certTypeOptions; 
+    options: DropdownOption[]; 
     value: string; 
     onChange: (val: string) => void; 
     width: string;
+    dropdownKey: 'certType' | 'status' | 'transport';
   }) => {
-    const dropdownKey = options === certTypeOptions ? 'certType' : options === statusOptions ? 'status' : 'transport';
     const isOpen = openDropdown === dropdownKey;
     
     return (
@@ -275,19 +315,22 @@ export default function VettingQueuePage() {
                 options={certTypeOptions} 
                 value={filterCertType} 
                 onChange={setFilterCertType} 
-                width="160px" 
+                width="160px"
+                dropdownKey="certType"
               />
               <CustomDropdown 
                 options={statusOptions} 
                 value={filterStatus} 
                 onChange={setFilterStatus} 
-                width="140px" 
+                width="140px"
+                dropdownKey="status"
               />
               <CustomDropdown 
                 options={transportOptions} 
                 value={filterTransport} 
                 onChange={setFilterTransport} 
-                width="130px" 
+                width="130px"
+                dropdownKey="transport"
               />
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -363,10 +406,10 @@ export default function VettingQueuePage() {
                         <td className="px-4 py-3">
                           <button
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                            onClick={() => router.push(`/vetting-review/${app.applicationId}`)}
+                            onClick={() => handleReviewAction(app)}
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            Review
+                            {app.status === 'PAID' ? 'Assign & Review' : 'Review'}
                           </button>
                         </td>
                       </tr>

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
@@ -28,12 +29,15 @@ interface Application {
 // query. A phrase such as "GSP Certificate" is sent as one clean search term.
 const normalizeSearchQuery = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+const ACTION_MENU_WIDTH = 140;
+
 export default function AdminApplications() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(0);
@@ -52,6 +56,20 @@ export default function AdminApplications() {
   const [transportModes, setTransportModes] = useState<any[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
 
+  // Action menu is rendered through a portal (see below), so instead of a
+  // simple open/closed flag we also need the applicationId it belongs to and
+  // the screen coordinates to render it at.
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number } | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // createPortal needs document.body, which only exists client-side.
+    setIsMounted(true);
+  }, []);
+
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
@@ -63,6 +81,26 @@ export default function AdminApplications() {
     fetchCertificateTypes();
     fetchTransportModes();
   }, [currentPage, filterStatus, filterCertType, filterCompanyId, filterFromDate, filterToDate]);
+
+  // Close the action menu if the table is scrolled (its button has moved out
+  // from under the fixed-position menu) or the window resizes.
+  useEffect(() => {
+    if (!openActionMenu) return;
+
+    const closeMenu = () => {
+      setOpenActionMenu(null);
+      setActionMenuPosition(null);
+    };
+
+    const scrollEl = tableScrollRef.current;
+    scrollEl?.addEventListener('scroll', closeMenu);
+    window.addEventListener('resize', closeMenu);
+
+    return () => {
+      scrollEl?.removeEventListener('scroll', closeMenu);
+      window.removeEventListener('resize', closeMenu);
+    };
+  }, [openActionMenu]);
 
   const fetchCertificateTypes = async () => {
     setIsLoadingFilters(true);
@@ -125,7 +163,7 @@ export default function AdminApplications() {
   const fetchApplications = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
@@ -136,7 +174,7 @@ export default function AdminApplications() {
       const params = new URLSearchParams();
       params.append('page', currentPage.toString());
       params.append('size', pageSize.toString());
-      
+
       if (filterStatus) params.append('status', filterStatus);
       if (filterCertType) params.append('certificateTypeId', filterCertType);
       if (filterCompanyId) params.append('companyId', filterCompanyId);
@@ -172,6 +210,81 @@ export default function AdminApplications() {
   const handleLogout = () => {
     setShowLogoutModal(false);
     router.push('/');
+  };
+
+  const getReviewerId = () => {
+    if (typeof window === 'undefined') {
+      return '54ce7a0f-714c-4b9c-b71d-5bf2f8cb82b2';
+    }
+
+    return localStorage.getItem('userId') || '54ce7a0f-714c-4b9c-b71d-5bf2f8cb82b2';
+  };
+
+  const handleAssignApplication = async (app: Application) => {
+    setOpenActionMenu(null);
+    setActionMenuPosition(null);
+    setActionError(null);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured');
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${app.applicationId}/assign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reviewerId: getReviewerId(),
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || payload?.success === false) {
+        const message = payload?.message || 'Failed to assign application.';
+        setActionError(message);
+        console.error('Failed to assign application:', message);
+        return;
+      }
+
+      setActionError(null);
+      await fetchApplications();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Assign application failed.';
+      setActionError(message);
+      console.error('Assign application failed:', err);
+    }
+  };
+
+  // Toggles the menu for a given row and records the button's on-screen
+  // position so the portal-rendered menu can be placed under it with
+  // `position: fixed` — independent of the scrollable table container.
+  const handleToggleActionMenu = (app: Application, event: React.MouseEvent<HTMLButtonElement>) => {
+    if (openActionMenu === app.applicationId) {
+      setOpenActionMenu(null);
+      setActionMenuPosition(null);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const left = Math.min(
+      rect.right - ACTION_MENU_WIDTH,
+      window.innerWidth - ACTION_MENU_WIDTH - 8
+    );
+
+    setActionMenuPosition({
+      top: rect.bottom + 4,
+      left: Math.max(8, left),
+    });
+    setOpenActionMenu(app.applicationId);
+  };
+
+  const closeActionMenu = () => {
+    setOpenActionMenu(null);
+    setActionMenuPosition(null);
   };
 
   const getStatusBadge = (status: Application['status']) => {
@@ -231,16 +344,6 @@ export default function AdminApplications() {
 
   const stats = getStats();
 
-  const getTransportIcon = (mode: string) => {
-    const icons: Record<string, string> = {
-      'SEA': '🚢',
-      'AIR': '✈️',
-      'ROAD': '🚛',
-      'RAIL': '🚂',
-    };
-    return icons[mode] || '📦';
-  };
-
   const getFilteredApplications = () => {
     const normalizedSearch = normalizeSearchQuery(searchQuery).toLowerCase();
     if (!normalizedSearch) return applications;
@@ -257,6 +360,7 @@ export default function AdminApplications() {
   };
 
   const filteredApps = getFilteredApplications();
+  const openActionApp = filteredApps.find((app) => app.applicationId === openActionMenu) || null;
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -266,9 +370,9 @@ export default function AdminApplications() {
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
         <AppHeader role="admin" />
-        <div className="flex-1 flex overflow-hidden min-h-[560px]">
+        <div className="flex-1 flex overflow-visible min-h-[560px]">
           <Sidebar role="admin" />
-          <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
+          <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-y-visible">
             <div className="mb-4">
               <div className="text-[20px] font-medium text-[#1a2236]">Applications Queue</div>
               <div className="text-[12px] text-[#6a7a9a]">All applications awaiting review and approval</div>
@@ -298,7 +402,7 @@ export default function AdminApplications() {
             <div className="flex flex-wrap items-center gap-2 mb-4">
               {/* Certificate Type Dropdown */}
               <div className="relative">
-                <button 
+                <button
                   className="flex items-center gap-2 px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] bg-white min-w-[180px]"
                   onClick={() => setCertTypeDropdownOpen(!certTypeDropdownOpen)}
                 >
@@ -311,14 +415,14 @@ export default function AdminApplications() {
                 </button>
                 {certTypeDropdownOpen && (
                   <div className="absolute top-full left-0 mt-1 bg-white border border-[#d1d5db] rounded-[4px] shadow-lg z-10 min-w-[180px]">
-                    <div 
+                    <div
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterCertType(''); setCurrentPage(0); setCertTypeDropdownOpen(false); }}
                     >
                       All Certificate Types
                     </div>
                     {certificateTypes.map((cert) => (
-                      <div 
+                      <div
                         key={cert.id}
                         className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                         onClick={() => {
@@ -338,7 +442,7 @@ export default function AdminApplications() {
 
               {/* Status Dropdown */}
               <div className="relative">
-                <button 
+                <button
                   className="flex items-center gap-2 px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] bg-white min-w-[140px]"
                   onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
                 >
@@ -349,37 +453,37 @@ export default function AdminApplications() {
                 </button>
                 {statusDropdownOpen && (
                   <div className="absolute top-full left-0 mt-1 bg-white border border-[#d1d5db] rounded-[4px] shadow-lg z-10 min-w-[140px]">
-                    <div 
+                    <div
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterStatus(''); setStatusDropdownOpen(false); }}
                     >
                       All Statuses
                     </div>
-                    <div 
+                    <div
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterStatus('SUBMITTED'); setStatusDropdownOpen(false); }}
                     >
                       Submitted
                     </div>
-                    <div 
+                    <div
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterStatus('PAID'); setStatusDropdownOpen(false); }}
                     >
                       Paid
                     </div>
-                    <div 
+                    <div
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterStatus('UNDER_REVIEW'); setStatusDropdownOpen(false); }}
                     >
                       Under Review
                     </div>
-                    <div 
+                    <div
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterStatus('APPROVED'); setStatusDropdownOpen(false); }}
                     >
                       Approved
                     </div>
-                    <div 
+                    <div
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterStatus('REJECTED'); setStatusDropdownOpen(false); }}
                     >
@@ -391,7 +495,7 @@ export default function AdminApplications() {
 
               {/* Date Range Dropdown */}
               <div className="relative">
-                <button 
+                <button
                   className="flex items-center gap-2 px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] bg-white min-w-[140px]"
                   onClick={() => setDateDropdownOpen(!dateDropdownOpen)}
                 >
@@ -405,7 +509,7 @@ export default function AdminApplications() {
                     <div className="flex flex-col gap-2">
                       <div>
                         <label className="text-[11px] font-medium text-[#374151] mb-1 block">From Date</label>
-                        <input 
+                        <input
                           type="datetime-local"
                           className="w-full px-2 py-1.5 border border-[#d1d5db] rounded-[4px] text-[11px]"
                           value={tempFromDate}
@@ -414,14 +518,14 @@ export default function AdminApplications() {
                       </div>
                       <div>
                         <label className="text-[11px] font-medium text-[#374151] mb-1 block">To Date</label>
-                        <input 
+                        <input
                           type="datetime-local"
                           className="w-full px-2 py-1.5 border border-[#d1d5db] rounded-[4px] text-[11px]"
                           value={tempToDate}
                           onChange={(e) => setTempToDate(e.target.value)}
                         />
                       </div>
-                      <button 
+                      <button
                         className="mt-2 px-3 py-1.5 bg-[#1a4a8a] text-white rounded-[4px] text-[11px] font-medium hover:bg-[#153c70]"
                         onClick={() => {
                           setFilterFromDate(tempFromDate);
@@ -437,16 +541,16 @@ export default function AdminApplications() {
               </div>
 
               {/* Company ID Input */}
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Company ID..."
                 className="px-3 py-2 border border-[#d1d5db] rounded-[4px] placeholder:text-[13px] text-[13px] w-[150px]"
                 value={filterCompanyId}
                 onChange={(e) => setFilterCompanyId(e.target.value)}
               />
 
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Search by company name..."
                 className="px-3 py-2 border border-[#d1d5db] rounded-[4px] placeholder:text-[13px] text-[13px] flex-1"
                 value={searchQuery}
@@ -460,7 +564,13 @@ export default function AdminApplications() {
               </button>
             </div>
 
-            <div className="overflow-x-auto pt-4 overflow-y-auto rounded border border-[#dde3ee]">
+            {actionError && (
+              <div className="mb-3 rounded-[6px] border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-[12px] text-[#991b1b]">
+                {actionError}
+              </div>
+            )}
+
+            <div ref={tableScrollRef} className="relative overflow-auto pt-4 rounded border border-[#dde3ee]">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <ClipLoader size={40} color="#1a4a8a" />
@@ -497,7 +607,22 @@ export default function AdminApplications() {
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getStatusBadge(app.status)}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.assignedTo || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
-                          <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(`/admin/my-applications/${app.applicationId}`)}>View</button>
+                          {!app.assignedTo || app.assignedTo.trim() === '' ? (
+                            <button
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
+                              onClick={(e) => handleToggleActionMenu(app, e)}
+                            >
+                              Actions
+                              <ChevronDown size={12} />
+                            </button>
+                          ) : (
+                            <button
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+                              onClick={() => router.push(`/admin/my-applications/${app.applicationId}`)}
+                            >
+                              Review
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -511,8 +636,8 @@ export default function AdminApplications() {
                   Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, applications.length)} of {applications.length} results
                 </div>
                 <div className="flex items-center gap-1">
-                  <button 
-                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" 
+                  <button
+                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 0}
                   >
@@ -529,7 +654,7 @@ export default function AdminApplications() {
                     } else {
                       pageNum = currentPage - 2 + i;
                     }
-                    
+
                     return (
                       <button
                         key={pageNum}
@@ -544,8 +669,8 @@ export default function AdminApplications() {
                       </button>
                     );
                   })}
-                  <button 
-                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1" 
+                  <button
+                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage >= totalPages - 1}
                   >
@@ -557,6 +682,31 @@ export default function AdminApplications() {
           </div>
         </div>
       </div>
+
+      {/* Action menu is rendered via portal so it's never clipped by the
+          table's overflow-auto container. */}
+      {isMounted && openActionMenu && actionMenuPosition && openActionApp &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[9998]" onClick={closeActionMenu} />
+            <div
+              className="fixed bg-white border border-[#d1d5db] rounded-[6px] shadow-lg z-[9999]"
+              style={{
+                top: actionMenuPosition.top,
+                left: actionMenuPosition.left,
+                width: ACTION_MENU_WIDTH,
+              }}
+            >
+              <button
+                className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9]"
+                onClick={() => handleAssignApplication(openActionApp)}
+              >
+                Assign & Review
+              </button>
+            </div>
+          </>,
+          document.body
+        )}
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
     </div>

@@ -570,14 +570,14 @@ export default function VettingReviewPage() {
                     <CheckCircle className="w-4 h-4" />
                     Approve Application
                   </button>
-                  <button
+                  {/* <button
                     onClick={() => handleDecision('REQUEST_INFO')}
                     disabled={submitting || selfAssigning}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <ClipboardList className="w-4 h-4" />
                     Request More Information
-                  </button>
+                  </button> */}
                   <button
                     onClick={() => handleDecision('REJECT')}
                     disabled={submitting || selfAssigning}
