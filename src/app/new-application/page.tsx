@@ -135,6 +135,8 @@ export default function NewApplication() {
   const [selectedCert, setSelectedCert] = React.useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [isLoadingReview, setIsLoadingReview] = useState(false);
@@ -1351,6 +1353,108 @@ export default function NewApplication() {
     }
   };
 
+  const openPaystackModal = async (paymentData: Record<string, unknown>) => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const paystackWindow = window as typeof window & {
+      PaystackPop?: {
+        setup: (options: {
+          key: string;
+          email: string;
+          amount: number;
+          currency: string;
+          ref: string;
+          metadata?: {
+            custom_fields?: Array<{ display_name: string; variable_name: string; value: string }>;
+          };
+          callback?: (response: { reference?: string }) => void;
+          onClose?: () => void;
+        }) => { openIframe: () => void };
+      };
+    };
+
+    const paystackKey = String(
+      paymentData.publicKey ||
+      paymentData.paystackPublicKey ||
+      paymentData.key ||
+      process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ||
+      ''
+    );
+
+    const email = String(paymentData.email || '');
+    const amountValue = Number(paymentData.amount ?? paymentData.totalAmount ?? paymentData.amountInKobo ?? 0);
+    const reference = String(
+      paymentData.reference ||
+      paymentData.transactionReference ||
+      paymentData.ref ||
+      `NACC-${Date.now()}`
+    );
+    const currency = String(paymentData.currency || 'NGN');
+    const checkoutUrl = String(
+      paymentData.checkoutUrl ||
+      paymentData.authorizationUrl ||
+      paymentData.paymentUrl ||
+      ''
+    );
+
+    if (paystackKey) {
+      const paystackScriptUrl = 'https://js.paystack.co/v1/inline.js';
+
+      if (!paystackWindow.PaystackPop) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = paystackScriptUrl;
+          script.async = true;
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Failed to load Paystack popup script'));
+          document.body.appendChild(script);
+        });
+      }
+
+      if (paystackWindow.PaystackPop) {
+        const rawAmount = Number(paymentData.amountInKobo ?? paymentData.koboAmount ?? amountValue);
+        const normalizedAmount = rawAmount > 0 ? rawAmount : Math.round(amountValue * 100);
+
+        paystackWindow.PaystackPop.setup({
+          key: paystackKey,
+          email,
+          amount: normalizedAmount,
+          currency,
+          ref: reference,
+          metadata: {
+            custom_fields: [
+              {
+                display_name: 'Application ID',
+                variable_name: 'application_id',
+                value: String(applicationId || ''),
+              },
+            ],
+          },
+          callback: (response: { reference?: string }) => {
+            const resolvedRef = response?.reference || reference;
+            setShowSuccessModal(true);
+            setSuccessMessage(`Payment successful. Reference: ${resolvedRef}`);
+          },
+          onClose: () => {
+            setValidationError('Payment popup closed before completion. You can retry the payment from your application.');
+          },
+        }).openIframe();
+
+        return true;
+      }
+    }
+
+    if (checkoutUrl) {
+      setPaymentCheckoutUrl(checkoutUrl);
+      setShowPaymentModal(true);
+      return true;
+    }
+
+    return false;
+  };
+
   const submitApplication = async () => {
     if (!applicationId) {
       setValidationError('Application ID not found');
@@ -1376,11 +1480,9 @@ export default function NewApplication() {
       const result = await response.json();
 
       if (response.ok && result.data) {
-        // Redirect to Paystack checkout URL in current tab
-        if (result.data.checkoutUrl) {
-          window.location.href = result.data.checkoutUrl;
-        } else {
-          setValidationError('Payment checkout URL not received');
+        const opened = await openPaystackModal(result.data);
+        if (!opened) {
+          setValidationError('Payment checkout was not available. Please try again.');
           return false;
         }
         return true;
@@ -2243,6 +2345,33 @@ export default function NewApplication() {
           </div>
         </div>
       </div>
+      {showPaymentModal && paymentCheckoutUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/70 p-4">
+          <div className="relative w-full max-w-[1100px] h-[90vh] rounded-[14px] overflow-hidden border border-[#dbe2ee] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
+            <div className="flex items-center justify-between border-b border-[#edf0f5] px-[16px] py-[12px] bg-[#f8fafd]">
+              <div>
+                <div className="text-[14px] font-bold text-[#1a2236]">Paystack Checkout</div>
+                <div className="text-[11px] text-[#6a7a9a]">Secure payment in progress</div>
+              </div>
+              <button
+                className="px-[10px] py-[6px] rounded-[6px] border border-[#d1d5db] bg-white text-[11px] font-semibold text-[#374151] hover:bg-[#f1f4f9]"
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setPaymentCheckoutUrl('');
+                }}
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              src={paymentCheckoutUrl}
+              title="Paystack Payment"
+              className="w-full h-full border-0"
+              allow="payment"
+            />
+          </div>
+        </div>
+      )}
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
       <SuccessModal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)} message={successMessage} />
     </div>

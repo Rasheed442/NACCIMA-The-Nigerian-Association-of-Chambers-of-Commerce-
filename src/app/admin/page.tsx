@@ -380,7 +380,7 @@ export default function AdminPage() {
                           <Cell key={`cell-${index}`} fill={statusColors[entry.name] || certificateColors[index % certificateColors.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => `${value.toLocaleString()} cases`} />
+                      <Tooltip formatter={(value: number) => `${value.toLocaleString()}`} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>

@@ -26,7 +26,7 @@ export default function RegisterPage() {
 
   const handleRegisterComplete = () => {
     // Registration complete - redirect to login
-    window.location.href = 'http://localhost:3000/login';
+    window.location.href = '/login';
   };
 
   const handleRegisterBackToStep1 = () => {

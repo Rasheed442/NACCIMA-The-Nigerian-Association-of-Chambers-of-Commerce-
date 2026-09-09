@@ -21,7 +21,7 @@ export default function VerificationInvalidPage() {
           </p>
           <div className="flex flex-col gap-3">
             <Link 
-              href="http://localhost:3000/login" 
+              href="/login" 
               className="inline-flex items-center justify-center px-6 py-3 rounded-lg text-sm font-semibold bg-[#1a4a8a] text-white hover:bg-[#153c70] transition-colors"
             >
               Go to Login

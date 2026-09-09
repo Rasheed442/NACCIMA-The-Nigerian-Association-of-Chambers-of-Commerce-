@@ -25,6 +25,7 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -127,25 +128,35 @@ export default function LoginScreen({ onLoginAsRole, onNavigateToRegister, onNav
           )}
           <div className="flex flex-col gap-1 mb-3">
             <label className="text-[13px] font-semibold text-[#374151]">
-              Username <span className="text-[#e53e3e]">*</span>
+              Username (TIN) <span className="text-[#e53e3e]">*</span>
             </label>
             <input 
               className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
               type="text" 
-              placeholder="Enter your username"
+              placeholder="Enter your username (TIN)"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-1 mb-[6px]">
             <label className="text-[13px] font-semibold text-[#374151]">Password <span className="text-[#e53e3e]">*</span></label>
-            <input 
-              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]" 
-              type="password" 
-              placeholder="••••••••" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative">
+              <input 
+                className="w-full px-[10px] py-[7px] pr-[38px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]" 
+                type={showPassword ? 'text' : 'password'} 
+                placeholder="••••••••" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="absolute right-[10px] top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#3a7bd5] cursor-pointer bg-transparent border-none"
+                onClick={() => setShowPassword(prev => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
           <div className="text-right text-[14px] font-medium text-[#3a7bd5] mb-4 cursor-pointer" onClick={onNavigateToForgotPassword}>Forgot password?</div>
           

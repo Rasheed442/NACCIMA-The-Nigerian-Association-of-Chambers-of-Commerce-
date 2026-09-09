@@ -111,6 +111,52 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
     }
   };
 
+  const normalizeCount = (payload: unknown): number => {
+    if (Array.isArray(payload)) {
+      return payload.length;
+    }
+
+    if (!payload || typeof payload !== 'object') {
+      return 0;
+    }
+
+    const record = payload as Record<string, unknown>;
+
+    if (typeof record.totalElements === 'number') {
+      return record.totalElements;
+    }
+
+    if (typeof record.total === 'number') {
+      return record.total;
+    }
+
+    if (typeof record.count === 'number') {
+      return record.count;
+    }
+
+    if (Array.isArray(record.items)) {
+      return record.items.length;
+    }
+
+    if (Array.isArray(record.content)) {
+      return record.content.length;
+    }
+
+    if (Array.isArray(record.certificates)) {
+      return record.certificates.length;
+    }
+
+    if (Array.isArray(record.applications)) {
+      return record.applications.length;
+    }
+
+    if (record.data && record.data !== payload) {
+      return normalizeCount(record.data);
+    }
+
+    return 0;
+  };
+
   const fetchIssuedCertificates = async () => {
     try {
       const accessToken = localStorage.getItem('accessToken');
@@ -131,10 +177,49 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
         },
       });
 
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
 
-      if (response.ok && result.data) {
-        setIssuedCertificatesCount(result.data.totalElements || 0);
+      if (response.ok) {
+        const nextCount = normalizeCount(result.data ?? result);
+        if (nextCount > 0 || Object.keys(result).length > 0) {
+          setIssuedCertificatesCount(nextCount);
+          return;
+        }
+      }
+
+      const appsResponse = await fetch(`${baseUrl}/api/v1/certificates/applications`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const appsResult = await appsResponse.json().catch(() => ({}));
+
+      if (appsResponse.ok) {
+        const apps = Array.isArray(appsResult.data)
+          ? appsResult.data
+          : Array.isArray(appsResult)
+            ? appsResult
+            : appsResult && typeof appsResult === 'object' && Array.isArray((appsResult as Record<string, unknown>).items)
+              ? (appsResult as Record<string, unknown>).items as unknown[]
+              : [];
+
+        const issuedApps = apps.filter((app: Record<string, unknown>) => {
+          const record = app as Record<string, unknown>;
+          return Boolean(
+            record.certificateNumber ||
+            record.verificationCode ||
+            record.issuedAt ||
+            record.certificateId ||
+            record.hasCertificate ||
+            record.status === 'VALID' ||
+            record.status === 'ISSUED'
+          );
+        });
+
+        setIssuedCertificatesCount(issuedApps.length || apps.length || 0);
       }
     } catch (err) {
       console.error('Failed to fetch issued certificates:', err);
@@ -268,7 +353,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
       <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/issued-certs' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/issued-certs')}>
-        <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs 
+        <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{issuedCertificatesCount}</span>}
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium text-[#8a9aba] uppercase tracking-[0.8px] pt-3">Account</div>
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push(companyProfilePath)}>

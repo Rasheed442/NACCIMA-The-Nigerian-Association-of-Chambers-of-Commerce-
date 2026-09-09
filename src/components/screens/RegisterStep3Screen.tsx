@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { getTinVerificationToken, clearTinVerification, getTinVerification } from '../../utils/tinVerification';
 
 interface RegisterStep3ScreenProps {
@@ -27,21 +27,26 @@ function getBaseApiUrl(): string {
 export default function RegisterStep3Screen({ onBack, onComplete }: RegisterStep3ScreenProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
-  const [contactPerson, setContactPerson] = useState<ContactPersonData | null>(null);
-
-  // Load contact person data from localStorage (stored in step 2)
-  useEffect(() => {
-    const stored = localStorage.getItem('naccima_contact_person');
-    if (stored) {
-      try {
-        setContactPerson(JSON.parse(stored));
-      } catch {
-        // Ignore parse errors
-      }
+  const [contactPerson, setContactPerson] = useState<ContactPersonData | null>(() => {
+    if (typeof window === 'undefined') {
+      return null;
     }
-  }, []);
+
+    const stored = window.localStorage.getItem('naccima_contact_person');
+    if (!stored) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(stored) as ContactPersonData;
+    } catch {
+      return null;
+    }
+  });
 
   const validateForm = (): boolean => {
     if (!password) {
@@ -124,7 +129,7 @@ export default function RegisterStep3Screen({ onBack, onComplete }: RegisterStep
       clearTinVerification();
       localStorage.removeItem('naccima_contact_person');
       // Redirect to login page
-      window.location.href = 'http://localhost:3000/login';
+      window.location.href = '/login';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
     } finally {
@@ -155,31 +160,51 @@ export default function RegisterStep3Screen({ onBack, onComplete }: RegisterStep
           
           <div className="flex flex-col gap-1 mb-3">
             <label className="text-[11px] font-semibold text-[#374151]">Password <span className="text-[#e53e3e]">*</span></label>
-            <input 
-              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
-              type="password" 
-              placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special" 
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (error) setError('');
-              }}
-            />
+            <div className="relative">
+              <input 
+                className="w-full px-[10px] py-[7px] pr-[38px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
+                type={showPassword ? 'text' : 'password'} 
+                placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special" 
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError('');
+                }}
+              />
+              <button
+                type="button"
+                className="absolute right-[10px] top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#3a7bd5] cursor-pointer bg-transparent border-none"
+                onClick={() => setShowPassword(prev => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
             <div className="text-[10px] text-[#6b7280] mt-[2px]">Minimum 8 characters, 1 uppercase, 1 number, 1 special character</div>
           </div>
 
           <div className="flex flex-col gap-1 mb-[18px]">
             <label className="text-[11px] font-semibold text-[#374151]">Confirm Password <span className="text-[#e53e3e]">*</span></label>
-            <input 
-              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
-              type="password" 
-              placeholder="Re-enter password" 
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                if (error) setError('');
-              }}
-            />
+            <div className="relative">
+              <input 
+                className="w-full px-[10px] py-[7px] pr-[38px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
+                type={showConfirmPassword ? 'text' : 'password'} 
+                placeholder="Re-enter password" 
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError('');
+                }}
+              />
+              <button
+                type="button"
+                className="absolute right-[10px] top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#3a7bd5] cursor-pointer bg-transparent border-none"
+                onClick={() => setShowConfirmPassword(prev => !prev)}
+                aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+              >
+                {showConfirmPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
             {confirmPassword && password !== confirmPassword && (
               <div className="text-[10px] text-[#e53e3e] mt-[2px]">Passwords do not match</div>
             )}
