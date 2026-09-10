@@ -103,6 +103,8 @@ export default function VettingReviewPage() {
   const [selfAssigning, setSelfAssigning] = useState(false);
   const [isSelfAssigned, setIsSelfAssigned] = useState(false);
   const [error, setError] = useState('');
+  const [decisionError, setDecisionError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -159,7 +161,7 @@ export default function VettingReviewPage() {
     if (isSelfAssigned) return true;
 
     setSelfAssigning(true);
-    setError('');
+    setDecisionError('');
 
     try {
       const baseUrl = getBaseUrl();
@@ -179,11 +181,11 @@ export default function VettingReviewPage() {
         return true;
       }
 
-      setError(data.message || 'Failed to self-assign this application.');
+      setDecisionError(data.message || 'Failed to self-assign this application.');
       return false;
     } catch (err) {
       console.error('Failed to self-assign application:', err);
-      setError('Failed to self-assign this application.');
+      setDecisionError('Failed to self-assign this application.');
       return false;
     } finally {
       setSelfAssigning(false);
@@ -191,18 +193,15 @@ export default function VettingReviewPage() {
   };
 
   const handleDecision = async (decision: 'APPROVE' | 'REJECT' | 'REQUEST_INFO') => {
-    if (!comment.trim()) {
-      setError('Comment is required for all actions');
-      return;
-    }
+    const approvalComment = 'All submitted documents have been reviewed and are satisfactory.';
 
-    const assigned = await handleSelfAssign();
-    if (!assigned) {
+    if (decision !== 'APPROVE' && !comment.trim()) {
+      setDecisionError('Comment is required for all actions. Please add a note before continuing.');
       return;
     }
 
     setSubmitting(true);
-    setError('');
+    setDecisionError('');
     try {
       const baseUrl = getBaseUrl();
       const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}/decision`, {
@@ -212,19 +211,20 @@ export default function VettingReviewPage() {
         },
         body: JSON.stringify({
           decision,
-          comment: comment.trim(),
+          comment: decision === 'APPROVE' ? approvalComment : comment.trim(),
         }),
       });
 
       const data = await response.json();
       if (response.ok && data.success !== false) {
-        router.push('/vetting-queue');
+        setSuccessMessage('Application decision submitted successfully.');
+        setComment('');
       } else {
-        setError(data.message || 'Failed to submit decision');
+        setDecisionError(data.message || 'Failed to submit decision');
       }
     } catch (err) {
       console.error('Failed to submit decision:', err);
-      setError('Failed to submit decision');
+      setDecisionError('Failed to submit decision');
     } finally {
       setSubmitting(false);
     }
@@ -298,7 +298,7 @@ export default function VettingReviewPage() {
               <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
               <p className="text-sm text-gray-600 mb-4">{error || 'Application not found'}</p>
               <button
-                onClick={() => router.push('/vetting-queue')}
+                onClick={() => router.push('/vetting-review')}
                 className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Back to Queue
@@ -541,7 +541,7 @@ export default function VettingReviewPage() {
                   <h2 className="text-sm font-semibold text-gray-900">Review Decision</h2>
                 </div>
 
-                <button
+                {/* <button
                   type="button"
                   onClick={handleSelfAssign}
                   disabled={selfAssigning || isSelfAssigned}
@@ -549,7 +549,7 @@ export default function VettingReviewPage() {
                 >
                   <ClipboardList className="w-4 h-4" />
                   {selfAssigning ? 'Assigning...' : isSelfAssigned ? 'Self-assigned for review' : 'Self assign application'}
-                </button>
+                </button> */}
 
                 <textarea
                   value={comment}
@@ -558,8 +558,17 @@ export default function VettingReviewPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows={4}
                 />
-                {error && (
-                  <p className="text-xs text-red-600 mt-2">{error}</p>
+                {successMessage && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{successMessage}</span>
+                  </div>
+                )}
+                {decisionError && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{decisionError}</span>
+                  </div>
                 )}
                 <div className="space-y-2 mt-4">
                   <button

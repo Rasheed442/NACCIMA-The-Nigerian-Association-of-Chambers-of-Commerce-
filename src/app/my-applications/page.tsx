@@ -26,7 +26,7 @@ interface Application {
   totalValueFob: number;
   valueCurrency: string;
   bulkQtyMt: number;
-  status: 'DRAFT' | 'SUBMITTED' | 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ISSUED' | 'UNAPPROVED';
+  status: 'DRAFT' | 'SUBMITTED' | 'PAID' | 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ISSUED' | 'CERTIFICATE_ISSUED' | 'UNAPPROVED';
   createdAt?: string;
   updatedAt?: string;
   submittedAt?: string;
@@ -69,6 +69,8 @@ function MyApplicationsContent() {
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+  const [selfAssigningId, setSelfAssigningId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -190,21 +192,25 @@ function MyApplicationsContent() {
     const badges: Record<Application['status'], string> = {
       DRAFT: 'bg-[#f3f4f6] text-[#6b7280]',
       SUBMITTED: 'bg-[#dbeafe] text-[#1e40af]',
+      PAID: 'bg-[#e0e7ff] text-[#3730a3]',
       PENDING_PAYMENT: 'bg-[#dbeafe] text-[#1e40af]',
       UNDER_REVIEW: 'bg-[#fef3c7] text-[#92400e]',
       APPROVED: 'bg-[#d1fae5] text-[#065f46]',
       REJECTED: 'bg-[#fee2e2] text-[#9b1c1c]',
       ISSUED: 'bg-[#e0e7ff] text-[#3730a3]',
+      CERTIFICATE_ISSUED: 'bg-[#e0e7ff] text-[#3730a3]',
       UNAPPROVED: 'bg-[#fdf2f8] text-[#9d174d]',
     };
     const labels: Record<Application['status'], string> = {
       DRAFT: 'Draft',
       SUBMITTED: 'Submitted',
+      PAID: 'Paid',
       PENDING_PAYMENT: 'Pending Payment',
       UNDER_REVIEW: 'Under Review',
       APPROVED: 'Approved',
       REJECTED: 'Rejected',
       ISSUED: 'Issued',
+      CERTIFICATE_ISSUED: 'Issued',
       UNAPPROVED: 'Unapproved',
     };
     return (
@@ -214,9 +220,16 @@ function MyApplicationsContent() {
     );
   };
 
-  const handleResubmit = async (id: string) => {
+  const handleResubmit = (id: string) => {
     setResubmittingId(id);
-    
+    router.push(`/new-application?resubmit=${id}`);
+    window.setTimeout(() => setResubmittingId(null), 1200);
+  };
+
+  const handleSelfAssignAndReview = async (id: string) => {
+    setSelfAssigningId(id);
+    setError(null);
+
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
@@ -224,8 +237,45 @@ function MyApplicationsContent() {
         return;
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/resubmit`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${id}/self-assign`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          comment: 'Taking this application for review.',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || result?.success === false) {
+        setError(result?.message || 'Failed to assign application for review.');
+        return;
+      }
+
+      router.push(`/my-applications/${id}`);
+    } catch (err) {
+      console.error('Failed to self-assign and review application:', err);
+      setError('Failed to assign application for review.');
+    } finally {
+      setSelfAssigningId(null);
+    }
+  };
+
+  const handleDownloadCertificate = async (id: string) => {
+    setDownloadingId(id);
+    setError(null);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        setError('API URL not configured');
+        return;
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/certificate`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -233,22 +283,37 @@ function MyApplicationsContent() {
 
       const result = await response.json();
 
-      if (response.ok) {
-        router.push(`/new-application?resubmit=${id}`);
-      } else {
-        setError(result.message || 'Failed to resubmit application');
+      if (!response.ok) {
+        setError(result?.message || 'Failed to load certificate for download.');
+        return;
       }
+
+      const pdfUrl = result?.data?.pdfUrl || result?.pdfUrl;
+      if (pdfUrl) {
+        window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      setError('Certificate PDF is not available yet.');
     } catch (err) {
-      console.error('Failed to resubmit application:', err);
-      setError('Failed to resubmit application');
+      console.error('Failed to download certificate:', err);
+      setError('Failed to download certificate.');
     } finally {
-      setResubmittingId(null);
+      setDownloadingId(null);
     }
   };
 
   const getActionButton = (status: Application['status'], id: string) => {
-    if (status === 'ISSUED') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]">Download</button>;
+    if (status === 'ISSUED' || status === 'CERTIFICATE_ISSUED') {
+      return (
+        <button
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857] disabled:opacity-60 disabled:cursor-not-allowed"
+          onClick={() => handleDownloadCertificate(id)}
+          disabled={downloadingId === id}
+        >
+          {downloadingId === id ? 'Preparing...' : 'Download'}
+        </button>
+      );
     }
     if (status === 'PENDING_PAYMENT') {
       return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
@@ -261,6 +326,17 @@ function MyApplicationsContent() {
           disabled={resubmittingId === id}
         >
           {resubmittingId === id ? 'Resubmitting...' : 'Edit & Resubmit'}
+        </button>
+      );
+    }
+    if (status === 'PAID') {
+      return (
+        <button
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
+          onClick={() => handleSelfAssignAndReview(id)}
+          disabled={selfAssigningId === id}
+        >
+          {selfAssigningId === id ? 'Assigning...' : 'Self Assign & Review'}
         </button>
       );
     }
@@ -426,6 +502,12 @@ function MyApplicationsContent() {
                     </div>
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
+                      onClick={() => { setFilterStatus('PAID'); setStatusDropdownOpen(false); }}
+                    >
+                      Paid
+                    </div>
+                    <div 
+                      className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { setFilterStatus('UNDER_REVIEW'); setStatusDropdownOpen(false); }}
                     >
                       Under Review
@@ -573,7 +655,34 @@ function MyApplicationsContent() {
 
 export default function MyApplications() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-[#6a7a9a]">Loading applications...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-[#f8fafc] px-4">
+          <div className="w-full max-w-[420px] rounded-[18px] border border-[#e2e8f0] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative h-16 w-16">
+                <div className="absolute inset-0 rounded-full border-4 border-[#dbeafe]" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#1a4a8a] animate-spin" />
+                <div className="absolute inset-3 rounded-full border-2 border-[#e2e8f0]" />
+              </div>
+
+              <div className="mt-5 text-center">
+                <div className="text-[12px] font-bold tracking-[0.22em] text-[#64748b] uppercase">Loading</div>
+                <div className="mt-2 text-[18px] font-semibold text-[#1a2236]">Applications Queue</div>
+              </div>
+
+              <div className="mt-5 w-full space-y-3">
+                <div className="h-3 w-full animate-pulse rounded-full bg-[#edf3fb]" />
+                <div className="h-3 w-5/6 animate-pulse rounded-full bg-[#edf3fb]" />
+                <div className="h-10 w-full animate-pulse rounded-[8px] bg-[#edf3fb]" />
+                <div className="h-10 w-full animate-pulse rounded-[8px] bg-[#edf3fb]" />
+                <div className="h-10 w-4/5 animate-pulse rounded-[8px] bg-[#edf3fb]" />
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    >
       <MyApplicationsContent />
     </Suspense>
   );

@@ -150,6 +150,7 @@ export default function ExporterDashboard() {
     const badges: Record<string, { bg: string; text: string }> = {
       DRAFT: { bg: 'bg-[#f3f4f6]', text: 'text-[#6b7280]' },
       SUBMITTED: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
+      PAID: { bg: 'bg-[#e0e7ff]', text: 'text-[#3730a3]' },
       PENDING_PAYMENT: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
       UNDER_REVIEW: { bg: 'bg-[#fef3c7]', text: 'text-[#92400e]' },
       APPROVED: { bg: 'bg-[#d1fae5]', text: 'text-[#065f46]' },
@@ -161,6 +162,7 @@ export default function ExporterDashboard() {
     const labels: Record<string, string> = {
       DRAFT: 'Draft',
       SUBMITTED: 'Submitted',
+      PAID: 'Paid',
       PENDING_PAYMENT: 'Pending Payment',
       UNDER_REVIEW: 'Under Review',
       APPROVED: 'Approved',
@@ -197,6 +199,9 @@ export default function ExporterDashboard() {
     }
     if (status === 'UNAPPROVED') {
       return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Edit & Resubmit</button>;
+    }
+    if (status === 'PAID') {
+      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => router.push(`/my-applications/${id}`)}>Self Assign & Review</button>;
     }
     return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
   };

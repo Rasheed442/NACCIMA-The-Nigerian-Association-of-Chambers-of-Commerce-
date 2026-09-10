@@ -17,7 +17,7 @@ interface Application {
   tin: string;
   certificateTypeId: string;
   certificateType: string;
-  status: 'DRAFT' | 'SUBMITTED' | 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CERTIFICATE_ISSUED' | 'UNAPPROVED';
+  status: 'DRAFT' | 'SUBMITTED' | 'PAID' | 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CERTIFICATE_ISSUED' | 'UNAPPROVED';
   submittedAt?: string;
   paidAt?: string;
   totalValueFob: number;
@@ -54,7 +54,9 @@ export default function AdminApplications() {
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<any[]>([]);
   const [transportModes, setTransportModes] = useState<any[]>([]);
+  const [vettingOfficers, setVettingOfficers] = useState<any[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
   // Action menu is rendered through a portal (see below), so instead of a
   // simple open/closed flag we also need the applicationId it belongs to and
@@ -80,6 +82,7 @@ export default function AdminApplications() {
     fetchApplications();
     fetchCertificateTypes();
     fetchTransportModes();
+    fetchVettingOfficers();
   }, [currentPage, filterStatus, filterCertType, filterCompanyId, filterFromDate, filterToDate]);
 
   // Close the action menu if the table is scrolled (its button has moved out
@@ -160,6 +163,35 @@ export default function AdminApplications() {
     }
   };
 
+  const fetchVettingOfficers = async () => {
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        return;
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/staff`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (response.ok && Array.isArray(result.data)) {
+        const staff = result.data.filter((member: any) => {
+          const roleName = `${member.roleName || ''} ${member.roleCode || ''}`.toLowerCase();
+          return roleName.includes('vetting') || roleName.includes('review');
+        });
+
+        setVettingOfficers(staff);
+      }
+    } catch (err) {
+      console.error('Failed to fetch vetting officers:', err);
+    }
+  };
+
   const fetchApplications = async () => {
     setIsLoading(true);
     setError(null);
@@ -212,18 +244,16 @@ export default function AdminApplications() {
     router.push('/');
   };
 
-  const getReviewerId = () => {
-    if (typeof window === 'undefined') {
-      return '54ce7a0f-714c-4b9c-b71d-5bf2f8cb82b2';
+  const handleAssignApplication = async (app: Application, reviewerId: string) => {
+    if (app.status !== 'PAID') {
+      setActionError('Only paid applications can be assigned for vetting.');
+      return;
     }
 
-    return localStorage.getItem('userId') || '54ce7a0f-714c-4b9c-b71d-5bf2f8cb82b2';
-  };
-
-  const handleAssignApplication = async (app: Application) => {
     setOpenActionMenu(null);
     setActionMenuPosition(null);
     setActionError(null);
+    setPendingActionId(app.applicationId);
 
     try {
       const baseUrl = getBaseUrl();
@@ -237,7 +267,7 @@ export default function AdminApplications() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          reviewerId: getReviewerId(),
+          reviewerId,
         }),
       });
 
@@ -256,6 +286,57 @@ export default function AdminApplications() {
       const message = err instanceof Error ? err.message : 'Assign application failed.';
       setActionError(message);
       console.error('Assign application failed:', err);
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleApplicationDecision = async (app: Application, decision: 'APPROVE' | 'REJECT') => {
+    if (app.status !== 'UNDER_REVIEW') {
+      setActionError('Only applications under review can be approved or rejected.');
+      return;
+    }
+
+    setOpenActionMenu(null);
+    setActionMenuPosition(null);
+    setActionError(null);
+    setPendingActionId(app.applicationId);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured');
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${app.applicationId}/decision`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          decision,
+          comment:
+            decision === 'APPROVE'
+              ? 'Application approved by admin after review.'
+              : 'Application rejected by admin after review.',
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || payload?.success === false) {
+        const message = payload?.message || `Failed to ${decision.toLowerCase()} application.`;
+        setActionError(message);
+        return;
+      }
+
+      await fetchApplications();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to ${decision.toLowerCase()} application.`;
+      setActionError(message);
+      console.error(`Decision failed (${decision}):`, err);
+    } finally {
+      setPendingActionId(null);
     }
   };
 
@@ -291,6 +372,7 @@ export default function AdminApplications() {
     const badges: Record<Application['status'], string> = {
       DRAFT: 'bg-[#f3f4f6] text-[#6b7280]',
       SUBMITTED: 'bg-[#dbeafe] text-[#1e40af]',
+      PAID: 'bg-[#e0e7ff] text-[#3730a3]',
       PENDING_PAYMENT: 'bg-[#dbeafe] text-[#1e40af]',
       UNDER_REVIEW: 'bg-[#fef3c7] text-[#92400e]',
       APPROVED: 'bg-[#d1fae5] text-[#065f46]',
@@ -301,6 +383,7 @@ export default function AdminApplications() {
     const labels: Record<Application['status'], string> = {
       DRAFT: 'Draft',
       SUBMITTED: 'Submitted',
+      PAID: 'Paid',
       PENDING_PAYMENT: 'Pending Payment',
       UNDER_REVIEW: 'Under Review',
       APPROVED: 'Approved',
@@ -570,6 +653,13 @@ export default function AdminApplications() {
               </div>
             )}
 
+            {pendingActionId && (
+              <div className="mb-3 flex items-center gap-2 rounded-[6px] border border-[#bfdbfe] bg-[#eff6ff] px-3 py-2 text-[12px] text-[#1d4ed8]">
+                <ClipLoader size={14} color="#1d4ed8" />
+                <span>Processing request...</span>
+              </div>
+            )}
+
             <div ref={tableScrollRef} className="relative overflow-auto pt-4 rounded border border-[#dde3ee]">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
@@ -607,12 +697,20 @@ export default function AdminApplications() {
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getStatusBadge(app.status)}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.assignedTo || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
-                          {!app.assignedTo || app.assignedTo.trim() === '' ? (
+                          {app.status === 'PAID' && (!app.assignedTo || app.assignedTo.trim() === '') ? (
                             <button
                               className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
                               onClick={(e) => handleToggleActionMenu(app, e)}
                             >
-                              Actions
+                              Assign
+                              <ChevronDown size={12} />
+                            </button>
+                          ) : app.status === 'UNDER_REVIEW' ? (
+                            <button
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
+                              onClick={(e) => handleToggleActionMenu(app, e)}
+                            >
+                              Action
                               <ChevronDown size={12} />
                             </button>
                           ) : (
@@ -690,19 +788,58 @@ export default function AdminApplications() {
           <>
             <div className="fixed inset-0 z-[9998]" onClick={closeActionMenu} />
             <div
-              className="fixed bg-white border border-[#d1d5db] rounded-[6px] shadow-lg z-[9999]"
+              className="fixed bg-white border border-[#d1d5db] rounded-[6px] shadow-lg z-[9999] overflow-hidden"
               style={{
                 top: actionMenuPosition.top,
                 left: actionMenuPosition.left,
                 width: ACTION_MENU_WIDTH,
               }}
             >
-              <button
-                className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9]"
-                onClick={() => handleAssignApplication(openActionApp)}
-              >
-                Assign & Review
-              </button>
+              {openActionApp.status === 'PAID' && (!openActionApp.assignedTo || openActionApp.assignedTo.trim() === '') ? (
+                vettingOfficers.length > 0 ? (
+                  vettingOfficers.map((officer) => (
+                    <button
+                      key={officer.userId || officer.id}
+                      className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9] border-b border-[#edf0f5] last:border-b-0 disabled:opacity-60 disabled:cursor-not-allowed"
+                      onClick={() => handleAssignApplication(openActionApp, officer.userId || officer.id)}
+                      disabled={pendingActionId === openActionApp.applicationId}
+                    >
+                      {pendingActionId === openActionApp.applicationId ? 'Assigning...' : `${officer.firstName || ''} ${officer.lastName || ''}`.trim() || 'Assign reviewer'}
+                    </button>
+                  ))
+                ) : (
+                  <button
+                    className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9]"
+                    onClick={() => handleAssignApplication(openActionApp, openActionApp.companyId || openActionApp.applicationId)}
+                  >
+                    Assign
+                  </button>
+                )
+              ) : openActionApp.status === 'UNDER_REVIEW' ? (
+                <>
+                  <button
+                    className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9] border-b border-[#edf0f5] disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={() => handleApplicationDecision(openActionApp, 'APPROVE')}
+                    disabled={pendingActionId === openActionApp.applicationId}
+                  >
+                    {pendingActionId === openActionApp.applicationId ? 'Approving...' : 'Approve'}
+                  </button>
+                  <button
+                    className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9] disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={() => handleApplicationDecision(openActionApp, 'REJECT')}
+                    disabled={pendingActionId === openActionApp.applicationId}
+                  >
+                    {pendingActionId === openActionApp.applicationId ? 'Rejecting...' : 'Reject'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9]"
+                  onClick={() => router.push(`/admin/my-applications/${openActionApp.applicationId}`)}
+                >
+                  Review
+                </button>
+              )}
             </div>
           </>,
           document.body

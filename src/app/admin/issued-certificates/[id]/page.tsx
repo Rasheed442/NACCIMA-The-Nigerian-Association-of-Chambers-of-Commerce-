@@ -34,9 +34,14 @@ export default function AdminCertificateDetail() {
   const certificateId = params.id as string;
   
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showVoidModal, setShowVoidModal] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [voidError, setVoidError] = useState<string | null>(null);
+  const [voidSuccess, setVoidSuccess] = useState<string | null>(null);
+  const [voiding, setVoiding] = useState(false);
+  const [voidReason, setVoidReason] = useState('');
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -102,6 +107,56 @@ export default function AdminCertificateDetail() {
 
   const handleViewApplication = (applicationId: string) => {
     router.push(`/admin/my-applications/${applicationId}`);
+  };
+
+  const handleVoidCertificate = async () => {
+    if (!certificate) return;
+
+    const trimmedReason = voidReason.trim();
+    if (!trimmedReason) {
+      setVoidError('Please enter a reason before voiding this certificate.');
+      return;
+    }
+
+    setVoiding(true);
+    setVoidError(null);
+    setVoidSuccess(null);
+
+    try {
+      const baseUrl = getBaseUrl();
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/${certificate.id}/void`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: trimmedReason,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success !== false) {
+        setCertificate((current) =>
+          current
+            ? {
+                ...current,
+                voided: true,
+                status: 'VOIDED',
+              }
+            : current
+        );
+        setVoidSuccess('Certificate voided successfully.');
+        setShowVoidModal(false);
+      } else {
+        setVoidError(result.message || 'Failed to void certificate');
+      }
+    } catch (err) {
+      console.error('Failed to void certificate:', err);
+      setVoidError('Failed to void certificate');
+    } finally {
+      setVoiding(false);
+    }
   };
 
   const getStatusBadge = (status: Certificate['status'], voided: boolean) => {
@@ -190,6 +245,13 @@ export default function AdminCertificateDetail() {
                 >
                   View Application
                 </button>
+                <button
+                  className="px-5 py-2.5 bg-[#dc2626] text-white rounded-[6px] text-[13px] font-medium hover:bg-[#b91c1c] transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => setShowVoidModal(true)}
+                  disabled={certificate.voided || certificate.status === 'VOIDED'}
+                >
+                  {certificate.voided || certificate.status === 'VOIDED' ? 'Voided' : 'Void Certificate'}
+                </button>
               </div>
             </div>
 
@@ -211,9 +273,19 @@ export default function AdminCertificateDetail() {
               {/* Certificate Body */}
               <div className="p-8">
                 {/* Status Badge */}
-                <div className="mb-8">
+                <div className="mb-4">
                   {getStatusBadge(certificate.status, certificate.voided)}
                 </div>
+                {voidSuccess && (
+                  <div className="mb-6 rounded-[8px] border border-[#bbf7d0] bg-[#ecfdf5] px-4 py-3 text-[13px] text-[#166534]">
+                    {voidSuccess}
+                  </div>
+                )}
+                {voidError && (
+                  <div className="mb-6 rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-[13px] text-[#991b1b]">
+                    {voidError}
+                  </div>
+                )}
 
                 {/* Key Details Grid */}
                 <div className="grid grid-cols-3 gap-6 mb-8">
@@ -295,6 +367,57 @@ export default function AdminCertificateDetail() {
           </div>
         </div>
       </div>
+
+      {showVoidModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+          <div className="w-full max-w-md rounded-[12px] border border-[#e2e8f0] bg-white p-6 shadow-xl">
+            <div className="mb-4">
+              <div className="text-[20px] font-semibold text-[#0f172a]">Void Certificate</div>
+              <p className="mt-2 text-[13px] leading-6 text-[#64748b]">
+                This action cannot be undone. The certificate will be marked as void.
+              </p>
+            </div>
+
+            <label className="block text-[12px] font-semibold uppercase tracking-wider text-[#475569] mb-2">
+              Reason for voiding
+            </label>
+            <textarea
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              placeholder="Enter a reason for voiding this certificate..."
+              rows={4}
+              className="w-full rounded-[8px] border border-[#cbd5e1] bg-white px-3 py-2.5 text-[13px] text-[#0f172a] placeholder:text-[#94a3b8] focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#99f6e4] resize-none"
+            />
+
+            {voidError && (
+              <div className="mt-4 rounded-[8px] border border-[#fecaca] bg-[#fef2f2] px-3 py-3 text-[13px] text-[#991b1b]">
+                {voidError}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="px-4 py-2.5 bg-white text-[#334155] border border-[#cbd5e1] rounded-[6px] text-[13px] font-medium hover:bg-[#f1f5f9] transition-colors"
+                onClick={() => {
+                  setShowVoidModal(false);
+                  setVoidReason('');
+                  setVoidError(null);
+                }}
+                disabled={voiding}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2.5 bg-[#dc2626] text-white rounded-[6px] text-[13px] font-medium hover:bg-[#b91c1c] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={handleVoidCertificate}
+                disabled={voiding || !voidReason.trim()}
+              >
+                {voiding ? 'Voiding...' : 'Confirm Void'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
     </div>

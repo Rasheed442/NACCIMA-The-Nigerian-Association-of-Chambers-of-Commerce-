@@ -130,15 +130,15 @@ interface ReviewData {
 function NewApplicationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const paymentTabRef = useRef<Window | null>(null);
   const paymentIframeRef = useRef<HTMLIFrameElement | null>(null);
+  const paymentPollIntervalRef = useRef<number | null>(null);
   const [step, setStep] = React.useState(1);
   const [transportMode, setTransportMode] = React.useState<string | null>(null);
   const [isSavingTransportMode, setIsSavingTransportMode] = useState(false);
   const [selectedCert, setSelectedCert] = React.useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [isLoadingReview, setIsLoadingReview] = useState(false);
@@ -182,6 +182,9 @@ function NewApplicationContent() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [paymentData, setPaymentData] = useState<Record<string, unknown> | null>(null);
+  const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CARD' | 'BANK_TRANSFER' | 'USSD'>('CARD');
   const [isCreatingApplication, setIsCreatingApplication] = useState(false);
   const [isSavingApplication, setIsSavingApplication] = useState(false);
   const [isSavingGoods, setIsSavingGoods] = useState(false);
@@ -199,35 +202,167 @@ function NewApplicationContent() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
+  const redirectToExporterDashboard = () => {
+    setShowSuccessModal(false);
+
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        window.location.assign('/exporter-dashboard');
+      }, 50);
+    }
+  };
+
   useEffect(() => {
     const status = searchParams.get('status');
     const reference = searchParams.get('reference');
+    const resubmitApplicationId = searchParams.get('resubmit');
+
+    if (resubmitApplicationId) {
+      setApplicationId(resubmitApplicationId);
+      setStep(2);
+    }
 
     if (status === 'success' || reference) {
-      router.replace('/my-applications');
+      // If this page loaded inside the payment tab we opened (window.open),
+      // it has a live `window.opener`. In that case, signal the original
+      // tab via localStorage (the `storage` event fires there) and close
+      // this tab instead of navigating it — the user should end up back
+      // on the original tab, not stranded on a second one.
+      if (typeof window !== 'undefined' && window.opener) {
+        try {
+          window.localStorage.setItem(
+            'nacc-payment-complete',
+            JSON.stringify({ reference: reference || null, ts: Date.now() })
+          );
+        } catch (err) {
+          console.error('Failed to write payment-complete signal:', err);
+        }
+        window.close();
+        return;
+      }
+
+      redirectToExporterDashboard();
     }
-  }, [router, searchParams]);
+  }, [searchParams]);
 
   useEffect(() => {
-    if (!showPaymentModal || !paymentIframeRef.current) {
-      return;
-    }
+    const resubmitApplicationId = searchParams.get('resubmit');
+    if (!resubmitApplicationId) return;
 
-    const iframe = paymentIframeRef.current;
-    const handleIframeLoad = () => {
+    const loadResubmitApplication = async () => {
       try {
-        const iframeUrl = iframe.contentWindow?.location.href || '';
-        if (iframeUrl.includes('status=success') || /[?&](status=success|reference=)/.test(iframeUrl)) {
-          router.replace('/my-applications');
+        const baseUrl = getBaseUrl();
+        if (!baseUrl) return;
+
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${resubmitApplicationId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result?.data) return;
+
+        const application = result.data;
+
+        if (application?.modeOfTransport) {
+          setTransportMode(application.modeOfTransport);
         }
-      } catch {
-        // ignore cross-origin navigation while the Paystack checkout is still loading
+
+        if (application?.certificateType) {
+          const matchedCertificate = certificateTypes.find(
+            cert => cert.code === application.certificateType || cert.id === application.certificateType || cert.name === application.certificateType
+          );
+
+          if (matchedCertificate) {
+            setSelectedCert(matchedCertificate.id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load resubmission application:', err);
       }
     };
 
-    iframe.addEventListener('load', handleIframeLoad);
-    return () => iframe.removeEventListener('load', handleIframeLoad);
-  }, [router, showPaymentModal]);
+    void loadResubmitApplication();
+  }, [searchParams, certificateTypes]);
+
+  // Listen for the payment-complete signal from the popup tab (see above).
+  useEffect(() => {
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key !== 'nacc-payment-complete' || !event.newValue) return;
+
+      let reference: string | null = null;
+      try {
+        reference = JSON.parse(event.newValue)?.reference ?? null;
+      } catch {
+        // ignore malformed payload
+      }
+
+      setSuccessMessage(reference ? `Payment successful. Reference: ${reference}` : 'Payment successful.');
+      stopPaymentStatusPolling();
+      redirectToExporterDashboard();
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+    return () => window.removeEventListener('storage', handleStorageEvent);
+  }, []);
+
+  // Stop polling if the component unmounts while a payment tab is open.
+  useEffect(() => {
+    return () => stopPaymentStatusPolling();
+  }, []);
+
+  const stopPaymentStatusPolling = () => {
+    if (paymentPollIntervalRef.current !== null) {
+      window.clearInterval(paymentPollIntervalRef.current);
+      paymentPollIntervalRef.current = null;
+    }
+  };
+
+  /**
+   * Fallback for the popup flow: the `storage` event above is the primary
+   * signal, but browsers can drop it (e.g. if the tab is closed before the
+   * event has a chance to propagate, or storage partitioning blocks it).
+   * This polls the application's review endpoint periodically and also
+   * stops itself if the user just closes the tab without paying.
+   *
+   * NOTE: adjust the "paid" condition below to match whatever field your
+   * backend actually uses to represent a completed payment.
+   */
+  const startPaymentStatusPolling = () => {
+    if (!applicationId) return;
+    stopPaymentStatusPolling();
+
+    paymentPollIntervalRef.current = window.setInterval(async () => {
+      try {
+        const baseUrl = getBaseUrl();
+        if (baseUrl) {
+          const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+            method: 'GET',
+          });
+          const result = await response.json();
+          const data = result?.data as (ReviewData & { paymentStatus?: string; status?: string }) | undefined;
+          const isPaid = data?.paymentStatus === 'PAID' || data?.status === 'PAYMENT_COMPLETE';
+
+          if (response.ok && isPaid) {
+            stopPaymentStatusPolling();
+            redirectToExporterDashboard();
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Payment status poll failed:', err);
+      }
+
+      // Stop polling once the user has closed the payment tab, whether or
+      // not payment succeeded — the storage-event path above will have
+      // already caught a success before the tab closed.
+      if (paymentTabRef.current?.closed) {
+        stopPaymentStatusPolling();
+      }
+    }, 4000);
+  };
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -586,12 +721,12 @@ function NewApplicationContent() {
 
   const renderDynamicField = (field: CertificateField) => {
     const formDataKey = field.code;
-    
+
     if (!field.applicable) return null;
 
     // Special handling for country dropdowns
     if (field.code === 'DESTINATION') {
-      const filteredCountries = countries.filter(country => 
+      const filteredCountries = countries.filter(country =>
         country.name.toLowerCase().includes(destinationSearchQuery.toLowerCase())
       );
       return (
@@ -654,7 +789,7 @@ function NewApplicationContent() {
     }
 
     if (field.code === 'COUNTRY_OF_MANUFACTURING') {
-      const filteredCountries = countries.filter(country => 
+      const filteredCountries = countries.filter(country =>
         country.name.toLowerCase().includes(manufacturingSearchQuery.toLowerCase())
       );
       return (
@@ -916,18 +1051,18 @@ function NewApplicationContent() {
             : typeof fieldValue === 'boolean'
               ? !fieldValue
               : !fieldValue.trim();
-          
+
           if (isEmpty) {
             errors[formDataKey] = `${field.name} is required`;
           }
-          
+
           // Special validation for email fields
           if (field.code === 'IMPORTER_EMAIL' && typeof fieldValue === 'string' && fieldValue) {
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue)) {
               errors[formDataKey] = 'Please enter a valid email address';
             }
           }
-          
+
           // Special validation for FOB value
           if (field.code === 'TOTAL_VALUE_FOB' && typeof fieldValue === 'string' && fieldValue) {
             const cleanValue = fieldValue.replace(/,/g, '').trim();
@@ -1059,6 +1194,22 @@ function NewApplicationContent() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(Number.isFinite(numericValue) ? numericValue : 0);
+  };
+
+  const getPaymentDisplayAmount = (data: Record<string, unknown> | null) => {
+    if (!data) return 0;
+
+    const rawAmount = Number(data.amount ?? data.totalAmount ?? data.amountInKobo ?? 0);
+    if (!Number.isFinite(rawAmount)) return 0;
+
+    // Paystack amounts are in the smallest currency unit when amountInKobo/koboAmount
+    // is supplied. Otherwise, the backend amount is treated as the displayed amount.
+    const isMinorUnit = data.amountInKobo != null || data.koboAmount != null;
+    return isMinorUnit ? rawAmount / 100 : rawAmount;
+  };
+
+  const getPaymentCurrency = (data: Record<string, unknown> | null): 'NGN' | 'USD' => {
+    return String(data?.currency || 'NGN').toUpperCase() === 'USD' ? 'USD' : 'NGN';
   };
 
   const smoothScrollToElement = (element: HTMLElement, duration: number = 1000) => {
@@ -1385,116 +1536,33 @@ function NewApplicationContent() {
     }
   };
 
-  const closePaymentModal = () => {
-    setShowPaymentModal(false);
-    setPaymentCheckoutUrl('');
-    if (typeof window !== 'undefined') {
-      window.location.assign('/my-applications');
-    }
-  };
-
-  const openPaystackModal = async (paymentData: Record<string, unknown>) => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    const paystackWindow = window as typeof window & {
-      PaystackPop?: {
-        setup: (options: {
-          key: string;
-          email: string;
-          amount: number;
-          currency: string;
-          ref: string;
-          metadata?: {
-            custom_fields?: Array<{ display_name: string; variable_name: string; value: string }>;
-          };
-          callback?: (response: { reference?: string }) => void;
-          onClose?: () => void;
-        }) => { openIframe: () => void };
-      };
-    };
-
-    const paystackKey = String(
-      paymentData.publicKey ||
-      paymentData.paystackPublicKey ||
-      paymentData.key ||
-      process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ||
-      ''
-    );
-
-    const email = String(paymentData.email || '');
-    const amountValue = Number(paymentData.amount ?? paymentData.totalAmount ?? paymentData.amountInKobo ?? 0);
-    const reference = String(
-      paymentData.reference ||
-      paymentData.transactionReference ||
-      paymentData.ref ||
-      `NACC-${Date.now()}`
-    );
-    const currency = String(paymentData.currency || 'NGN');
+  const getHostedPaymentUrl = (paymentData: Record<string, unknown>) => {
     const checkoutUrl = String(
       paymentData.checkoutUrl ||
       paymentData.authorizationUrl ||
       paymentData.paymentUrl ||
+      paymentData.redirectUrl ||
+      paymentData.url ||
       ''
     );
 
-    if (paystackKey) {
-      const paystackScriptUrl = 'https://js.paystack.co/v1/inline.js';
+    return checkoutUrl.trim();
+  };
 
-      if (!paystackWindow.PaystackPop) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = paystackScriptUrl;
-          script.async = true;
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error('Failed to load Paystack popup script'));
-          document.body.appendChild(script);
-        });
-      }
-
-      if (paystackWindow.PaystackPop) {
-        const rawAmount = Number(paymentData.amountInKobo ?? paymentData.koboAmount ?? amountValue);
-        const normalizedAmount = rawAmount > 0 ? rawAmount : Math.round(amountValue * 100);
-
-        paystackWindow.PaystackPop.setup({
-          key: paystackKey,
-          email,
-          amount: normalizedAmount,
-          currency,
-          ref: reference,
-          metadata: {
-            custom_fields: [
-              {
-                display_name: 'Application ID',
-                variable_name: 'application_id',
-                value: String(applicationId || ''),
-              },
-            ],
-          },
-          callback: (response: { reference?: string }) => {
-            const resolvedRef = response?.reference || reference;
-            closePaymentModal();
-            setShowSuccessModal(false);
-            setSuccessMessage(`Payment successful. Reference: ${resolvedRef}`);
-            router.replace('/my-applications');
-          },
-          onClose: () => {
-            setValidationError('Payment popup closed before completion. You can retry the payment from your application.');
-          },
-        }).openIframe();
-
-        return true;
-      }
+  const openPayfonteCheckout = (paymentData: Record<string, unknown>) => {
+    if (typeof window === 'undefined') {
+      return false;
     }
 
-    if (checkoutUrl) {
-      setPaymentCheckoutUrl(checkoutUrl);
-      setShowPaymentModal(true);
-      return true;
+    const checkoutUrl = getHostedPaymentUrl(paymentData);
+    if (!checkoutUrl) {
+      setValidationError('The Payfonte checkout URL is unavailable. Please try again.');
+      return false;
     }
 
-    return false;
+    setPaymentCheckoutUrl(checkoutUrl);
+    window.location.assign(checkoutUrl);
+    return true;
   };
 
   const submitApplication = async () => {
@@ -1522,12 +1590,19 @@ function NewApplicationContent() {
       const result = await response.json();
 
       if (response.ok && result.data) {
-        const opened = await openPaystackModal(result.data);
-        if (!opened) {
-          setValidationError('Payment checkout was not available. Please try again.');
-          return false;
+        const paymentRecord = result.data as Record<string, unknown>;
+        const hostedUrl = getHostedPaymentUrl(paymentRecord);
+
+        if (hostedUrl) {
+          setPaymentData(paymentRecord);
+          setPaymentCheckoutUrl(hostedUrl);
+          setSelectedPaymentMethod('CARD');
+          window.location.assign(hostedUrl);
+          return true;
         }
-        return true;
+
+        setValidationError('Payment checkout URL was not returned by the payment gateway. Please try again.');
+        return false;
       } else {
         setValidationError(result.message || 'Failed to submit application');
         return false;
@@ -1865,7 +1940,7 @@ function NewApplicationContent() {
                     })}
                   </div>
                   {getSelectedTransportMode() && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[#11px] text-[#1e40af]">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[11px] text-[#1e40af]">
                       <span>ℹ️</span>
                       <span className='text-[14px]'><strong>{getSelectedTransportMode()?.name} selected:</strong> You must upload {getSelectedTransportMode()?.documents.map(d => d.name).join(', ')} before submitting.</span>
                     </div>
@@ -2155,8 +2230,8 @@ function NewApplicationContent() {
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(1)}>← Back</button>
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
-                  <button 
-                    className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60" 
+                  <button
+                    className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleContinueToStep3}
                     disabled={isSavingAll || !isStep2Valid()}
                   >
@@ -2340,105 +2415,178 @@ function NewApplicationContent() {
                 ) : null}
               </>
             )}
-            {/* Step 4 - Payment - Commented out, now redirects directly to Paystack */}
-            {/* {step === 4 && (
-                  <>
-                    <div className="flex flex-col items-center pt-6">
-                      <div className="text-[16px] font-bold text-[#1a2236] mb-1 text-center">Secure Payment</div>
-                      <div className="text-[11.5px] text-[#6a7a9a] mb-5 text-center">Step 4 of 4 — Application NACC-2026-00422 submitted. Complete payment to begin processing.</div>
-                      <div className="flex items-center gap-2 mb-3 max-w-[620px] w-full">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
-                          <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>
-                        </div>
-                        <div className="h-[2px] flex-1 bg-[#059669]"></div>
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
-                          <span className="text-[10px] font-semibold text-[#059669]">Application Details</span>
-                        </div>
-                        <div className="h-[2px] flex-1 bg-[#059669]"></div>
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
-                          <span className="text-[10px] font-semibold text-[#059669]">Review & Submit</span>
-                        </div>
-                        <div className="h-[2px] flex-1 bg-[#059669]"></div>
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-[24px] h-[24px] rounded-full border-2 border-[#3a7bd5] bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
-                          <span className="text-[10px] font-semibold text-[#3a7bd5]">Payment</span>
-                        </div>
-                      </div>
-                      <div className="bg-white border border-[#dde3ee] rounded-[10px] shadow-[0_2px_16px_rgba(0,0,0,0.1)] w-full max-w-[400px]">
-                        <div className="px-5 py-4 border-b border-[#edf0f5]">
-                          <div className="text-[14px] font-bold text-[#0ba4db] mb-1">Paystack</div>
-                          <div className="text-[10.5px] text-[#6a7a9a] opacity-80">Lagos Traders Ltd — lagos@traders.ng</div>
-                          <div className="text-[24px] font-bold text-[#1a2236] mt-2">₦ 12,031.88</div>
-                          <div className="text-[10.5px] text-[#6a7a9a]">Ref: NACC-PAY-2026-00422 &nbsp;|&nbsp; NACCIMA Certificate Fee</div>
-                        </div>
-                        <div className="p-5">
-                          <div className="flex gap-2 mb-4">
-                            <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#0ba4db] text-white text-center">💳 Card</div>
-                            <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">🏦 Bank Transfer</div>
-                            <div className="flex-1 px-3 py-2 rounded-[6px] text-[11px] font-semibold cursor-pointer bg-[#f8fafd] text-[#6a7a9a] text-center hover:bg-[#edf2ff]">📱 USSD</div>
-                          </div>
-                          <div className="flex flex-col gap-3 mb-4">
-                            <div className="flex flex-col gap-1">
-                              <label className="text-[11px] font-semibold text-[#374151]">Card Number</label>
-                              <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="0000  0000  0000  0000" />
-                            </div>
-                            <div className="flex gap-3">
-                                <div className="flex-1 flex flex-col gap-1">
-                                  <label className="text-[11px] font-semibold text-[#374151]">Expiry Date</label>
-                                  <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="MM / YY" />
-                                </div>
-                                <div className="flex-1 flex flex-col gap-1">
-                                  <label className="text-[11px] font-semibold text-[#374151]">CVV</label>
-                                  <input className="px-3 py-2 border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" placeholder="•••" />
-                                </div>
-                              </div>
-                            </div>
-                            <button className="w-full px-4 py-3 rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#0ba4db] text-white hover:bg-[#0984b8]">Pay ₦12,031.88</button>
-                            <div className="text-[10.5px] text-[#6a7a9a] text-center mt-3">🔒 Secured by Paystack — PCI DSS Compliant</div>
-                        </div>
-                      </div>
-                      <div className="text-[11px] text-[#9ca3af] text-center mt-3">
-                        Having trouble? <span className="text-[#3a7bd5] cursor-pointer">Return to application</span> — your data is saved as PAYMENT PENDING.
-                      </div>
+            {step === 4 && (
+              <>
+                <div className="text-[16px] font-bold text-[#1a2236] mb-[3px]">Secure Payment</div>
+                <div className="text-[11.5px] text-[#6a7a9a] mb-5">
+                  Step 4 of 4 — Complete your payment without leaving this page
                 </div>
+
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Application Details</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Review & Submit</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#3a7bd5]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full border-2 border-[#3a7bd5] bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
+                    <span className="text-[10px] font-semibold text-[#3a7bd5]">Payment</span>
+                  </div>
+                </div>
+
+                {paymentData ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-5">
+                      <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
+                        <div className="flex items-center justify-between mb-5">
+                          <div>
+                            <div className="text-[14px] font-bold text-[#1a2236]">Checkout</div>
+                            <div className="text-[11px] text-[#6a7a9a] mt-1">Choose a payment option to continue securely.</div>
+                          </div>
+                          <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
+                            🔒 Secure
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 mb-5">
+                          {[
+                            { key: 'CARD' as const, label: 'Card', icon: '💳' },
+                            { key: 'BANK_TRANSFER' as const, label: 'Bank Transfer', icon: '🏦' },
+                            { key: 'USSD' as const, label: 'USSD', icon: '📱' },
+                          ].map((method) => (
+                            <button
+                              key={method.key}
+                              type="button"
+                              onClick={() => setSelectedPaymentMethod(method.key)}
+                              className={`px-3 py-3 rounded-[8px] border text-[11px] font-semibold transition-all ${
+                                selectedPaymentMethod === method.key
+                                  ? 'border-[#3a7bd5] bg-[#e8f0fe] text-[#1a4a8a]'
+                                  : 'border-[#dde3ee] bg-white text-[#4a5a7a] hover:border-[#3a7bd5]'
+                              }`}
+                            >
+                              <div className="text-[18px] mb-1">{method.icon}</div>
+                              {method.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="rounded-[8px] bg-[#f8fafd] border border-[#dde3ee] p-4 mb-5">
+                          {selectedPaymentMethod === 'CARD' ? (
+                            <>
+                              <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Card</div>
+                              <div className="text-[10.5px] text-[#6a7a9a]">
+                                Your card details will be entered securely on the Payfonte checkout page. They are not stored or sent through this application.
+                              </div>
+                            </>
+                          ) : selectedPaymentMethod === 'BANK_TRANSFER' ? (
+                            <>
+                              <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Bank Transfer</div>
+                              <div className="text-[10.5px] text-[#6a7a9a]">
+                                Payfonte will provide the secure bank-transfer instructions after you continue.
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with USSD</div>
+                              <div className="text-[10.5px] text-[#6a7a9a]">
+                                Payfonte will show the available USSD options for your payment.
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {paymentCheckoutUrl ? (
+                          <div className="border border-[#dde3ee] rounded-[8px] overflow-hidden bg-[#f8fafd] p-4 text-[12px] text-[#1a2236]">
+                            Redirecting to the secure Payfonte payment page in your browser...
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openPayfonteCheckout(paymentData)}
+                            disabled={isSubmittingApplication}
+                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            Pay Securely with Payfonte
+                            <FiArrowRight className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        <div className="text-center text-[10px] text-[#94a3b8] mt-3">
+                          Secured by Payfonte · Redirects to the full browser checkout
+                        </div>
+                      </div>
+
+                      <div className="h-fit bg-[#f8fafd] border border-[#dde3ee] rounded-[10px] p-5">
+                        <div className="text-[12px] font-bold text-[#1a2236] mb-4">Payment Summary</div>
+                        <div className="space-y-3 text-[11px]">
+                          <div className="flex justify-between gap-4">
+                            <span className="text-[#6a7a9a]">Application</span>
+                            <span className="font-semibold text-[#1a2236] text-right">{applicationId || '—'}</span>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <span className="text-[#6a7a9a]">Certificate</span>
+                            <span className="font-semibold text-[#1a2236] text-right">{reviewData?.application?.certificateType || 'NACCIMA'}</span>
+                          </div>
+                          <div className="border-t border-[#dde3ee] pt-3 flex justify-between gap-4">
+                            <span className="font-bold text-[#1a2236]">Total Payable</span>
+                            <span className="font-bold text-[#1a4a8a] text-[15px]">
+                              {paymentData
+                                ? formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))
+                                : formatCurrency(
+                                    ((((Number(String(reviewData?.application?.totalValueFob || 0).replace(/,/g, '')) * (exchangeRate?.rate || 0)) * 0.0011) + 2500) * 1.075),
+                                    'NGN'
+                                  )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 p-3 rounded-[7px] bg-[#ecfdf5] border border-[#a7f3d0] text-[10.5px] text-[#065f46]">
+                          Once payment is confirmed successfully, you will be redirected to your exporter dashboard.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-start pt-5 mt-5 border-t border-[#edf0f5]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentCheckoutUrl('');
+                          stopPaymentStatusPolling();
+                          setStep(3);
+                        }}
+                        className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold border border-[#ccd3e0] bg-white text-[#2a3a56] hover:bg-[#f1f4f9]"
+                      >
+                        ← Back to Review
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-12 text-[12px] text-[#6a7a9a]">
+                    Payment details are not available. Please return to the review step and submit again.
+                  </div>
+                )}
+
+                {validationError && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mt-4">
+                    <span>⚠️</span>
+                    <span>{validationError}</span>
+                  </div>
+                )}
               </>
-            )} */}
+            )}
           </div>
         </div>
       </div>
-      {showPaymentModal && paymentCheckoutUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/70 p-4">
-          <div className="relative w-full max-w-[800px] h-[80vh] rounded-[14px] overflow-auto border border-[#dbe2ee] bg-white shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
-            <div className="flex items-center justify-between border-b border-[#edf0f5] px-[23px] py-[8px] bg-[#f8fafd]">
-              <div>
-                <div className="text-[18px] font-bold text-[#1a2236]">Payment</div>
-                <div className="text-[11px] text-[#6a7a9a]">Secure payment in progress</div>
-              </div>
-              <button
-                type="button"
-                className="px-[10px] py-[6px] cursor-pointer rounded-[6px] border border-[#d1d5db] bg-white text-[11px] font-semibold text-[#374151] hover:bg-[#f1f4f9]"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  closePaymentModal();
-                }}
-              >
-                Close
-              </button>
-            </div>
-            <iframe
-              ref={paymentIframeRef}
-              src={paymentCheckoutUrl}
-              title="Paystack Payment"
-              className="w-full h-full border-0"
-              allow="payment"
-            />
-          </div>
-        </div>
-      )}
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
       <SuccessModal isOpen={showSuccessModal} onClose={() => setShowSuccessModal(false)} message={successMessage} />
     </div>
@@ -2447,7 +2595,34 @@ function NewApplicationContent() {
 
 export default function NewApplicationPage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-[12px] text-[#6a7a9a]">Loading application...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-[#f8fafc] px-4">
+          <div className="w-full max-w-[420px] rounded-[18px] border border-[#e2e8f0] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative h-16 w-16">
+                <div className="absolute inset-0 rounded-full border-4 border-[#dbeafe]" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#1a4a8a] animate-spin" />
+                <div className="absolute inset-3 rounded-full border-2 border-[#e2e8f0]" />
+              </div>
+
+              <div className="mt-5 text-center">
+                <div className="text-[12px] font-bold tracking-[0.22em] text-[#64748b] uppercase">Loading</div>
+                <div className="mt-2 text-[18px] font-semibold text-[#1a2236]">Application Form</div>
+              </div>
+
+              <div className="mt-5 w-full space-y-3">
+                <div className="h-3 w-full animate-pulse rounded-full bg-[#edf3fb]" />
+                <div className="h-3 w-5/6 animate-pulse rounded-full bg-[#edf3fb]" />
+                <div className="h-10 w-full animate-pulse rounded-[8px] bg-[#edf3fb]" />
+                <div className="h-10 w-full animate-pulse rounded-[8px] bg-[#edf3fb]" />
+                <div className="h-10 w-4/5 animate-pulse rounded-[8px] bg-[#edf3fb]" />
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    >
       <NewApplicationContent />
     </Suspense>
   );

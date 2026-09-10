@@ -161,7 +161,7 @@ export default function AdminApplicationDetail() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '—';
-    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(dateString)?.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const getStatusBadge = (status: string) => {
@@ -244,15 +244,15 @@ export default function AdminApplicationDetail() {
             {/* Summary Cards */}
             <div className="flex gap-3 mb-6">
               <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#1a4a8a] mb-[2px]">${app.totalValueFob.toLocaleString()}</div>
+                <div className="text-[24px] font-extrabold text-[#1a4a8a] mb-[2px]">${app.totalValueFob?.toLocaleString()}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Total Value (FOB)</div>
               </div>
               <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">${applicationDetail.feePaid.toLocaleString()}</div>
+                <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">${applicationDetail?.feePaid?.toLocaleString()}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Fee Paid</div>
               </div>
               <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">{applicationDetail.exchangeRate.toFixed(2)}</div>
+                <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">{applicationDetail?.exchangeRate?.toFixed(2)}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Exchange Rate</div>
               </div>
               <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
@@ -346,9 +346,9 @@ export default function AdminApplicationDetail() {
                         <td className="px-3 py-2 border-b border-[#edf0f5]">{good.description}</td>
                         <td className="px-3 py-2 border-b border-[#edf0f5]">{good.marksNo}</td>
                         <td className="px-3 py-2 border-b border-[#edf0f5]">{good.unit}</td>
-                        <td className="px-3 py-2 border-b border-[#edf0f5]">{good.quantity.toLocaleString()}</td>
-                        <td className="px-3 py-2 border-b border-[#edf0f5]">{good.grossWeight.toLocaleString()}</td>
-                        <td className="px-3 py-2 border-b border-[#edf0f5]">${good.value.toLocaleString()}</td>
+                        <td className="px-3 py-2 border-b border-[#edf0f5]">{good.quantity?.toLocaleString()}</td>
+                        <td className="px-3 py-2 border-b border-[#edf0f5]">{good.grossWeight?.toLocaleString()}</td>
+                        <td className="px-3 py-2 border-b border-[#edf0f5]">${good.value?.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>

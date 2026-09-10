@@ -114,6 +114,8 @@ export default function VettingReviewPage() {
       PAID: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Paid', icon: <CheckCircle className="w-3 h-3" /> },
       UNDER_REVIEW: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Under Review', icon: <Clock className="w-3 h-3" /> },
       INFO_REQUESTED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Info Requested', icon: <AlertCircle className="w-3 h-3" /> },
+      RESUBMITTED: { bg: 'bg-violet-100', text: 'text-violet-800', label: 'Resubmitted', icon: <Clock className="w-3 h-3" /> },
+      UNAPPROVED: { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Unapproved', icon: <AlertCircle className="w-3 h-3" /> },
       APPROVED: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved', icon: <CheckCircle className="w-3 h-3" /> },
       REJECTED: { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Rejected', icon: <FileText className="w-3 h-3" /> },
     };
@@ -139,7 +141,9 @@ export default function VettingReviewPage() {
   };
 
   const handleReviewAction = async (app: ReviewApplication) => {
-    if (app.status === 'PAID') {
+    const requiresSelfAssign = app.status === 'PAID';
+
+    if (requiresSelfAssign) {
       try {
         const baseUrl = getBaseUrl();
         if (!baseUrl) {
