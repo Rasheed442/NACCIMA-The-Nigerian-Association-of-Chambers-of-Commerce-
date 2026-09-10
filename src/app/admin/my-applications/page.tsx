@@ -54,9 +54,13 @@ export default function AdminApplications() {
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<any[]>([]);
   const [transportModes, setTransportModes] = useState<any[]>([]);
-  const [vettingOfficers, setVettingOfficers] = useState<any[]>([]);
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [assigningReviewerId, setAssigningReviewerId] = useState<string | null>(null);
+  const [assignModalAppId, setAssignModalAppId] = useState<string | null>(null);
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Action menu is rendered through a portal (see below), so instead of a
   // simple open/closed flag we also need the applicationId it belongs to and
@@ -79,10 +83,17 @@ export default function AdminApplications() {
   }, []);
 
   useEffect(() => {
+    if (!toast) return;
+
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
     fetchApplications();
     fetchCertificateTypes();
     fetchTransportModes();
-    fetchVettingOfficers();
+    fetchStaffMembers();
   }, [currentPage, filterStatus, filterCertType, filterCompanyId, filterFromDate, filterToDate]);
 
   // Close the action menu if the table is scrolled (its button has moved out
@@ -163,7 +174,7 @@ export default function AdminApplications() {
     }
   };
 
-  const fetchVettingOfficers = async () => {
+  const fetchStaffMembers = async () => {
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
@@ -179,16 +190,19 @@ export default function AdminApplications() {
 
       const result = await response.json();
 
-      if (response.ok && Array.isArray(result.data)) {
-        const staff = result.data.filter((member: any) => {
-          const roleName = `${member.roleName || ''} ${member.roleCode || ''}`.toLowerCase();
-          return roleName.includes('vetting') || roleName.includes('review');
-        });
+      if (response.ok) {
+        const members = Array.isArray(result.data)
+          ? result.data
+          : Array.isArray(result)
+            ? result
+            : [];
 
-        setVettingOfficers(staff);
+        const availableStaff = members.filter((member: any) => member?.enabled !== false);
+        setStaffMembers(availableStaff.length > 0 ? availableStaff : members);
       }
     } catch (err) {
-      console.error('Failed to fetch vetting officers:', err);
+      console.error('Failed to fetch staff members:', err);
+      setStaffMembers([]);
     }
   };
 
@@ -246,7 +260,9 @@ export default function AdminApplications() {
 
   const handleAssignApplication = async (app: Application, reviewerId: string) => {
     if (app.status !== 'PAID') {
-      setActionError('Only paid applications can be assigned for vetting.');
+      const message = 'Only paid applications can be assigned for vetting.';
+      setActionError(message);
+      setToast({ type: 'error', message });
       return;
     }
 
@@ -254,6 +270,7 @@ export default function AdminApplications() {
     setActionMenuPosition(null);
     setActionError(null);
     setPendingActionId(app.applicationId);
+    setAssigningReviewerId(reviewerId);
 
     try {
       const baseUrl = getBaseUrl();
@@ -276,18 +293,27 @@ export default function AdminApplications() {
       if (!response.ok || payload?.success === false) {
         const message = payload?.message || 'Failed to assign application.';
         setActionError(message);
+        setToast({ type: 'error', message });
         console.error('Failed to assign application:', message);
         return;
       }
 
+      const selectedStaff = staffMembers.find((member) => (member.userId || member.id) === reviewerId);
+      const staffLabel = selectedStaff ? `${selectedStaff.firstName || ''} ${selectedStaff.lastName || ''}`.trim() || selectedStaff.username || selectedStaff.email : 'selected staff member';
+      const successMessage = `Application assigned to ${staffLabel} successfully.`;
+
       setActionError(null);
+      setToast({ type: 'success', message: successMessage });
+      setAssignModalAppId(null);
       await fetchApplications();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Assign application failed.';
       setActionError(message);
+      setToast({ type: 'error', message });
       console.error('Assign application failed:', err);
     } finally {
       setPendingActionId(null);
+      setAssigningReviewerId(null);
     }
   };
 
@@ -367,6 +393,13 @@ export default function AdminApplications() {
     setOpenActionMenu(null);
     setActionMenuPosition(null);
   };
+
+  const assignModalApp = applications.find((app) => app.applicationId === assignModalAppId) || null;
+  const filteredStaffMembers = staffMembers.filter((member) => {
+    const fullName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
+    const haystack = [fullName, member.username, member.email, member.roleName, member.roleCode].filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(staffSearchQuery.toLowerCase());
+  });
 
   const getStatusBadge = (status: Application['status']) => {
     const badges: Record<Application['status'], string> = {
@@ -700,18 +733,17 @@ export default function AdminApplications() {
                           {app.status === 'PAID' && (!app.assignedTo || app.assignedTo.trim() === '') ? (
                             <button
                               className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
-                              onClick={(e) => handleToggleActionMenu(app, e)}
+                              onClick={() => setAssignModalAppId(app.applicationId)}
                             >
                               Assign
                               <ChevronDown size={12} />
                             </button>
                           ) : app.status === 'UNDER_REVIEW' ? (
                             <button
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
-                              onClick={(e) => handleToggleActionMenu(app, e)}
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+                              onClick={() => router.push(`/admin/my-applications/${app.applicationId}`)}
                             >
-                              Action
-                              <ChevronDown size={12} />
+                              View
                             </button>
                           ) : (
                             <button
@@ -781,69 +813,92 @@ export default function AdminApplications() {
         </div>
       </div>
 
-      {/* Action menu is rendered via portal so it's never clipped by the
-          table's overflow-auto container. */}
-      {isMounted && openActionMenu && actionMenuPosition && openActionApp &&
-        createPortal(
-          <>
-            <div className="fixed inset-0 z-[9998]" onClick={closeActionMenu} />
-            <div
-              className="fixed bg-white border border-[#d1d5db] rounded-[6px] shadow-lg z-[9999] overflow-hidden"
-              style={{
-                top: actionMenuPosition.top,
-                left: actionMenuPosition.left,
-                width: ACTION_MENU_WIDTH,
-              }}
-            >
-              {openActionApp.status === 'PAID' && (!openActionApp.assignedTo || openActionApp.assignedTo.trim() === '') ? (
-                vettingOfficers.length > 0 ? (
-                  vettingOfficers.map((officer) => (
-                    <button
-                      key={officer.userId || officer.id}
-                      className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9] border-b border-[#edf0f5] last:border-b-0 disabled:opacity-60 disabled:cursor-not-allowed"
-                      onClick={() => handleAssignApplication(openActionApp, officer.userId || officer.id)}
-                      disabled={pendingActionId === openActionApp.applicationId}
-                    >
-                      {pendingActionId === openActionApp.applicationId ? 'Assigning...' : `${officer.firstName || ''} ${officer.lastName || ''}`.trim() || 'Assign reviewer'}
-                    </button>
-                  ))
-                ) : (
-                  <button
-                    className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9]"
-                    onClick={() => handleAssignApplication(openActionApp, openActionApp.companyId || openActionApp.applicationId)}
-                  >
-                    Assign
-                  </button>
-                )
-              ) : openActionApp.status === 'UNDER_REVIEW' ? (
-                <>
-                  <button
-                    className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9] border-b border-[#edf0f5] disabled:opacity-60 disabled:cursor-not-allowed"
-                    onClick={() => handleApplicationDecision(openActionApp, 'APPROVE')}
-                    disabled={pendingActionId === openActionApp.applicationId}
-                  >
-                    {pendingActionId === openActionApp.applicationId ? 'Approving...' : 'Approve'}
-                  </button>
-                  <button
-                    className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9] disabled:opacity-60 disabled:cursor-not-allowed"
-                    onClick={() => handleApplicationDecision(openActionApp, 'REJECT')}
-                    disabled={pendingActionId === openActionApp.applicationId}
-                  >
-                    {pendingActionId === openActionApp.applicationId ? 'Rejecting...' : 'Reject'}
-                  </button>
-                </>
-              ) : (
-                <button
-                  className="block w-full text-left px-3 py-2 text-[12px] hover:bg-[#f1f4f9]"
-                  onClick={() => router.push(`/admin/my-applications/${openActionApp.applicationId}`)}
-                >
-                  Review
-                </button>
-              )}
+      {isMounted && assignModalApp && createPortal(
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-[560px] pb-10 rounded bg-white shadow-[0_18px_60px_rgba(15,23,42,0.25)]">
+            <div className="flex items-center justify-between border-b border-[#edf0f5] px-5 py-4">
+              <div>
+                <div className="text-[18px] font-semibold text-[#1a2236]">Assign Application</div>
+                <div className="text-[12px] text-[#6a7a9a]">{assignModalApp.companyName || 'Application'} • {assignModalApp.applicationId}</div>
+              </div>
+              <button
+                type="button"
+                className="text-[20px] leading-none text-[#64748b] hover:text-[#1a2236]"
+                onClick={() => setAssignModalAppId(null)}
+              >
+                ×
+              </button>
             </div>
-          </>,
-          document.body
-        )}
+
+            <div className="px-5 py-4">
+              {pendingActionId === assignModalApp.applicationId && (
+                <div className="mb-3 flex items-center gap-2 rounded-[6px] border border-[#bfdbfe] bg-[#eff6ff] px-3 py-2 text-[12px] text-[#1d4ed8]">
+                  <ClipLoader size={14} color="#1d4ed8" />
+                  <span>Assigning application...</span>
+                </div>
+              )}
+
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={staffSearchQuery}
+                  onChange={(e) => setStaffSearchQuery(e.target.value)}
+                  placeholder="Search staff by name, email, or role"
+                  className="w-full rounded-[6px] border border-[#d1d5db] px-3 py-2 text-[12px] outline-none focus:border-[#3a7bd5]"
+                />
+              </div>
+
+              <div className="max-h-[320px] cursor-pointer overflow-y-auto rounded border border-[#edf0f5]">
+                {filteredStaffMembers.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-[12px] text-[#6a7a9a]">No staff members found.</div>
+                ) : (
+                  filteredStaffMembers.map((member) => {
+                    const fullName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
+                    const label = fullName || member.username || member.email || 'Staff member';
+                    const roleLabel = member.roleName || member.roleCode || 'Staff';
+                    const thisMemberIsAssigning = assigningReviewerId === (member.userId || member.id) && pendingActionId === assignModalApp.applicationId;
+
+                    return (
+                      <button
+                        key={member.userId || member.id}
+                        type="button"
+                        className="flex cursor-pointer w-full items-center justify-between gap-3 border-b border-[#bec0c3] px-4 py-3 text-left last:border-b-0 hover:bg-[#f8fafc] disabled:opacity-60 disabled:cursor-not-allowed"
+                        onClick={() => handleAssignApplication(assignModalApp, member.userId || member.id)}
+                        disabled={pendingActionId === assignModalApp.applicationId}
+                      >
+                        <div>
+                          <div className="text-[13px] font-semibold text-[#1a2236]">{label}</div>
+                          <div className="text-[11px] text-[#6a7a9a]">{member.email || member.username || roleLabel}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-[14px] text-[#3a7bd5] font-medium">{roleLabel}</div>
+                          {thisMemberIsAssigning && <ClipLoader size={12} color="#1d4ed8" />}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-[9999] max-w-[320px]">
+          <div
+            className={`flex items-start gap-3 rounded-[10px] border px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.15)] ${
+              toast.type === 'success'
+                ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'
+                : 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b]'
+            }`}
+          >
+            <div className="mt-0.5 text-[16px]">{toast.type === 'success' ? '✅' : '⚠️'}</div>
+            <div className="text-[12px] font-medium leading-5">{toast.message}</div>
+          </div>
+        </div>
+      )}
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
     </div>
