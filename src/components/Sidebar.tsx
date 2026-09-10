@@ -169,7 +169,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
         return;
       }
 
-      const response = await fetch(`${baseUrl}/api/v1/certificates/issued?page=0&size=1`, {
+      const response = await fetch(`${baseUrl}/api/v1/certificates/my`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -186,6 +186,8 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
           return;
         }
       }
+
+      setIssuedCertificatesCount(0);
 
       const appsResponse = await fetch(`${baseUrl}/api/v1/certificates/applications`, {
         method: 'GET',

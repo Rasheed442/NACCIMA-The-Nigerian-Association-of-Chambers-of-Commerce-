@@ -423,19 +423,19 @@ function MyApplicationsContent() {
 
             {/* Summary Cards */}
             <div className="flex gap-3 mb-4">
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">{stats.pendingReview}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Pending Review</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#1a4a8a] mb-[2px]">{stats.reviewedToday}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Reviewed Today</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">{stats.approvedThisMonth}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Approved This Month</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#9b1c1c] mb-[2px]">{stats.rejectedThisMonth}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Rejected This Month</div>
               </div>

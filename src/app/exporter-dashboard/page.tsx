@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { FaPlus } from "react-icons/fa";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch, getBaseUrl, clearAuthData } from '@/utils/api';
 import { FaArrowUp } from "react-icons/fa6";
 interface Application {
@@ -41,10 +41,13 @@ interface CompanyProfile {
   tin: string;
 }
 
-export default function ExporterDashboard() {
+function ExporterDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showWelcomeToast, setShowWelcomeToast] = useState(false);
+  const [showPaymentSuccessToast, setShowPaymentSuccessToast] = useState(false);
+  const [paymentSuccessReference, setPaymentSuccessReference] = useState<string | null>(null);
   const [recentApplications, setRecentApplications] = useState<Application[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(true);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
@@ -56,6 +59,19 @@ export default function ExporterDashboard() {
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
+
+  useEffect(() => {
+    const status = searchParams.get('status');
+    const reference = searchParams.get('reference');
+
+    if (status === 'success' || reference) {
+      setPaymentSuccessReference(reference);
+      setShowPaymentSuccessToast(true);
+
+      const hideTimer = setTimeout(() => setShowPaymentSuccessToast(false), 5000);
+      return () => clearTimeout(hideTimer);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const shouldShowToast = localStorage.getItem('showWelcomeToast');
@@ -274,7 +290,20 @@ export default function ExporterDashboard() {
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             <div className="text-[22px] font-bold text-[#1a2236] mb-[3px]">Welcome, {companyProfile?.companyName || 'Loading...'}</div>
-            <div className="text-[13px] text-[#6a7a9a] mb-[18px]">TIN: {companyProfile?.tin || 'Loading...'} &nbsp;|&nbsp; Last login: Today, &apos;---&apos;</div>
+            <div className="text-[13px] text-[#6a7a9a] mb-[10px]">TIN: {companyProfile?.tin || 'Loading...'} &nbsp;|&nbsp; Last login: Today, &apos;---&apos;</div>
+            {showPaymentSuccessToast && (
+              <div className="mb-[14px] flex items-center justify-between gap-3 rounded-[8px] border border-[#86efac] bg-[#ecfdf5] px-[12px] py-[10px] text-[13px] font-semibold text-[#065f46] shadow-[0_2px_8px_rgba(5,150,105,0.12)]">
+                <div className="flex items-center gap-2">
+                  <span className="text-[16px]">✓</span>
+                  <span>Payment successful.</span>
+                </div>
+                {paymentSuccessReference && (
+                  <span className="text-[11px] font-medium text-[#0f766e] break-all">
+                    Ref: {paymentSuccessReference}
+                  </span>
+                )}
+              </div>
+            )}
             {dashboardData?.membership?.member && (
               <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
                 ★NACCIMA Member rates apply
@@ -383,5 +412,32 @@ export default function ExporterDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ExporterDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-[#f8fafc] px-4">
+          <div className="w-full max-w-[420px] rounded-[18px] border border-[#e2e8f0] bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+            <div className="flex flex-col items-center justify-center">
+              <div className="relative h-16 w-16">
+                <div className="absolute inset-0 rounded-full border-4 border-[#dbeafe]" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#1a4a8a] animate-spin" />
+                <div className="absolute inset-3 rounded-full border-2 border-[#e2e8f0]" />
+              </div>
+
+              <div className="mt-5 text-center">
+                <div className="text-[12px] font-bold tracking-[0.22em] text-[#64748b] uppercase">Loading</div>
+                <div className="mt-2 text-[18px] font-semibold text-[#1a2236]">Dashboard</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    >
+      <ExporterDashboardContent />
+    </Suspense>
   );
 }

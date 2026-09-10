@@ -51,68 +51,37 @@ export default function IssuedCerts() {
   const fetchCertificates = async () => {
     setIsLoading(true);
     setError(null);
-    
+    setCertificates([]);
+    setIsFetchingMore(false);
+
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
         setError('API URL not configured');
-        setIsLoading(false);
         return;
       }
 
-      // First fetch all applications to get their IDs
-      const appsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/my`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      const appsResult = await appsResponse.json();
+      const result = await response.json();
 
-      if (appsResponse.ok && appsResult.data) {
-        const apps = Array.isArray(appsResult.data) ? appsResult.data : [appsResult.data];
-        
-        // Set loading to false once we have applications
-        setIsLoading(false);
-        setIsFetchingMore(true);
-        
-        // Fetch certificates for each application progressively
-        for (const app of apps) {
-          try {
-            const certResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${app.id}/certificate`, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            });
-
-            const certResult = await certResponse.json();
-
-            if (certResponse.ok && certResult.data) {
-              setCertificates(prev => {
-                const newCertificates = [...prev, certResult.data];
-                // Hide loading more indicator once we have at least 10 items
-                if (newCertificates.length >= 10) {
-                  setIsFetchingMore(false);
-                }
-                return newCertificates;
-              });
-            }
-          } catch (err) {
-            console.error(`Failed to fetch certificate for app ${app.id}:`, err);
-          }
-        }
-        
-        setIsFetchingMore(false);
+      if (response.ok) {
+        const list = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : result?.data ? [result.data] : [];
+        setCertificates(list);
       } else {
-        setError(appsResult.message || 'Failed to fetch applications');
-        setIsLoading(false);
+        setError(result?.message || 'Failed to fetch certificates');
       }
     } catch (err) {
       console.error('Failed to fetch certificates:', err);
       setError('Failed to fetch certificates');
+    } finally {
       setIsLoading(false);
+      setIsFetchingMore(false);
     }
   };
 

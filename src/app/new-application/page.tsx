@@ -202,12 +202,18 @@ function NewApplicationContent() {
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
-  const redirectToExporterDashboard = () => {
+  const redirectToExporterDashboard = (reference?: string | null) => {
     setShowSuccessModal(false);
 
     if (typeof window !== 'undefined') {
+      const dashboardUrl = new URL('/exporter-dashboard', window.location.origin);
+      dashboardUrl.searchParams.set('status', 'success');
+      if (reference) {
+        dashboardUrl.searchParams.set('reference', reference);
+      }
+
       window.setTimeout(() => {
-        window.location.assign('/exporter-dashboard');
+        window.location.assign(dashboardUrl.toString());
       }, 50);
     }
   };
@@ -241,7 +247,7 @@ function NewApplicationContent() {
         return;
       }
 
-      redirectToExporterDashboard();
+      redirectToExporterDashboard(reference || null);
     }
   }, [searchParams]);
 
@@ -301,7 +307,7 @@ function NewApplicationContent() {
 
       setSuccessMessage(reference ? `Payment successful. Reference: ${reference}` : 'Payment successful.');
       stopPaymentStatusPolling();
-      redirectToExporterDashboard();
+      redirectToExporterDashboard(reference || null);
     };
 
     window.addEventListener('storage', handleStorageEvent);
