@@ -68,7 +68,6 @@ function MyApplicationsContent() {
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
-  const [selfAssigningId, setSelfAssigningId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -219,43 +218,6 @@ function MyApplicationsContent() {
     );
   };
 
-  const handleSelfAssignAndReview = async (id: string) => {
-    setSelfAssigningId(id);
-    setError(null);
-
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        setError('API URL not configured');
-        return;
-      }
-
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${id}/self-assign`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          comment: 'Taking this application for review.',
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || result?.success === false) {
-        setError(result?.message || 'Failed to assign application for review.');
-        return;
-      }
-
-      router.push(`/my-applications/${id}`);
-    } catch (err) {
-      console.error('Failed to self-assign and review application:', err);
-      setError('Failed to assign application for review.');
-    } finally {
-      setSelfAssigningId(null);
-    }
-  };
-
   const handleDownloadCertificate = async (id: string) => {
     setDownloadingId(id);
     setError(null);
@@ -324,11 +286,10 @@ function MyApplicationsContent() {
     if (status === 'PAID') {
       return (
         <button
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
-          onClick={() => handleSelfAssignAndReview(id)}
-          disabled={selfAssigningId === id}
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+          onClick={() => router.push(`/my-applications/${id}/review`)}
         >
-          {selfAssigningId === id ? 'Assigning...' : 'Self Assign & Review'}
+          Review
         </button>
       );
     }
