@@ -214,7 +214,14 @@ function ExporterDashboardContent() {
       return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
     }
     if (status === 'UNAPPROVED') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Edit & Resubmit</button>;
+      return (
+        <button
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
+          onClick={() => router.push(`/my-applications/${id}/edit`)}
+        >
+          Edit & Resubmit
+        </button>
+      );
     }
     if (status === 'PAID') {
       return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => router.push(`/my-applications/${id}`)}>Self Assign & Review</button>;

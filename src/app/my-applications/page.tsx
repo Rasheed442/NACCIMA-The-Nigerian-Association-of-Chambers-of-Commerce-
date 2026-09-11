@@ -7,13 +7,13 @@ import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { ChevronDown } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
+import { format } from 'date-fns';
 
 interface Application {
   id: string;
   certificateType: string;
   tin: string;
   shipperName: string;
-  companyName?: string;
   shipperAddress: string;
   consignee: string;
   consigneeAddress: string;
@@ -56,7 +56,6 @@ function MyApplicationsContent() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [resubmittingId, setResubmittingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
@@ -220,12 +219,6 @@ function MyApplicationsContent() {
     );
   };
 
-  const handleResubmit = (id: string) => {
-    setResubmittingId(id);
-    router.push(`/new-application?resubmit=${id}`);
-    window.setTimeout(() => setResubmittingId(null), 1200);
-  };
-
   const handleSelfAssignAndReview = async (id: string) => {
     setSelfAssigningId(id);
     setError(null);
@@ -320,12 +313,11 @@ function MyApplicationsContent() {
     }
     if (status === 'UNAPPROVED') {
       return (
-        <button 
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f] disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => handleResubmit(id)}
-          disabled={resubmittingId === id}
+        <button
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
+          onClick={() => router.push(`/my-applications/${id}/edit`)}
         >
-          {resubmittingId === id ? 'Resubmitting...' : 'Edit & Resubmit'}
+          Edit & Resubmit
         </button>
       );
     }
@@ -345,7 +337,11 @@ function MyApplicationsContent() {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '—';
-    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    try {
+      return format(new Date(dateString), 'dd MMM yyyy');
+    } catch (error) {
+      return '—';
+    }
   };
 
   const getStats = () => {
@@ -388,7 +384,6 @@ function MyApplicationsContent() {
       const matchesSearch = normalizedSearch === '' ||
         app.id.toLowerCase().includes(normalizedSearch) ||
         app.shipperName?.toLowerCase().includes(normalizedSearch) ||
-        app.companyName?.toLowerCase().includes(normalizedSearch) ||
         app.tin?.toLowerCase().includes(normalizedSearch) ||
         app.certificateType?.toLowerCase().includes(normalizedSearch) ||
         app.status.toLowerCase().includes(normalizedSearch);
@@ -562,7 +557,7 @@ function MyApplicationsContent() {
 
               <input 
                 type="text" 
-                placeholder="Search by ID....."
+                placeholder="Search by ID, TIN, Shipper Name, Cert Type, or Status..."
                 className="px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] flex-1"
                 value={searchQuery}
                 onChange={(e) => {
@@ -587,14 +582,13 @@ function MyApplicationsContent() {
                   <thead className="sticky top-0 z-2">
                     <tr className="bg-[#f1f4f9] text-[12px] text-[#4a5a7a] font-semibold">
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Approval #</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Company</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">TIN</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Cert Type</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Transport</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Submitted</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Created</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Last Updated</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">FOB</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Status</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Assigned To</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
@@ -602,14 +596,13 @@ function MyApplicationsContent() {
                     {filteredCurrentItems.map((app) => (
                       <tr key={app.id} className="hover:bg-[#f8faff] text-[12px] transition-colors">
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.id}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.companyName || app.shipperName || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.tin || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.certificateType || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getTransportIcon(app.modeOfTransport)} {app.modeOfTransport || '—'}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(app.submittedAt || app.createdAt)}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(app.createdAt)}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(app.updatedAt)}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.totalValueFob ? `${app.valueCurrency || 'USD'} ${app.totalValueFob.toLocaleString()}` : '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getStatusBadge(app.status)}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.assignedTo || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
                           <div className="flex gap-[5px]">
                             {getActionButton(app.status, app.id)}

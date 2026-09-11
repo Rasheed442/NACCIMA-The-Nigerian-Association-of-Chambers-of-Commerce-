@@ -180,7 +180,7 @@ export default function AdminIssuedCertificates() {
                   <thead className="sticky top-0 z-2">
                     <tr className="bg-[#f1f4f9] text-[12px] text-[#4a5a7a] font-semibold">
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate #</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Company</th>
+                      {/* <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Company</th> */}
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate Type</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Shipper</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Consignee</th>
@@ -194,7 +194,7 @@ export default function AdminIssuedCertificates() {
                     {certificates.map((cert) => (
                       <tr key={cert.certificateId} className="hover:bg-[#f8faff] text-[12px] transition-colors">
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono text-[#1a4a8a]">{cert.certificateNumber}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.companyName || '—'}</td>
+                        {/* <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.companyName || '—'}</td> */}
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.certificateType || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.shipperName || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{cert.consignee || '—'}</td>
