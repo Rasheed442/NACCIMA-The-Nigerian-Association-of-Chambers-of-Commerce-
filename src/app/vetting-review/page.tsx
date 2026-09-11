@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, CheckCircle, Clock, Truck, Plane, Ship, ArrowRight, AlertCircle, ChevronDown } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
@@ -23,7 +23,7 @@ interface ReviewApplication {
   status: string;
 }
 
-export default function VettingReviewPage() {
+function VettingReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const reviewStatus = searchParams.get('status') || 'SUBMITTED';
@@ -372,5 +372,13 @@ export default function VettingReviewPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VettingReviewPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f5f7fb]" />}>
+      <VettingReviewContent />
+    </Suspense>
   );
 }
