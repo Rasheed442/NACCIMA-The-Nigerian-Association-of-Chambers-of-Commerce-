@@ -719,7 +719,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
                   <div className="flex items-center justify-between">
                     <dt className="text-slate-500">{state.currency} Exchange Rate</dt>
                     <dd className="font-medium text-slate-700">
-                      1 USD = {state.currency} {exchangeRate.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      1 USD = {state?.currency} {exchangeRate?.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                     </dd>
                   </div>
                   <p className="text-right text-xs text-slate-400">({EXCHANGE_RATE_TIMESTAMP})</p>

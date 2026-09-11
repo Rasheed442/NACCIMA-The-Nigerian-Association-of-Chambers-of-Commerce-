@@ -140,15 +140,15 @@ export default function AdminIssuedCertificates() {
 
             {/* Summary Cards */}
             <div className="flex gap-3 mb-4">
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#059669] mb-[2px]">{totalCertificates}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Total Issued</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">{certificates.filter(c => !c.voided && c.status === 'VALID').length}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Valid Certificates</div>
               </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded-[8px] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <div className="flex-1 bg-white border border-[#dde3ee] px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
                 <div className="text-[24px] font-extrabold text-[#9b1c1c] mb-[2px]">{certificates.filter(c => c.voided).length}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Voided Certificates</div>
               </div>
@@ -165,7 +165,7 @@ export default function AdminIssuedCertificates() {
               />
             </div>
 
-            <div className="overflow-x-auto pt-4 overflow-y-auto rounded-lg border border-[#dde3ee]">
+            <div className="overflow-x-auto pt-4 overflow-y-auto rounded border border-[#dde3ee]">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <ClipLoader size={40} color="#1a4a8a" />
@@ -204,13 +204,13 @@ export default function AdminIssuedCertificates() {
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
                           <div className="flex gap-[5px]">
                             <button 
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[14px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
                               onClick={() => handleDownload(cert.pdfUrl)}
                             >
                               Download
                             </button>
                             <button 
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
                               onClick={() => handleView(cert.certificateId)}
                             >
                               View

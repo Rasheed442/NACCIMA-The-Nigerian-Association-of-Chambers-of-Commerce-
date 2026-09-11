@@ -25,6 +25,20 @@ interface Application {
   assignedTo?: string;
 }
 
+interface StaffMember {
+  id?: string;
+  userId?: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  email?: string;
+  roleCode?: string;
+  roleName?: string;
+  enabled?: boolean;
+}
+
+const isCertificateOfficer = (member: StaffMember) => member.roleCode === 'CERTIFICATE_OFFICER';
+
 // Avoid encoding pasted whitespace (for example, a leading tab) into the API
 // query. A phrase such as "GSP Certificate" is sent as one clean search term.
 const normalizeSearchQuery = (value: string) => value.replace(/\s+/g, ' ').trim();
@@ -54,7 +68,7 @@ export default function AdminApplications() {
   const [dateDropdownOpen, setDateDropdownOpen] = useState(false);
   const [certificateTypes, setCertificateTypes] = useState<any[]>([]);
   const [transportModes, setTransportModes] = useState<any[]>([]);
-  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [assigningReviewerId, setAssigningReviewerId] = useState<string | null>(null);
@@ -197,8 +211,8 @@ export default function AdminApplications() {
             ? result
             : [];
 
-        const availableStaff = members.filter((member: any) => member?.enabled !== false);
-        setStaffMembers(availableStaff.length > 0 ? availableStaff : members);
+        const availableStaff = members.filter((member: StaffMember) => member?.enabled !== false);
+        setStaffMembers((availableStaff.length > 0 ? availableStaff : members).filter(isCertificateOfficer));
       }
     } catch (err) {
       console.error('Failed to fetch staff members:', err);
@@ -261,6 +275,14 @@ export default function AdminApplications() {
   const handleAssignApplication = async (app: Application, reviewerId: string) => {
     if (app.status !== 'PAID') {
       const message = 'Only paid applications can be assigned for vetting.';
+      setActionError(message);
+      setToast({ type: 'error', message });
+      return;
+    }
+
+    const reviewer = staffMembers.find((member) => (member.userId || member.id) === reviewerId);
+    if (!reviewer || !isCertificateOfficer(reviewer)) {
+      const message = 'Applications can only be assigned to a Certificate Officer.';
       setActionError(message);
       setToast({ type: 'error', message });
       return;
@@ -740,7 +762,7 @@ export default function AdminApplications() {
                             </button>
                           ) : app.status === 'UNDER_REVIEW' ? (
                             <button
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all  text-[#153c70]"
                               onClick={() => router.push(`/admin/my-applications/${app.applicationId}`)}
                             >
                               View
@@ -748,7 +770,7 @@ export default function AdminApplications() {
                           ) : (
                             <button
                               className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
-                              onClick={() => router.push(`/admin/my-applications/${app.applicationId}`)}
+                              onClick={() => router.push(`/admin/my-applications/${app.applicationId}/review`)}
                             >
                               Review
                             </button>
@@ -843,27 +865,30 @@ export default function AdminApplications() {
                   type="text"
                   value={staffSearchQuery}
                   onChange={(e) => setStaffSearchQuery(e.target.value)}
-                  placeholder="Search staff by name, email, or role"
+                  placeholder="Search Certificate Officers by name or email"
                   className="w-full rounded-[6px] border border-[#d1d5db] px-3 py-2 text-[12px] outline-none focus:border-[#3a7bd5]"
                 />
               </div>
 
               <div className="max-h-[320px] cursor-pointer overflow-y-auto rounded border border-[#edf0f5]">
                 {filteredStaffMembers.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-[12px] text-[#6a7a9a]">No staff members found.</div>
+                  <div className="px-4 py-6 text-center text-[12px] text-[#6a7a9a]">No Certificate Officers found.</div>
                 ) : (
                   filteredStaffMembers.map((member) => {
+                    const memberId = member.userId || member.id;
+                    if (!memberId) return null;
+
                     const fullName = `${member.firstName || ''} ${member.lastName || ''}`.trim();
                     const label = fullName || member.username || member.email || 'Staff member';
                     const roleLabel = member.roleName || member.roleCode || 'Staff';
-                    const thisMemberIsAssigning = assigningReviewerId === (member.userId || member.id) && pendingActionId === assignModalApp.applicationId;
+                    const thisMemberIsAssigning = assigningReviewerId === memberId && pendingActionId === assignModalApp.applicationId;
 
                     return (
                       <button
-                        key={member.userId || member.id}
+                        key={memberId}
                         type="button"
                         className="flex cursor-pointer w-full items-center justify-between gap-3 border-b border-[#bec0c3] px-4 py-3 text-left last:border-b-0 hover:bg-[#f8fafc] disabled:opacity-60 disabled:cursor-not-allowed"
-                        onClick={() => handleAssignApplication(assignModalApp, member.userId || member.id)}
+                        onClick={() => handleAssignApplication(assignModalApp, memberId)}
                         disabled={pendingActionId === assignModalApp.applicationId}
                       >
                         <div>

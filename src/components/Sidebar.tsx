@@ -20,6 +20,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const [applicationsCount, setApplicationsCount] = useState(0);
   const [certificatesCount, setCertificatesCount] = useState(0);
   const [issuedCertificatesCount, setIssuedCertificatesCount] = useState(0);
+  const [vettingQueueCount, setVettingQueueCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   const getBaseApiUrl = () => {
@@ -157,6 +158,34 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
     return 0;
   };
 
+  const fetchVettingQueueCount = async () => {
+    setIsLoading(true);
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      const baseUrl = getBaseApiUrl();
+      if (!accessToken || !baseUrl) return;
+
+      // Match the queue page's default Submitted filter so its badge and
+      // table always report the same total.
+      const response = await fetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications?status=SUBMITTED`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (response.ok && result?.success !== false) {
+        setVettingQueueCount(normalizeCount(result?.data ?? result));
+      }
+    } catch (err) {
+      console.error('Failed to fetch vetting queue count:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const fetchIssuedCertificates = async () => {
     try {
       const accessToken = localStorage.getItem('accessToken');
@@ -180,6 +209,21 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       const result = await response.json().catch(() => ({}));
 
       if (response.ok) {
+        const certificates = Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result)
+            ? result
+            : result?.data
+              ? [result.data]
+              : null;
+
+        if (certificates) {
+          setIssuedCertificatesCount(
+            certificates.filter((certificate: Record<string, unknown>) => certificate.voided !== true).length
+          );
+          return;
+        }
+
         const nextCount = normalizeCount(result.data ?? result);
         if (nextCount > 0 || Object.keys(result).length > 0) {
           setIssuedCertificatesCount(nextCount);
@@ -210,7 +254,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
 
         const issuedApps = apps.filter((app: Record<string, unknown>) => {
           const record = app as Record<string, unknown>;
-          return Boolean(
+          return record.voided !== true && Boolean(
             record.certificateNumber ||
             record.verificationCode ||
             record.issuedAt ||
@@ -239,9 +283,11 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
     const fetchTimer = window.setTimeout(() => {
       if (role === 'admin') {
         void fetchAdminData();
-      } else {
+      } else if (role === 'exporter') {
         void fetchApplications();
         void fetchIssuedCertificates();
+      } else if (role === 'vetting') {
+        void fetchVettingQueueCount();
       }
     }, 0);
 
@@ -249,7 +295,11 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   }, [mounted, role]);
 
   const allCount = role === 'admin' ? applicationsCount : applications.length;
-  const pendingPaymentCount = applications.filter(app => app.status === 'PENDING_PAYMENT').length;
+  const pendingPaymentCount = applications.filter(app => (
+    app.status !== 'ISSUED' &&
+    app.status !== 'CERTIFICATE_ISSUED' &&
+    app.status !== 'REJECTED'
+  )).length;
   const underReviewCount = applications.filter(app => app.status === 'UNDER_REVIEW').length;
   const issuedCount = role === 'admin' ? certificatesCount : issuedCertificatesCount;
 
@@ -318,15 +368,15 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const renderVettingSidebar = () => (
     <>
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-queue' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/vetting-queue')}>
-        <span className="text-[13px] w-[15px] text-center">📥</span> Applications Queue {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">12</span>}
+        <span className="text-[13px] w-[15px] text-center">📥</span> Applications Queue {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{vettingQueueCount}</span>}
       </div>
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-review' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/vetting-review')}>
         <span className="text-[13px] w-[15px] text-center">🗂️</span> My Reviews
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push('/vetting-review?status=APPROVED')}>
         <span className="text-[13px] w-[15px] text-center">✅</span> Approved Today {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">0</span>}
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push('/vetting-review?status=REJECTED')}>
         <span className="text-[13px] w-[15px] text-center">❌</span> Rejected
       </div>
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
@@ -347,7 +397,7 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath)}>
         <span className="text-[13px] w-[15px] text-center">📄</span> All Applications {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{allCount}</span>}
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath + '?status=PENDING_PAYMENT' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath + '?status=PENDING_PAYMENT')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath + '?status=PENDING' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath + '?status=PENDING')}>
         <span className="text-[13px] w-[15px] text-center">🕐</span> Pending Payment {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{pendingPaymentCount}</span>}
       </div>
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath + '?status=UNDER_REVIEW' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath + '?status=UNDER_REVIEW')}>

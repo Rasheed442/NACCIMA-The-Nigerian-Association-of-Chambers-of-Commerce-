@@ -89,7 +89,19 @@ interface ApplicationData {
   history: HistoryItem[];
 }
 
-export default function VettingReviewPage() {
+interface ApplicationReviewPageProps {
+  role?: 'admin' | 'vetting';
+  backHref?: string;
+  backLabel?: string;
+  logoutHref?: string;
+}
+
+export default function VettingReviewPage({
+  role = 'vetting',
+  backHref = '/vetting-review',
+  backLabel = 'Back to Queue',
+  logoutHref = '/login',
+}: ApplicationReviewPageProps) {
   const router = useRouter();
   const params = useParams();
   const applicationId = params.id as string;
@@ -105,6 +117,11 @@ export default function VettingReviewPage() {
   const [error, setError] = useState('');
   const [decisionError, setDecisionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // The route is opened with the list item's applicationId. Once details are
+  // loaded, use the canonical application.id returned by the API for every
+  // state-changing request.
+  const resolvedApplicationId = applicationData?.application?.id || applicationId;
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -154,7 +171,7 @@ export default function VettingReviewPage() {
   const handleLogout = () => {
     setShowLogoutModal(false);
     localStorage.clear();
-    router.push('/login');
+    router.push(logoutHref);
   };
 
   const handleSelfAssign = async () => {
@@ -165,7 +182,7 @@ export default function VettingReviewPage() {
 
     try {
       const baseUrl = getBaseUrl();
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}/self-assign`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${encodeURIComponent(resolvedApplicationId)}/self-assign`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,10 +210,10 @@ export default function VettingReviewPage() {
   };
 
   const handleDecision = async (decision: 'APPROVE' | 'REJECT' | 'REQUEST_INFO') => {
-    const approvalComment = 'All submitted documents have been reviewed and are satisfactory.';
+    const approvalComment = comment.trim() || 'All submitted documents have been reviewed and are satisfactory.';
 
     if (decision !== 'APPROVE' && !comment.trim()) {
-      setDecisionError('Comment is required for all actions. Please add a note before continuing.');
+      setDecisionError('Comment is required when rejecting or requesting additional information.');
       return;
     }
 
@@ -204,7 +221,7 @@ export default function VettingReviewPage() {
     setDecisionError('');
     try {
       const baseUrl = getBaseUrl();
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}/decision`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${encodeURIComponent(resolvedApplicationId)}/decision`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -273,9 +290,9 @@ export default function VettingReviewPage() {
   if (loading) {
     return (
       <div className="h-screen flex flex-col">
-        <AppHeader role="vetting" />
+        <AppHeader role={role} />
         <div className="flex-1 flex overflow-hidden">
-          <Sidebar role="vetting" />
+          <Sidebar role={role} />
           <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -290,18 +307,18 @@ export default function VettingReviewPage() {
   if (error || !applicationData) {
     return (
       <div className="h-screen flex flex-col">
-        <AppHeader role="vetting" />
+        <AppHeader role={role} />
         <div className="flex-1 flex overflow-hidden">
-          <Sidebar role="vetting" />
+          <Sidebar role={role} />
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
               <p className="text-sm text-gray-600 mb-4">{error || 'Application not found'}</p>
               <button
-                onClick={() => router.push('/vetting-review')}
+                onClick={() => router.push(backHref)}
                 className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                Back to Queue
+                {backLabel}
               </button>
             </div>
           </div>
@@ -314,18 +331,18 @@ export default function VettingReviewPage() {
 
   return (
     <div className="h-screen flex flex-col">
-      <AppHeader role="vetting" />
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar role="vetting" />
+        <AppHeader role={role} />
+        <div className="flex-1 flex overflow-hidden">
+          <Sidebar role={role} />
         <div className="flex-1 px-6 py-5 overflow-auto bg-gray-50">
           {/* Header */}
           <div className="mb-6">
             <button
-              onClick={() => router.push('/vetting-queue')}
+              onClick={() => router.push(backHref)}
               className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Queue
+              {backLabel}
             </button>
             <div className="flex items-center justify-between">
               <div>
@@ -419,18 +436,18 @@ export default function VettingReviewPage() {
                     <div>
                       <span className="text-gray-500 text-xs">FOB ({application.valueCurrency})</span>
                       <p className="text-gray-900 font-medium">
-                        {application.valueCurrency === 'USD' ? '$' : '₦'}{application.totalValueFob.toLocaleString()}
+                        {application.valueCurrency === 'USD' ? '$' : '₦'}{application?.totalValueFob?.toLocaleString()}
                       </p>
                     </div>
                     <div>
                       <span className="text-gray-500 text-xs">FOB (NGN)</span>
                       <p className="text-gray-900 font-medium">
-                        ₦{(application.totalValueFob * exchangeRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} @ ₦{exchangeRate.toLocaleString()}/$
+                        ₦{(application.totalValueFob * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })} @ ₦{exchangeRate?.toLocaleString()}/$
                       </p>
                     </div>
                     <div>
                       <span className="text-gray-500 text-xs">Fee Paid</span>
-                      <p className="text-gray-900 font-medium">₦{feePaid.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                      <p className="text-gray-900 font-medium">₦{feePaid?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
                     </div>
                     <div>
                       <span className="text-gray-500 text-xs">Country of Manufacture</span>
@@ -464,7 +481,7 @@ export default function VettingReviewPage() {
                           <td className="px-4 py-3 text-gray-700">{item.quantity}</td>
                           <td className="px-4 py-3 text-gray-700">{item.grossWeight} kg</td>
                           <td className="px-4 py-3 text-gray-900 font-medium">
-                            {item.valueCurrency === 'USD' ? '$' : '₦'}{item.value.toLocaleString()}
+                            {item.valueCurrency === 'USD' ? '$' : '₦'}{item?.value?.toLocaleString()}
                           </td>
                         </tr>
                       ))}
@@ -554,7 +571,7 @@ export default function VettingReviewPage() {
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Comment required for all actions..."
+                  placeholder="Add a review comment (required when rejecting)..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows={4}
                 />

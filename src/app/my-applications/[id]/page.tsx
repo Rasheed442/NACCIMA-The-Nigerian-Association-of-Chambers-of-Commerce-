@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
+import { FileText, PackageOpen } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 
 interface TimelineEvent {
@@ -15,6 +16,28 @@ interface TimelineEvent {
   occurredAt: string;
 }
 
+interface LineItem {
+  id: string;
+  hsCode?: string;
+  hsDescription?: string;
+  marksNo?: string;
+  description?: string;
+  nomenclature?: string;
+  quantity?: number;
+  unit?: string;
+  grossWeight?: number;
+  value?: number;
+  valueCurrency?: string;
+}
+
+interface ApplicationDocument {
+  id: string;
+  documentType: string;
+  fileName: string;
+  fileUrl?: string;
+  uploadedAt?: string;
+}
+
 interface TrackingData {
   application: {
     id: string;
@@ -23,6 +46,8 @@ interface TrackingData {
     submittedAt: string;
     modeOfTransport: string;
     destinationCountry: string;
+    valueCurrency?: string;
+    goods?: LineItem[];
   };
   shipment: {
     consignee: string;
@@ -39,6 +64,8 @@ interface TrackingData {
     currency: string;
   };
   timeline: TimelineEvent[];
+  lineItems?: LineItem[];
+  documents?: ApplicationDocument[];
 }
 
 export default function ApplicationDetail() {
@@ -49,6 +76,11 @@ export default function ApplicationDetail() {
   const [activeTab, setActiveTab] = React.useState('details');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [trackingData, setTrackingData] = useState<TrackingData | null>(null);
+  const [applicationGoods, setApplicationGoods] = useState<LineItem[] | null>(null);
+  const [lineItemsLoading, setLineItemsLoading] = useState(true);
+  const [documents, setDocuments] = useState<ApplicationDocument[] | null>(null);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,7 +134,82 @@ export default function ApplicationDetail() {
       }
     };
 
+    const loadDocuments = async () => {
+      setDocumentsLoading(true);
+      setDocumentsError(null);
+
+      try {
+        const baseUrl = getBaseUrl();
+        if (!baseUrl) throw new Error('API URL not configured');
+
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        const result = await response.json();
+
+        if (isCancelled) return;
+        if (!response.ok) {
+          setDocumentsError(result.message || 'Failed to load documents.');
+          return;
+        }
+
+        setDocuments(Array.isArray(result.data) ? result.data : []);
+      } catch (err) {
+        if (!isCancelled) {
+          console.error('Failed to fetch application documents:', err);
+          setDocumentsError('Failed to load documents.');
+        }
+      } finally {
+        if (!isCancelled) setDocumentsLoading(false);
+      }
+    };
+
+    const loadApplicationGoods = async () => {
+      setLineItemsLoading(true);
+
+      try {
+        const baseUrl = getBaseUrl();
+        if (!baseUrl) throw new Error('API URL not configured');
+
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        const result = await response.json();
+
+        if (isCancelled || !response.ok) return;
+
+        const payload = result.data;
+        const applications = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.content)
+            ? payload.content
+            : payload?.id || payload?.applicationId
+              ? [payload]
+              : [];
+        const application = applications.find((item: { id?: string; applicationId?: string }) => (
+          item.id === applicationId || item.applicationId === applicationId
+        ));
+
+        setApplicationGoods(Array.isArray(application?.goods) ? application.goods : []);
+      } catch (err) {
+        if (!isCancelled) {
+          console.error('Failed to fetch application line items:', err);
+          setApplicationGoods([]);
+        }
+      } finally {
+        if (!isCancelled) setLineItemsLoading(false);
+      }
+    };
+
     void loadTrackingData();
+    void loadDocuments();
+    void loadApplicationGoods();
 
     return () => {
       isCancelled = true;
@@ -112,6 +219,23 @@ export default function ApplicationDetail() {
   const handleLogout = () => {
     setShowLogoutModal(false);
     router.push('/');
+  };
+
+  // Tracking responses do not always include goods and documents. The tabs
+  // remain available, but show an empty state instead of placeholder records.
+  const lineItems = applicationGoods || trackingData?.lineItems || trackingData?.application.goods || [];
+  const documentRecords = documents || trackingData?.documents || [];
+  const hasLineItems = lineItems.length > 0;
+  const hasDocuments = documentRecords.length > 0;
+  const firstLineItem = lineItems[0];
+  const fobValueNgn = trackingData?.shipment.totalValueFob && trackingData.shipment.exchangeRate
+    ? trackingData.shipment.totalValueFob * trackingData.shipment.exchangeRate
+    : undefined;
+
+  const getDocumentUrl = (fileUrl?: string) => {
+    if (!fileUrl) return undefined;
+    const markdownUrl = fileUrl.match(/^\[.*?\]\((https?:\/\/[^)]+)\)$/);
+    return markdownUrl?.[1] || fileUrl;
   };
 
   const formatDate = (dateString: string) => {
@@ -233,73 +357,75 @@ export default function ApplicationDetail() {
                     className={`px-3.5 py-1.75 text-[13px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'lineitems' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
                     onClick={() => setActiveTab('lineitems')}
                   >
-                    Line Items (1)
+                    Line Items ({lineItems.length})
                   </button>
                   <button 
                     className={`px-3.5 py-1.75 text-[13px] font-semibold cursor-pointer border-b-2 -mb-[2px] transition-all ${activeTab === 'documents' ? 'text-[#1a4a8a] border-b-[#1a4a8a]' : 'text-[#6a7a9a] border-b-transparent'}`}
                     onClick={() => setActiveTab('documents')}
                   >
-                    Documents (1/3)
+                    Documents ({documentRecords.length})
                   </button>
                 </div>
 
                 {activeTab === 'details' && (
                   <>
-                    <div className="bg-[#f0f7ff] border border-[#bfdbfe] rounded-[6px] p-[10px] [12px] mb-[12px]">
-                      <div className="text-[13px] font-bold text-[#1e40af] uppercase tracking-[0.5px] pb-2">Shipment Information</div>
-                      <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[13px]">
-                        <span className="text-[#6a7a9a] font-medium">Consignee</span>
-                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.consignee}</span>
-                        <span className="text-[#6a7a9a] font-medium">Consignee Address</span>
-                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.consigneeAddress}</span>
-                        <span className="text-[#6a7a9a] font-medium">Destination</span>
-                        <span className="text-[#1a2236] font-medium">{trackingData.application.destinationCountry}</span>
-                        <span className="text-[#6a7a9a] font-medium">Mode of Transport</span>
-                        <span className="text-[#1a2236] font-medium">🚢 {trackingData.application.modeOfTransport}</span>
-                        <span className="text-[#6a7a9a] font-medium">Carrier</span>
-                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.carrier}</span>
-                        <span className="text-[#6a7a9a] font-medium">Destination Port</span>
-                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.destinationPort}</span>
-                        <span className="text-[#6a7a9a] font-medium">FOB Value (USD)</span>
-                        <span className="text-[#1a2236] font-medium">{trackingData.shipment.valueCurrency} {trackingData?.shipment?.totalValueFob?.toLocaleString()}</span>
-                        <span className="text-[#6a7a9a] font-medium">Exchange Rate</span>
-                        <span className="text-[#1a2236] font-medium">₦{trackingData?.shipment?.exchangeRate?.toLocaleString()}/USD</span>
-                      </div>
-                    </div>
+                    <section className="mb-3 rounded-[6px] border border-[#bfdbfe] bg-[#f0f7ff] p-[10px]">
+                      <h2 className="border-b border-[#d6e8fb] pb-2 text-[13px] font-bold uppercase tracking-[0.5px] text-[#1e40af]">Shipment Information</h2>
+                      <dl className="mt-2 grid grid-cols-[145px_minmax(0,1fr)] gap-x-[10px] gap-y-[5px] text-[13px]">
+                        <dt className="font-medium text-[#6a7a9a]">Consignee</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.consignee || '—'}</dd>
+                        <dt className="font-medium text-[#6a7a9a]">Destination</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.destinationCountry || '—'}</dd>
+                        <dt className="font-medium text-[#6a7a9a]">Mode of Transport</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.modeOfTransport || '—'}</dd>
+                        <dt className="font-medium text-[#6a7a9a]">Carrier</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.carrier || '—'}</dd>
+                        <dt className="font-medium text-[#6a7a9a]">FOB Value ({trackingData.shipment.valueCurrency || 'USD'})</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.valueCurrency} {trackingData.shipment.totalValueFob?.toLocaleString() || '—'}</dd>
+                        {fobValueNgn && <><dt className="font-medium text-[#6a7a9a]">FOB Value (NGN)</dt><dd className="font-medium text-[#1a2236]">₦{fobValueNgn.toLocaleString()} @ ₦{trackingData.shipment.exchangeRate.toLocaleString()}/$</dd></>}
+                        {firstLineItem && <><dt className="font-medium text-[#6a7a9a]">HS Code</dt><dd className="font-mono font-medium text-[#1a4a8a]">{firstLineItem.hsCode || '—'}{firstLineItem.hsDescription ? ` — ${firstLineItem.hsDescription}` : ''}</dd></>}
+                      </dl>
+                    </section>
 
-                    <div className="bg-[#f0f7ff] border border-[#bfdbfe] rounded-[6px] p-[10px] [12px] mb-[12px]">
-                      <div className="text-[13px] font-bold text-[#1e40af] uppercase tracking-[0.5px] pb-2">Payment</div>
-                      <div className="grid grid-cols-[130px_1fr] gap-[3px_10px] text-[13px]">
-                        <span className="text-[#6a7a9a] font-medium">Amount Paid</span>
-                        <span className="text-[#065f46] font-medium">{trackingData.payment.currency} {trackingData?.payment?.amount?.toLocaleString()}</span>
-                        <span className="text-[#6a7a9a] font-medium">Payment Reference</span>
-                        <span className="text-[#1a2236] font-medium font-mono">{trackingData.payment.paymentReference}</span>
-                      </div>
-                    </div>
+                    <section className="mb-3 rounded-[6px] border border-[#bfdbfe] bg-[#f0f7ff] p-[10px]">
+                      <h2 className="border-b border-[#d6e8fb] pb-2 text-[13px] font-bold uppercase tracking-[0.5px] text-[#1e40af]">Payment</h2>
+                      <dl className="mt-2 grid grid-cols-[145px_minmax(0,1fr)] gap-x-[10px] gap-y-[5px] text-[13px]">
+                        <dt className="font-medium text-[#6a7a9a]">Amount Paid</dt><dd className="font-medium text-[#065f46]">{trackingData.payment.currency} {trackingData.payment.amount?.toLocaleString() || '—'}</dd>
+                        <dt className="font-medium text-[#6a7a9a]">Payment Reference</dt><dd className="font-mono font-medium text-[#1a2236]">{trackingData.payment.paymentReference || '—'}</dd>
+                      </dl>
+                    </section>
                   </>
                 )}
 
                 {activeTab === 'lineitems' && (
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5">
                     <div className="text-[13px] font-medium text-[#1a2236] mb-4">Goods Line Items</div>
-                    <div className="text-center py-8 text-[#6a7a9a]">Line items data not available in tracking response</div>
+                    {lineItemsLoading ? <div className="flex flex-col items-center justify-center py-8 text-center text-[#6a7a9a]"><PackageOpen size={32} className="mb-2 animate-pulse text-[#9aa9c2]" /><p className="text-[13px] font-medium">Loading line items...</p></div>
+                      : hasLineItems ? <div className="overflow-x-auto">
+                      <table className="w-full min-w-[600px] overflow-x-auto text-left text-[12px]">
+                        <thead className="bg-[#f1f4f9] text-[#4a5a7a]">
+                          <tr><th className="p-2">HS Code</th><th className="p-2">Description</th><th className="p-2">Marks No.</th><th className="p-2">Nomenclature</th><th className="p-2">Quantity</th><th className="p-2">Gross Weight</th><th className="p-2">Value</th></tr>
+                        </thead>
+                        <tbody>
+                          {lineItems.map((item) => (
+                            <tr key={item.id} className="border-t border-[#dde3ee]">
+                              <td className="p-2 font-mono">{item.hsCode || '—'}</td><td className="p-2"><div>{item.description || '—'}</div>{item.hsDescription && <div className="mt-0.5 text-[11px] text-[#6a7a9a]">{item.hsDescription}</div>}</td><td className="p-2">{item.marksNo || '—'}</td><td className="p-2">{item.nomenclature || '—'}</td><td className="p-2">{item.quantity !== undefined ? `${item.quantity.toLocaleString()} ${item.unit || ''}` : '—'}</td><td className="p-2">{item.grossWeight?.toLocaleString() || '—'}</td><td className="p-2">{item.value !== undefined ? `${item.valueCurrency || trackingData.application.valueCurrency || ''} ${item.value.toLocaleString()}` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div> : <div className="flex flex-col items-center justify-center py-8 text-center text-[#6a7a9a]"><PackageOpen size={32} className="mb-2 text-[#9aa9c2]" /><p className="text-[13px] font-medium">No line items available</p><p className="mt-1 text-[12px]">Line items will appear here when they are provided.</p></div>}
                   </div>
                 )}
 
                 {activeTab === 'documents' && (
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5">
                     <div className="text-[14px] font-medium text-[#1a2236] mb-4">Supporting Documents</div>
-                    <div className="flex flex-wrap gap-3 mb-3">
-                      <div className="border-[1.5px] flex flex-col gap-2 border-dashed  border-[#3a7bd5] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#3a7bd5] bg-[#f0f7ff] text-center min-w-[140px]">
-                        ✅ Bill of Lading <span className="text-[12px] text-[#6a7a9a]">BOL_2026.pdf — 1.2MB</span>
-                      </div>
-                      <div className="border-[1.5px] flex flex-col gap-2 border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                        📎 Commercial Invoice <span className="text-[12px] text-[#e53e3e]">Required ✕</span>
-                      </div>
-                      <div className="border-[1.5px] flex flex-col gap-2 border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#6a7a9a] cursor-pointer text-center min-w-[140px] hover:border-[#3a7bd5] hover:text-[#3a7bd5]">
-                        📎 Packing List <span className="text-[12px] text-[#e53e3e]">Required ✕</span>
-                      </div>
-                    </div>
+                    {documentsLoading ? <div className="flex flex-col items-center justify-center py-8 text-center text-[#6a7a9a]"><FileText size={32} className="mb-2 animate-pulse text-[#9aa9c2]" /><p className="text-[13px] font-medium">Loading documents...</p></div>
+                      : documentsError ? <div className="flex flex-col items-center justify-center py-8 text-center text-[#9b1c1c]"><FileText size={32} className="mb-2 text-[#fca5a5]" /><p className="text-[13px] font-medium">{documentsError}</p></div>
+                        : hasDocuments ? <div className="flex flex-wrap gap-3 mb-3">
+                          {documentRecords.map((document) => {
+                            const url = getDocumentUrl(document.fileUrl);
+                            const content = <><span>{document.documentType.replace(/_/g, ' ')}</span><span className="text-[12px] text-[#6a7a9a]">{document.fileName}</span></>;
+                            return url ? <a key={document.id} href={url} target="_blank" rel="noreferrer" className="border-[1.5px] flex flex-col gap-2 border-dashed border-[#3a7bd5] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#3a7bd5] bg-[#f0f7ff] text-center min-w-[140px] hover:bg-[#e4f1ff]">{content}</a>
+                              : <div key={document.id} className="border-[1.5px] flex flex-col gap-2 border-dashed border-[#d1d5db] rounded-[6px] px-[14px] py-[10px] text-[13px] text-[#4a5a7a] text-center min-w-[140px]">{content}</div>;
+                          })}
+                        </div> : <div className="flex flex-col items-center justify-center py-8 text-center text-[#6a7a9a]"><FileText size={32} className="mb-2 text-[#9aa9c2]" /><p className="text-[13px] font-medium">No documents available</p><p className="mt-1 text-[12px]">Uploaded documents will appear here.</p></div>}
                   </div>
                 )}
               </div>
@@ -341,6 +467,29 @@ export default function ApplicationDetail() {
       </div>
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
+    </div>
+  );
+}
+
+function DetailField({
+  label,
+  value,
+  wide = false,
+  mono = false,
+  emphasis,
+}: {
+  label: string;
+  value?: string;
+  wide?: boolean;
+  mono?: boolean;
+  emphasis?: 'success';
+}) {
+  return (
+    <div className={`min-w-0 bg-white px-4 py-3 ${wide ? 'sm:col-span-2' : ''}`}>
+      <dt className="mb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#71809a]">{label}</dt>
+      <dd className={`break-words text-[13px] font-medium ${mono ? 'font-mono text-[12px]' : ''} ${emphasis === 'success' ? 'text-[#047857]' : 'text-[#1a2236]'}`}>
+        {value || '—'}
+      </dd>
     </div>
   );
 }

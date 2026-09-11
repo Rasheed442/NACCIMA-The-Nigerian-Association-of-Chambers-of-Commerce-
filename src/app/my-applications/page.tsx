@@ -283,13 +283,13 @@ function MyApplicationsContent() {
         </button>
       );
     }
-    if (status === 'PAID') {
+    if (status === 'DRAFT') {
       return (
         <button
           className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
-          onClick={() => router.push(`/my-applications/${id}/review`)}
+          onClick={() => router.push(`/my-applications/${id}/edit`)}
         >
-          Review
+          Edit
         </button>
       );
     }
@@ -348,7 +348,9 @@ function MyApplicationsContent() {
         app.tin?.toLowerCase().includes(normalizedSearch) ||
         app.certificateType?.toLowerCase().includes(normalizedSearch) ||
         app.status.toLowerCase().includes(normalizedSearch);
-      const matchesStatus = filterStatus === '' || app.status === filterStatus;
+      const matchesStatus = filterStatus === ''
+        || (filterStatus === 'PENDING' && !['ISSUED', 'CERTIFICATE_ISSUED', 'REJECTED'].includes(app.status))
+        || app.status === filterStatus;
       const matchesCertType = filterCertType === '' || app.certificateType === filterCertType;
       const matchesTransport = filterTransport === '' || app.modeOfTransport === filterTransport;
       return matchesSearch && matchesStatus && matchesCertType && matchesTransport;
@@ -438,7 +440,7 @@ function MyApplicationsContent() {
                   onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
                 >
                   <span className="flex-1 text-left">
-                    {filterStatus === '' ? 'All Statuses' : filterStatus}
+                    {filterStatus === '' ? 'All Statuses' : filterStatus === 'PENDING' ? 'Pending' : filterStatus}
                   </span>
                   <ChevronDown size={14} />
                 </button>

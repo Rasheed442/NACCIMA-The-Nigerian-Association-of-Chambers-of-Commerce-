@@ -282,7 +282,7 @@ function ExporterDashboardContent() {
       value: dashboardData?.certificatesIssued || 0,
       meta: `${dashboardData?.certificatesIssuedThisMonth || 0} this month`,
       color: 'text-[#065f46]',
-      href: '/my-applications?status=ISSUED',
+      href: '/issued-certs',
       highlight: 'text-[#059669]',
       accent: 'bg-[#eaf7f2]',
       icon: <FaArrowUp className="text-[#059669]" />

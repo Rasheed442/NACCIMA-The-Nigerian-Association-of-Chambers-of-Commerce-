@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { FileText, CheckCircle, Clock, Truck, Plane, Ship, ArrowRight, AlertCircle } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { FileText, CheckCircle, Clock, Truck, Plane, Ship, ArrowRight, AlertCircle, ChevronDown } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
@@ -25,10 +25,25 @@ interface ReviewApplication {
 
 export default function VettingReviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reviewStatus = searchParams.get('status') || 'SUBMITTED';
+  const reviewEndpoint = reviewStatus === 'ALL'
+    ? '/api/v1/admin/certificates/vetting/applications'
+    : `/api/v1/admin/certificates/vetting/applications?status=${encodeURIComponent(reviewStatus)}`;
   const [applications, setApplications] = useState<ReviewApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false);
+
+  const reviewStatusOptions = [
+    { value: 'SUBMITTED', label: 'Submitted' },
+    { value: 'UNDER_REVIEW', label: 'Under Review' },
+    { value: 'APPROVED', label: 'Approved' },
+    { value: 'REJECTED', label: 'Rejected' },
+    { value: 'ALL', label: 'All' },
+  ];
+  const reviewStatusLabel = reviewStatusOptions.find((option) => option.value === reviewStatus)?.label || 'Submitted';
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -46,7 +61,7 @@ export default function VettingReviewPage() {
         throw new Error('API base URL is not configured');
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications`);
+      const response = await apiFetch(`${baseUrl}${reviewEndpoint}`);
       const payload = await response.json();
 
       if (response.ok && payload?.success && payload?.data) {
@@ -75,7 +90,7 @@ export default function VettingReviewPage() {
           throw new Error('API base URL is not configured');
         }
 
-        const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications`);
+        const response = await apiFetch(`${baseUrl}${reviewEndpoint}`);
         const payload = await response.json();
 
         if (!isMounted) return;
@@ -101,7 +116,7 @@ export default function VettingReviewPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reviewEndpoint]);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -111,6 +126,7 @@ export default function VettingReviewPage() {
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
+      SUBMITTED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Submitted', icon: <FileText className="w-3 h-3" /> },
       PAID: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Paid', icon: <CheckCircle className="w-3 h-3" /> },
       UNDER_REVIEW: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Under Review', icon: <Clock className="w-3 h-3" /> },
       INFO_REQUESTED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Info Requested', icon: <AlertCircle className="w-3 h-3" /> },
@@ -186,15 +202,62 @@ export default function VettingReviewPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[16px] font-bold text-[#1a2236]">My Reviews</div>
-                  <div className="text-[11.5px] text-[#6a7a9a] mt-1">All applications assigned to my vetting review queue</div>
+                  <div className="text-[11.5px] text-[#6a7a9a] mt-1">
+                    {reviewStatus === 'SUBMITTED'
+                      ? 'Submitted applications awaiting vetting review'
+                      : reviewStatus === 'ALL'
+                        ? 'Showing applications across all statuses'
+                        : `Showing ${reviewStatus.toLowerCase().replace(/_/g, ' ')} applications`}
+                  </div>
                 </div>
-                <button
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#dbe2ee] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a2236] hover:bg-[#f4f7fb]"
-                  onClick={fetchReviews}
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  Refresh
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilterOpen((isOpen) => !isOpen)}
+                      className="inline-flex min-w-[132px] items-center justify-between gap-2 rounded-lg border border-[#dbe2ee] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a2236] transition-colors hover:bg-[#f4f7fb] focus:outline-none focus:ring-2 focus:ring-[#1a4a8a]/20"
+                      aria-haspopup="listbox"
+                      aria-expanded={statusFilterOpen}
+                    >
+                      <span>{reviewStatusLabel}</span>
+                      <ChevronDown className={`h-4 w-4 text-[#6a7a9a] transition-transform ${statusFilterOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {statusFilterOpen && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Close status filter"
+                          className="fixed inset-0 z-10 cursor-default"
+                          onClick={() => setStatusFilterOpen(false)}
+                        />
+                        <div className="absolute right-0 z-20 mt-1 min-w-[160px] overflow-hidden rounded-lg border border-[#dbe2ee] bg-white py-1 shadow-[0_8px_20px_rgba(26,34,54,0.14)]" role="listbox">
+                          {reviewStatusOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="option"
+                              aria-selected={reviewStatus === option.value}
+                              onClick={() => {
+                                setStatusFilterOpen(false);
+                                router.push(option.value === 'SUBMITTED' ? '/vetting-review' : `/vetting-review?status=${option.value}`);
+                              }}
+                              className={`block w-full px-3 py-2 text-left text-[12px] transition-colors hover:bg-[#f4f7fb] ${reviewStatus === option.value ? 'bg-[#edf4ff] font-semibold text-[#1a4a8a]' : 'text-[#374151]'}`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#dbe2ee] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a2236] hover:bg-[#f4f7fb]"
+                    onClick={fetchReviews}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    Refresh
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -213,7 +276,7 @@ export default function VettingReviewPage() {
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6381a8]">Ready</span>
                   <Clock className="w-4 h-4 text-[#d97706]" />
                 </div>
-                <div className="text-[28px] font-bold text-[#1a2236]">{applications.filter((app) => app.status === 'PAID').length}</div>
+                <div className="text-[28px] font-bold text-[#1a2236]">{applications.filter((app) => app.status === 'SUBMITTED').length}</div>
                 <div className="text-[13px] text-[#6a7a9a]">Awaiting review</div>
               </div>
 

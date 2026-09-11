@@ -145,7 +145,6 @@ export default function EditResubmissionPage() {
   // New application page state
   const [transportMode, setTransportMode] = useState<string | null>(null);
   const [isSavingTransportMode, setIsSavingTransportMode] = useState(false);
-  const [selectedCert, setSelectedCert] = useState<string | null>(null);
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoadingCerts, setIsLoadingCerts] = useState(true);
   const [certError, setCertError] = useState('');
@@ -175,6 +174,43 @@ export default function EditResubmissionPage() {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string | boolean | string[]>>({});
+
+  const prefillDynamicFields = (appData: ApplicationData) => {
+    const fieldValues: Record<string, string | boolean | string[]> = {};
+
+    if (appData.fields && typeof appData.fields === 'object') {
+      Object.entries(appData.fields).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          fieldValues[key] = value.map(String);
+        } else if (typeof value === 'boolean') {
+          fieldValues[key] = value;
+        } else if (value !== null && value !== undefined) {
+          fieldValues[key] = String(value);
+        }
+      });
+    }
+
+    const fallbackValues: Record<string, string> = {
+      IMPORTER_EMAIL: appData.importerEmail || '',
+      CONSIGNEE: appData.consignee || '',
+      CONSIGNEE_ADDRESS: appData.consigneeAddress || '',
+      CARRIER: appData.carrier || '',
+      DESTINATION: appData.destinationCountry || '',
+      DESTINATION_PORT: appData.destinationPort || '',
+      COUNTRY_OF_MANUFACTURING: appData.countryOfMfg || '',
+      TOTAL_VALUE_FOB: String(appData.totalValueFob ?? ''),
+      BULK_QUANTITY_MT: String(appData.bulkQtyMt ?? ''),
+      TOTAL_ITEMS: String(appData.totalItems ?? ''),
+    };
+
+    Object.entries(fallbackValues).forEach(([key, value]) => {
+      if (fieldValues[key] === undefined && value !== '') {
+        fieldValues[key] = value;
+      }
+    });
+
+    setDynamicFieldValues(fieldValues);
+  };
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -213,7 +249,7 @@ export default function EditResubmissionPage() {
         }
 
         // Load certificate types and other reference data
-        await Promise.all([
+        const [types] = await Promise.all([
           fetchCertificateTypes(),
           fetchTransportModes(),
           fetchCountries(),
@@ -235,6 +271,10 @@ export default function EditResubmissionPage() {
 
         console.log('Application data loaded:', appData);
 
+        // Saved application fields are available immediately; do not wait for
+        // the certificate-field configuration state to re-render first.
+        prefillDynamicFields(appData);
+
         // Set transport mode
         if (appData.modeOfTransport) {
           setTransportMode(appData.modeOfTransport);
@@ -242,86 +282,14 @@ export default function EditResubmissionPage() {
         }
 
         // Set certificate type
-        if (appData.certificateType && certificateTypes.length > 0) {
-          const matchedCertificate = certificateTypes.find(
+        if (appData.certificateType && types.length > 0) {
+          const matchedCertificate = types.find(
             cert => cert.code === appData.certificateType || cert.id === appData.certificateType || cert.name === appData.certificateType
           );
 
           if (matchedCertificate) {
-            setSelectedCert(matchedCertificate.id);
-            await fetchCertificateFields(matchedCertificate.id);
-
-            // Prefill dynamic field values after certificate fields are loaded
-            // Map application data to field codes based on certificate configuration
-            const fieldValues: Record<string, string | boolean | string[]> = {};
-
-            console.log('Certificate fields loaded:', certificateFields?.fields?.map(f => ({ code: f.code, name: f.name })));
-
-            // First, try to use the fields from the application data if they exist
-            if (appData.fields && typeof appData.fields === 'object') {
-              console.log('Application fields from API:', appData.fields);
-              Object.entries(appData.fields).forEach(([key, value]) => {
-                fieldValues[key] = String(value);
-              });
-            }
-
-            // Map known application fields to potential field codes as fallback
-            const fieldMapping: Record<string, string> = {
-              'IMPORTER_EMAIL': appData.importerEmail || '',
-              'CONSIGNEE': appData.consignee || '',
-              'CONSIGNEE_ADDRESS': appData.consigneeAddress || '',
-              'CARRIER': appData.carrier || '',
-              'DESTINATION': appData.destinationCountry || '',
-              'DESTINATION_PORT': appData.destinationPort || '',
-              'COUNTRY_OF_MANUFACTURING': appData.countryOfMfg || '',
-              'TOTAL_VALUE_FOB': String(appData.totalValueFob ?? ''),
-              'BULK_QUANTITY_MT': String(appData.bulkQtyMt ?? ''),
-              'TOTAL_ITEMS': String(appData.totalItems ?? ''),
-              'CRITERIA': '', // CRITERIA will need to be filled by the user
-            };
-
-            console.log('Field mapping:', fieldMapping);
-
-            // Set field values for fields that exist in the certificate configuration
-            if (certificateFields?.fields) {
-              certificateFields.fields.forEach(field => {
-                // First check if we already have a value from appData.fields
-                if (!fieldValues[field.code]) {
-                  // Then try the field mapping
-                  if (fieldMapping[field.code]) {
-                    fieldValues[field.code] = fieldMapping[field.code];
-                  }
-                }
-              });
-            }
-
-            // Also set common fields as fallback to ensure all data is available
-            Object.keys(fieldMapping).forEach(key => {
-              if (!fieldValues[key] && fieldMapping[key]) {
-                fieldValues[key] = fieldMapping[key];
-              }
-            });
-
-            console.log('Final field values to set:', fieldValues);
-            setDynamicFieldValues(fieldValues);
+            await fetchCertificateFields(matchedCertificate.id, matchedCertificate);
           }
-        } else {
-          // If no certificate type is set or certificate types not loaded yet, still set the basic field values from application data
-          const fieldValues: Record<string, string | boolean | string[]> = {
-            'IMPORTER_EMAIL': appData.importerEmail || '',
-            'CONSIGNEE': appData.consignee || '',
-            'CONSIGNEE_ADDRESS': appData.consigneeAddress || '',
-            'CARRIER': appData.carrier || '',
-            'DESTINATION': appData.destinationCountry || '',
-            'DESTINATION_PORT': appData.destinationPort || '',
-            'COUNTRY_OF_MANUFACTURING': appData.countryOfMfg || '',
-            'TOTAL_VALUE_FOB': String(appData.totalValueFob ?? ''),
-            'BULK_QUANTITY_MT': String(appData.bulkQtyMt ?? ''),
-            'TOTAL_ITEMS': String(appData.totalItems ?? ''),
-          };
-          
-          console.log('Setting field values without certificate type:', fieldValues);
-          setDynamicFieldValues(fieldValues);
         }
 
         // Prefill goods line items
@@ -339,14 +307,6 @@ export default function EditResubmissionPage() {
           }));
           setGoodsLineItems(items);
           lineItemIdRef.current = items.length;
-        }
-
-        // Ensure destination port is set from application data
-        if (appData.destinationPort) {
-          setDynamicFieldValues(prev => ({
-            ...prev,
-            DESTINATION_PORT: appData.destinationPort
-          }));
         }
 
         const trackingResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/tracking`, {
@@ -381,64 +341,7 @@ export default function EditResubmissionPage() {
     };
   }, [applicationId]);
 
-  // Handle case where certificate types load after application data
-  useEffect(() => {
-    if (application && certificateTypes.length > 0 && !selectedCert && application.certificateType) {
-      const matchedCertificate = certificateTypes.find(
-        cert => cert.code === application.certificateType || cert.id === application.certificateType || cert.name === application.certificateType
-      );
-
-      if (matchedCertificate) {
-        setSelectedCert(matchedCertificate.id);
-        fetchCertificateFields(matchedCertificate.id).then(() => {
-          // Prefill field values after certificate fields are loaded
-          const fieldValues: Record<string, string | boolean | string[]> = {};
-
-          // First, try to use the fields from the application data if they exist
-          if (application.fields && typeof application.fields === 'object') {
-            Object.entries(application.fields).forEach(([key, value]) => {
-              fieldValues[key] = String(value);
-            });
-          }
-
-          // Map known application fields to potential field codes as fallback
-          const fieldMapping: Record<string, string> = {
-            'IMPORTER_EMAIL': application.importerEmail || '',
-            'CONSIGNEE': application.consignee || '',
-            'CONSIGNEE_ADDRESS': application.consigneeAddress || '',
-            'CARRIER': application.carrier || '',
-            'DESTINATION': application.destinationCountry || '',
-            'DESTINATION_PORT': application.destinationPort || '',
-            'COUNTRY_OF_MANUFACTURING': application.countryOfMfg || '',
-            'TOTAL_VALUE_FOB': String(application.totalValueFob ?? ''),
-            'BULK_QUANTITY_MT': String(application.bulkQtyMt ?? ''),
-            'TOTAL_ITEMS': String(application.totalItems ?? ''),
-            'CRITERIA': '',
-          };
-
-          // Set field values for fields that exist in the certificate configuration
-          if (certificateFields?.fields) {
-            certificateFields.fields.forEach(field => {
-              if (!fieldValues[field.code] && fieldMapping[field.code]) {
-                fieldValues[field.code] = fieldMapping[field.code];
-              }
-            });
-          }
-
-          // Also set common fields as fallback
-          Object.keys(fieldMapping).forEach(key => {
-            if (!fieldValues[key] && fieldMapping[key]) {
-              fieldValues[key] = fieldMapping[key];
-            }
-          });
-
-          setDynamicFieldValues(fieldValues);
-        });
-      }
-    }
-  }, [application, certificateTypes, selectedCert, certificateFields]);
-
-  async function fetchCertificateTypes() {
+  async function fetchCertificateTypes(): Promise<CertificateType[]> {
     setIsLoadingCerts(true);
     setCertError('');
 
@@ -461,15 +364,22 @@ export default function EditResubmissionPage() {
         throw new Error(result.message || 'Failed to fetch certificate types.');
       }
 
-      setCertificateTypes(result);
+      const types = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.data)
+          ? result.data
+          : [];
+      setCertificateTypes(types);
+      return types;
     } catch (err) {
       setCertError(err instanceof Error ? err.message : 'Failed to fetch certificate types. Please try again.');
+      return [];
     } finally {
       setIsLoadingCerts(false);
     }
   }
 
-  async function fetchCertificateFields(certificateId: string) {
+  async function fetchCertificateFields(certificateId: string, certificate?: CertificateType) {
     setIsLoadingFields(true);
 
     try {
@@ -478,7 +388,7 @@ export default function EditResubmissionPage() {
         throw new Error('API base URL is not configured.');
       }
 
-      const selectedCert = certificateTypes.find(c => c.id === certificateId);
+      const selectedCert = certificate || certificateTypes.find(c => c.id === certificateId);
       if (!selectedCert) {
         throw new Error('Certificate type not found.');
       }
@@ -1167,34 +1077,34 @@ export default function EditResubmissionPage() {
         return;
       }
 
-      // Resubmit application using the resubmit endpoint
-      const resubmitResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/resubmit`, {
+      const isDraft = application?.status === 'DRAFT';
+      const submissionAction = isDraft ? 'submit' : 'resubmit';
+      const submissionResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/${submissionAction}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
 
-      const resubmitResult = await resubmitResponse.json();
-      if (!resubmitResponse.ok) {
-        throw new Error(resubmitResult?.message || 'Failed to resubmit application');
+      const submissionResult = await submissionResponse.json();
+      if (!submissionResponse.ok) {
+        throw new Error(submissionResult?.message || `Failed to ${submissionAction} application`);
       }
 
-      // Handle successful resubmission
-      const resubmitData = resubmitResult.data;
-      setSuccessMessage('Application resubmitted successfully!');
+      const submissionData = submissionResult.data;
+      setSuccessMessage(isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!');
       
       // Redirect after a short delay to show the success message
       setTimeout(() => {
-        if (resubmitData.status === 'PAID') {
+        if (submissionData.status === 'PAID') {
           // Application is already paid, redirect to applications
           router.push('/my-applications?status=SUBMITTED');
         } else {
           // Application needs payment, handle payment flow
-          router.push('/my-applications?status=PENDING_PAYMENT');
+          router.push('/my-applications?status=PENDING');
         }
       }, 2000);
     } catch (err) {
-      console.error('Failed to resubmit application:', err);
-      setError(err instanceof Error ? err.message : 'Failed to resubmit application');
+      console.error('Failed to submit application:', err);
+      setError(err instanceof Error ? err.message : 'Failed to submit application');
     } finally {
       setIsSaving(false);
     }
@@ -1270,7 +1180,9 @@ export default function EditResubmissionPage() {
     );
   }
 
-  if (error || !application) {
+  // Loading failures have no application form to display. Once the form is
+  // loaded, save and resubmission errors stay in the inline alert below.
+  if (!application) {
     return (
       <div className="h-screen flex flex-col">
         <AppHeader role="exporter" />
@@ -1722,7 +1634,7 @@ export default function EditResubmissionPage() {
                 onClick={handleSaveAndResubmit}
                 disabled={isSaving}
               >
-                {isSaving ? 'Resubmitting...' : 'Save & Resubmit'}
+                {isSaving ? (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...') : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit')}
               </button>
             </div>
           </div>

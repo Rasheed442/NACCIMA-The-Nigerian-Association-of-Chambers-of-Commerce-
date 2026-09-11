@@ -41,7 +41,7 @@ export default function VettingQueuePage() {
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [filterCertType, setFilterCertType] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('SUBMITTED');
   const [filterTransport, setFilterTransport] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [totalElements, setTotalElements] = useState(0);
@@ -70,7 +70,12 @@ export default function VettingQueuePage() {
     setLoading(true);
     try {
       const baseUrl = getBaseUrl();
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications`);
+      const params = new URLSearchParams();
+      if (filterStatus !== 'all') {
+        params.set('status', filterStatus);
+      }
+      const query = params.toString();
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications${query ? `?${query}` : ''}`);
       const data = await response.json();
       if (data.success && data.data) {
         setApplications(data.data.content || []);
@@ -85,8 +90,11 @@ export default function VettingQueuePage() {
 
   useEffect(() => {
     fetchDashboardStats();
-    fetchApplications();
   }, []);
+
+  useEffect(() => {
+    fetchApplications();
+  }, [filterStatus]);
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -129,6 +137,7 @@ export default function VettingQueuePage() {
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
+      SUBMITTED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Submitted', icon: <FileText className="w-3 h-3" /> },
       UNDER_REVIEW: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Under Review', icon: <Clock className="w-3 h-3" /> },
       PAID: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Paid', icon: <CheckCircle className="w-3 h-3" /> },
       INFO_REQUESTED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Info Requested', icon: <AlertCircle className="w-3 h-3" /> },
@@ -185,6 +194,7 @@ export default function VettingQueuePage() {
 
   const statusOptions = [
     { value: 'all', label: 'All Statuses' },
+    { value: 'SUBMITTED', label: 'Submitted' },
     { value: 'PAID', label: 'Paid / Unassigned' },
     { value: 'UNDER_REVIEW', label: 'Under Review' },
     { value: 'INFO_REQUESTED', label: 'Info Requested' },
@@ -276,38 +286,54 @@ export default function VettingQueuePage() {
             </div>
 
             <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+              <button
+                type="button"
+                onClick={() => router.push('/vetting-queue')}
+                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <Clock className="w-5 h-5 text-amber-600" />
                   <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Pending</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{pendingCount}</div>
                 <div className="text-xs text-gray-500 font-medium mt-1">Awaiting Review</div>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/vetting-review')}
+                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <CheckCircle className="w-5 h-5 text-emerald-600" />
                   <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Today</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{reviewedToday}</div>
                 <div className="text-xs text-gray-500 font-medium mt-1">Reviewed Today</div>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/vetting-review?status=APPROVED')}
+                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <CheckCircle className="w-5 h-5 text-blue-600" />
                   <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Month</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{approvedThisMonth}</div>
                 <div className="text-xs text-gray-500 font-medium mt-1">Approved This Month</div>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/vetting-review?status=REJECTED')}
+                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <XCircle className="w-5 h-5 text-rose-600" />
                   <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">Month</span>
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{rejectedThisMonth}</div>
                 <div className="text-xs text-gray-500 font-medium mt-1">Rejected This Month</div>
-              </div>
+              </button>
             </div>
 
             <div className="flex items-center gap-3 mb-6 flex-wrap bg-gray-50 border border-gray-200 rounded-xl p-4">
@@ -348,68 +374,68 @@ export default function VettingQueuePage() {
               </button>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full border-collapse text-sm">
+            <div className="overflow-x-auto pt-4">
+              <table className="w-full border-collapse text-[14px]">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">TIN</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Certificate Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Transport</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Submitted</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">FOB Value</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                  <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
+                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">TIN</th>
+                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate Type</th>
+                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Transport</th>
+                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Submitted</th>
+                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">FOB Value</th>
+                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Status</th>
+                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                          Loading applications...
+                      <td colSpan={7} className="px-[11px] py-[10px] border-b border-[#edf0f5]">
+                        <div className="flex items-center justify-center gap-3 rounded-[8px] border border-[#edf0f5] bg-[#f8fafc] px-4 py-5 text-[#4a5a7a]">
+                          <div className="flex gap-1">
+                            <span className="h-2 w-2 rounded-full bg-[#9eb7d6] animate-pulse" />
+                            <span className="h-2 w-2 rounded-full bg-[#9eb7d6] animate-pulse [animation-delay:120ms]" />
+                            <span className="h-2 w-2 rounded-full bg-[#9eb7d6] animate-pulse [animation-delay:240ms]" />
+                          </div>
+                          <span className="text-[13px] font-medium">Gathering applications for review...</span>
                         </div>
                       </td>
                     </tr>
                   ) : filteredApplications.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                        <div className="flex flex-col items-center gap-2">
-                          <FileText className="w-8 h-8 text-gray-300" />
-                          <span className="text-sm">No applications found</span>
-                        </div>
+                      <td colSpan={7} className="px-[11px] py-[8px] border-b border-[#edf0f5] text-center text-[#6a7a9a]">
+                        No applications found
                       </td>
                     </tr>
                   ) : (
                     filteredApplications.map((app) => (
                       <tr
                         key={app.applicationId}
-                        className="hover:bg-gray-50 transition-colors"
+                        className="hover:bg-[#f8faff]"
                       >
-                        <td className="px-4 py-3">
-                          <span className="font-mono text-xs text-gray-600">{app.tin}</span>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
+                          <span className="font-mono text-[12px]">{app.tin}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{app.certificateType}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 text-gray-700">
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.certificateType}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
+                          <div className="flex items-center gap-2">
                             {getTransportIcon(app.modeOfTransport)}
-                            <span className="text-xs">{app.modeOfTransport}</span>
+                            <span className="text-[12px]">{app.modeOfTransport}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle text-[12px]">
                           {format(new Date(app.submittedAt), 'MMM dd, yyyy')}
                         </td>
-                        <td className="px-4 py-3 text-gray-700 font-medium">
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle font-medium">
                           {app.fobCurrency === 'USD' ? '$' : '₦'}{app.fobValue.toLocaleString()}
                         </td>
-                        <td className="px-4 py-3">{getStatusBadge(app.status)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{getStatusBadge(app.status)}</td>
+                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
                           <button
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                            className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
                             onClick={() => handleReviewAction(app)}
                           >
-                            <FileText className="w-3.5 h-3.5" />
-                            {app.status === 'PAID' ? 'Assign & Review' : 'Review'}
+                            Review
                           </button>
                         </td>
                       </tr>
