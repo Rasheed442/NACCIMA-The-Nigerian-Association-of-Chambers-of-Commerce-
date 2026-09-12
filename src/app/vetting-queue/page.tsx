@@ -4,9 +4,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
+
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { Search, Ship, Plane, Truck, ChevronDown, Filter, FileText, CheckCircle, XCircle, BarChart3, Clock, AlertCircle, ChevronsUpDown, X } from 'lucide-react';
+import { Search, Ship, Plane, Truck, ChevronDown, Filter, FileText, CheckCircle,ArrowRight ,XCircle, BarChart3, Clock, AlertCircle, ChevronsUpDown, X } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 import { format } from 'date-fns';
 
@@ -136,20 +137,17 @@ export default function VettingQueuePage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
-      SUBMITTED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Submitted', icon: <FileText className="w-3 h-3" /> },
-      UNDER_REVIEW: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Under Review', icon: <Clock className="w-3 h-3" /> },
-      PAID: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'Paid', icon: <CheckCircle className="w-3 h-3" /> },
-      INFO_REQUESTED: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Info Requested', icon: <AlertCircle className="w-3 h-3" /> },
-      UNAPPROVED: { bg: 'bg-rose-100', text: 'text-rose-800', label: 'Unapproved', icon: <XCircle className="w-3 h-3" /> },
+    const statusMap: Record<string, { styles: string; label: string }> = {
+      SUBMITTED: { styles: 'bg-[#dbeafe] text-[#1e40af]', label: 'Submitted' },
+      UNDER_REVIEW: { styles: 'bg-[#fef3c7] text-[#92400e]', label: 'Under Review' },
+      PAID: { styles: 'bg-[#e0e7ff] text-[#3730a3]', label: 'Paid' },
+      INFO_REQUESTED: { styles: 'bg-[#dbeafe] text-[#1e40af]', label: 'Info Requested' },
+      UNAPPROVED: { styles: 'bg-[#fdf2f8] text-[#9d174d]', label: 'Unapproved' },
     };
 
-    const s = statusMap[status] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status, icon: <FileText className="w-3 h-3" /> };
+    const s = statusMap[status] || { styles: 'bg-[#f3f4f6] text-[#6b7280]', label: status };
     return (
-      <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${s.bg} ${s.text}`}>
-        {s.icon}
-        {s.label}
-      </span>
+      <span className={`inline-block whitespace-nowrap rounded px-2 py-[4px] text-[14px] font-medium ${s.styles}`}>{s.label}</span>
     );
   };
 
@@ -235,7 +233,7 @@ export default function VettingQueuePage() {
       <div className="relative" style={{ width }}>
         <button
           onClick={() => setOpenDropdown(isOpen ? null : dropdownKey)}
-          className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+          className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded text-xs bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
         >
           <span className="truncate">{getSelectedLabel(options, value)}</span>
           {isOpen ? (
@@ -289,7 +287,7 @@ export default function VettingQueuePage() {
               <button
                 type="button"
                 onClick={() => router.push('/vetting-queue')}
-                className="rounded-xl border border-[#fde7b0] bg-[#fffcf5] p-4 text-left shadow-[0_2px_10px_rgba(180,83,9,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(180,83,9,0.09)] focus:outline-none focus:ring-2 focus:ring-[#b45309]/20 focus:ring-offset-2"
+                className="rounded border border-[#fde7b0] bg-[#fffcf5] p-4 text-left shadow-[0_2px_10px_rgba(180,83,9,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(180,83,9,0.09)] focus:outline-none focus:ring-2 focus:ring-[#b45309]/20 focus:ring-offset-2"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#976527]">Pending</span>
@@ -303,7 +301,7 @@ export default function VettingQueuePage() {
               <button
                 type="button"
                 onClick={() => router.push('/vetting-review')}
-                className="rounded-xl border border-[#cdebdc] bg-[#f6fdf9] p-4 text-left shadow-[0_2px_10px_rgba(4,120,87,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(4,120,87,0.09)] focus:outline-none focus:ring-2 focus:ring-[#047857]/20 focus:ring-offset-2"
+                className="rounded border border-[#cdebdc] bg-[#f6fdf9] p-4 text-left shadow-[0_2px_10px_rgba(4,120,87,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(4,120,87,0.09)] focus:outline-none focus:ring-2 focus:ring-[#047857]/20 focus:ring-offset-2"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#327260]">Today</span>
@@ -317,7 +315,7 @@ export default function VettingQueuePage() {
               <button
                 type="button"
                 onClick={() => router.push('/vetting-review?status=APPROVED')}
-                className="rounded-xl border border-[#dbeafe] bg-[#f8fbff] p-4 text-left shadow-[0_2px_10px_rgba(37,99,235,0.06)] transition-all hover:shadow-[0_6px_18px_rgba(37,99,235,0.10)] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:ring-offset-2"
+                className="rounded border border-[#dbeafe] bg-[#f8fbff] p-4 text-left shadow-[0_2px_10px_rgba(37,99,235,0.06)] transition-all hover:shadow-[0_6px_18px_rgba(37,99,235,0.10)] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:ring-offset-2"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#3b6298]">This month</span>
@@ -331,7 +329,7 @@ export default function VettingQueuePage() {
               <button
                 type="button"
                 onClick={() => router.push('/vetting-review?status=REJECTED')}
-                className="rounded-xl border border-[#f7d8dc] bg-[#fff8f8] p-4 text-left shadow-[0_2px_10px_rgba(190,24,93,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(190,24,93,0.09)] focus:outline-none focus:ring-2 focus:ring-[#be185d]/20 focus:ring-offset-2"
+                className="rounded border border-[#f7d8dc] bg-[#fff8f8] p-4 text-left shadow-[0_2px_10px_rgba(190,24,93,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(190,24,93,0.09)] focus:outline-none focus:ring-2 focus:ring-[#be185d]/20 focus:ring-offset-2"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9d4b60]">This month</span>
@@ -371,29 +369,28 @@ export default function VettingQueuePage() {
                 <input
                   type="text"
                   placeholder="Search by TIN…"
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">
+              <button className="flex items-center gap-2 px-4 py-2 text-xs font-semibold border border-gray-300 rounded bg-white text-gray-700 hover:bg-gray-50 transition-colors">
                 <Filter className="w-4 h-4" />
                 Filter
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-[#dce6f3] bg-white shadow-[0_4px_16px_rgba(26,34,54,0.05)]">
-              <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] border-collapse text-[12px]">
-                <thead>
-                  <tr className="border-b border-[#dce6f3] bg-[#f5f8fc] text-[#506582]">
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">TIN</th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Certificate Type</th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Transport</th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Submitted</th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">FOB Value</th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Status</th>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Actions</th>
+            <div className="overflow-x-auto overflow-y-auto rounded-lg border border-[#dde3ee] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+              <table className="w-full min-w-[1040px] border-collapse text-[12px]">
+                <thead className="sticky top-0 z-2">
+                  <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
+                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">TIN</th>
+                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Certificate Type</th>
+                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Transport</th>
+                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Submitted</th>
+                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">FOB Value</th>
+                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Status</th>
+                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -420,31 +417,33 @@ export default function VettingQueuePage() {
                     filteredApplications.map((app) => (
                       <tr
                         key={app.applicationId}
-                        className="border-b border-[#edf1f6] last:border-b-0 transition-colors hover:bg-[#f7faff]"
+                        className="text-[12px] transition-colors hover:bg-[#f8faff]"
                       >
-                        <td className="px-4 py-3.5 align-middle font-mono text-[11px] font-medium text-[#233552]">
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
                           <span>{app.tin}</span>
                         </td>
-                        <td className="px-4 py-3.5 align-middle text-[#31425d]">{app.certificateType}</td>
-                        <td className="px-4 py-3.5 align-middle">
-                          <div className="flex items-center gap-2 text-[#40546f]">
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">{app.certificateType}</td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          <div className="flex items-center gap-2">
                             {getTransportIcon(app.modeOfTransport)}
                             <span>{app.modeOfTransport}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 align-middle text-[#40546f]">
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           {format(new Date(app.submittedAt), 'MMM dd, yyyy')}
                         </td>
-                        <td className="px-4 py-3.5 align-middle font-semibold text-[#233552]">
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           {app.fobCurrency === 'USD' ? '$' : '₦'}{app.fobValue.toLocaleString()}
                         </td>
-                        <td className="px-4 py-3.5 align-middle">{getStatusBadge(app.status)}</td>
-                        <td className="px-4 py-3.5 align-middle">
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">{getStatusBadge(app.status)}</td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           <button
-                            className="inline-flex items-center gap-1 rounded-md bg-[#1f5fae] px-2.5 py-1.75 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#194f91] hover:shadow focus:outline-none focus:ring-2 focus:ring-[#2563eb]/25"
+                            className="inline-flex items-center gap-1 rounded border-none bg-[#1a4a8a] px-[9px] py-[5px] text-[13px] font-medium text-white transition-all hover:bg-[#153c70]"
                             onClick={() => handleReviewAction(app)}
                           >
                             Review
+                                                          <ArrowRight className="w-3.5 h-3.5" />
+                            
                           </button>
                         </td>
                       </tr>
@@ -452,7 +451,6 @@ export default function VettingQueuePage() {
                   )}
                 </tbody>
               </table>
-              </div>
             </div>
 
             <div className="flex items-center justify-between mt-4 text-xs text-gray-500">

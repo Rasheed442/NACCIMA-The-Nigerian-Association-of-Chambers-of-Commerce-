@@ -7,6 +7,7 @@ import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { ClipLoader } from 'react-spinners';
 import { apiFetch, getBaseUrl } from '@/utils/api';
+import { BadgeCheck, Building2, CalendarDays, Eye, FileText, MapPin, Search, Tag } from 'lucide-react';
 
 interface Certificate {
   certificateId: string;
@@ -155,17 +156,20 @@ export default function AdminIssuedCertificates() {
             </div>
 
             {/* Search */}
-            <div className="flex gap-2 mb-4">
-              <input 
-                type="text" 
-                placeholder="Search by company name, certificate number..."
-                className="px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] flex-1"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div className="mb-4 flex gap-2">
+              <div className="relative w-full sm:w-[320px] lg:w-[360px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6a7a9a]" />
+                <input
+                  type="text"
+                  placeholder="Search company or certificate..."
+                  className="w-full rounded-[4px] border border-[#d1d5db] py-2 pl-9 pr-3 text-[12px]"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="overflow-x-auto pt-4 overflow-y-auto rounded border border-[#dde3ee]">
+            <div className="overflow-x-auto overflow-y-auto rounded border border-[#dde3ee]">
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <ClipLoader size={40} color="#1a4a8a" />
@@ -179,15 +183,15 @@ export default function AdminIssuedCertificates() {
                 <table className="w-full border-collapse text-[12px]">
                   <thead className="sticky top-0 z-2">
                     <tr className="bg-[#f1f4f9] text-[12px] text-[#4a5a7a] font-semibold">
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate #</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><FileText className="h-3 w-3" />Certificate #</span></th>
                       {/* <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Company</th> */}
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate Type</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Shipper</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Consignee</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Destination</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Issued At</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Status</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Actions</th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><Tag className="h-3 w-3" />Certificate Type</span></th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><Building2 className="h-3 w-3" />Shipper</span></th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><Building2 className="h-3 w-3" />Consignee</span></th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><MapPin className="h-3 w-3" />Destination</span></th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3 w-3" />Issued At</span></th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><BadgeCheck className="h-3 w-3" />Status</span></th>
+                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap"><span className="inline-flex items-center gap-1.5"><Eye className="h-3 w-3" />Actions</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -202,15 +206,15 @@ export default function AdminIssuedCertificates() {
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(cert.issuedAt)}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getStatusBadge(cert.status, cert.voided)}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
-                          <div className="flex gap-[5px]">
+                          <div className="flex gap-[8px]">
                             <button 
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[14px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
                               onClick={() => handleDownload(cert.pdfUrl)}
                             >
                               Download
                             </button>
                             <button 
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded border border-gray-300 text-[12px] font-medium cursor-pointer transition-all bg-white text-[#2a3a56]  hover:bg-[#f1f4f9]"
                               onClick={() => handleView(cert.certificateId)}
                             >
                               View
@@ -224,20 +228,23 @@ export default function AdminIssuedCertificates() {
               )}
             </div>
             {certificates.length > 0 && (
-              <div className="flex items-center justify-between mt-4">
+              <div className="mt-4 flex items-center justify-between">
                 <div className="text-[11px] text-[#6a7a9a]">
-                  Page {currentPage + 1} of {totalPages}
+                  Showing {currentPage * pageSize + 1}-{Math.min((currentPage + 1) * pageSize, totalCertificates)} of {totalCertificates} certificates
                 </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                <div className="flex items-center gap-1.5">
+                  <button
+                    className="rounded border border-[#ccd3e0] bg-white px-3 py-1.5 text-[11px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 0}
                   >
                     Prev
                   </button>
-                  <button 
-                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                  <span className="px-1 text-[11px] text-[#6a7a9a]">
+                    Page {currentPage + 1} of {totalPages}
+                  </span>
+                  <button
+                    className="rounded border border-[#ccd3e0] bg-white px-3 py-1.5 text-[11px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage >= totalPages - 1}
                   >

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown,ArrowRight } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 import { format } from 'date-fns';
 
@@ -323,6 +323,7 @@ function MyApplicationsContent() {
           onClick={() => router.push(`/my-applications/${id}/edit`)}
         >
           Edit
+          <ArrowRight className="w-3.5 h-3.5" />
         </button>
       );
     }

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown,ArrowRight } from 'lucide-react';
 import { ClipLoader } from 'react-spinners';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 
@@ -762,17 +762,19 @@ export default function AdminApplications() {
                             </button>
                           ) : app.status === 'UNDER_REVIEW' ? (
                             <button
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all  text-[#153c70]"
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded border border-gray-300 text-[12px] font-medium cursor-pointer transition-all bg-white text-[#2a3a56]  hover:bg-[#f1f4f9]"
                               onClick={() => router.push(`/admin/my-applications/${app.applicationId}`)}
                             >
                               View
                             </button>
                           ) : (
                             <button
-                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+                              className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
                               onClick={() => router.push(`/admin/my-applications/${app.applicationId}/review`)}
                             >
                               Review
+                                                                                        <ArrowRight className="w-3.5 h-3.5" />
+                              
                             </button>
                           )}
                         </td>

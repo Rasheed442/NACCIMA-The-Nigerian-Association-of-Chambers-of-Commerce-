@@ -1866,7 +1866,7 @@ function NewApplicationContent() {
               <>
                 <div className="text-[16px] font-bold text-[#1a2236] mb-[3px]">New Certificate Application</div>
                 <div className="text-[11.5px] text-[#6a7a9a] mb-5">Step 2 of 4 — Enter shipment details</div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex items-center gap-2 mb-3 border border-gray-200 px-4 py-4 rounded shadow-sm">
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
                     <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>
@@ -2266,7 +2266,7 @@ function NewApplicationContent() {
               <>
                 <div className="text-[16px] font-bold text-[#1a2236] mb-[3px]">Review Your Application</div>
                 <div className="text-[11.5px] text-[#6a7a9a] mb-5">Step 3 of 4 — Confirm all details before submitting</div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 flex items-center gap-2 mb-3 border border-gray-200 px-4 py-4 rounded shadow-sm">
                   <div className="flex flex-col items-center gap-1">
                     <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
                     <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>

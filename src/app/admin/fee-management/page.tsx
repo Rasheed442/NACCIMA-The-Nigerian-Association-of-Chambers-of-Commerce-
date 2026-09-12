@@ -242,7 +242,7 @@ export default function AdminFeeManagement() {
             )}
 
             {/* Full-width Table */}
-            <div className="bg-white border border-[#dde3ee] rounded-[8px] shadow-[0_1px_4px_rgba(0,0,0,0.05)] overflow-hidden">
+            <div className="bg-white border border-[#dde3ee] rounded shadow-[0_1px_4px_rgba(0,0,0,0.05)] overflow-hidden">
               <table className="w-full">
                 <thead>
                   <tr className="bg-[#f8fafd] border-b border-[#dde3ee]">

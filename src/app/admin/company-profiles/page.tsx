@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 import { ClipLoader } from 'react-spinners';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 import Dropdown from '@/components/Dropdown';
@@ -204,13 +204,16 @@ export default function AdminCompanyProfiles() {
                 )}
               </div>
 
-              <input 
-                type="text" 
-                placeholder="Search by company name, TIN, or email..."
-                className="px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] flex-1"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <div className="relative w-full sm:w-[320px] lg:w-[360px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6a7a9a]" />
+                <input
+                  type="text"
+                  placeholder="Search company, TIN, or email..."
+                  className="w-full rounded-[4px] border border-[#d1d5db] py-2 pl-9 pr-3 text-[12px]"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
               <button className="px-4 py-2 bg-[#1a4a8a] text-white rounded-[4px] text-[12px] font-medium hover:bg-[#153c70]">
                 Filter
               </button>
