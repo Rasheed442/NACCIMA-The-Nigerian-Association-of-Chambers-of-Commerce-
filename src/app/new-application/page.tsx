@@ -96,6 +96,7 @@ interface ExchangeRate {
 }
 
 interface ReviewData {
+  status?: string;
   application?: {
     certificateType?: string;
     shipperName?: string;
