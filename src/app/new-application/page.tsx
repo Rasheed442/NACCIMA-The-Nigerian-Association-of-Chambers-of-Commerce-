@@ -193,6 +193,7 @@ function NewApplicationContent() {
   const [selectedTransportModeDetails, setSelectedTransportModeDetails] = useState<TransportMode | null>(null);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isPaymentFlow, setIsPaymentFlow] = useState(false);
 
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string | boolean | string[]>>({});
 
@@ -222,12 +223,41 @@ function NewApplicationContent() {
     const status = searchParams.get('status');
     const reference = searchParams.get('reference');
     const resubmitApplicationId = searchParams.get('resubmit');
+    const tab = searchParams.get('tab');
+    const paymentApplicationId = searchParams.get('id');
 
+    // Reset state for fresh new application when no special query parameters
+    if (!resubmitApplicationId && !tab && !paymentApplicationId && !status && !reference) {
+      setStep(1);
+      setApplicationId(null);
+      setIsPaymentFlow(false);
+      setSelectedCert(null);
+      setTransportMode(null);
+      setReviewData(null);
+      setPaymentData(null);
+      setPaymentCheckoutUrl('');
+      setValidationError(null);
+      setFormErrors({});
+      setGoodsLineItems([]);
+      setUploadedDocuments({});
+      setDynamicFieldValues({});
+      return;
+    }
+
+    // Handle resubmit case
     if (resubmitApplicationId) {
       setApplicationId(resubmitApplicationId);
       setStep(2);
     }
 
+    // Handle payment tab: load existing application and go to review step
+    if (tab === 'payment' && paymentApplicationId) {
+      setApplicationId(paymentApplicationId);
+      setStep(3); // Go to review step first
+      setIsPaymentFlow(true); // Mark as payment flow
+    }
+
+    // Handle payment success case
     if (status === 'success' || reference) {
       // If this page loaded inside the payment tab we opened (window.open),
       // it has a live `window.opener`. In that case, signal the original
@@ -291,6 +321,92 @@ function NewApplicationContent() {
     };
 
     void loadResubmitApplication();
+  }, [searchParams, certificateTypes]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const paymentApplicationId = searchParams.get('id');
+    if (tab !== 'payment' || !paymentApplicationId) return;
+
+    const loadPaymentApplication = async () => {
+      try {
+        const baseUrl = getBaseUrl();
+        if (!baseUrl) return;
+
+        const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${paymentApplicationId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result?.data) return;
+
+        const application = result.data;
+
+        if (application?.modeOfTransport) {
+          setTransportMode(application.modeOfTransport);
+        }
+
+        if (application?.certificateType) {
+          const matchedCertificate = certificateTypes.find(
+            cert => cert.code === application.certificateType || cert.id === application.certificateType || cert.name === application.certificateType
+          );
+
+          if (matchedCertificate) {
+            setSelectedCert(matchedCertificate.id);
+          }
+        }
+
+        // Fetch review data to get payment information
+        setIsLoadingReview(true);
+        setValidationError(null);
+
+        let applicationStatus = application.status;
+        try {
+          const reviewResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${paymentApplicationId}/review`, {
+            method: 'GET',
+          });
+
+          const reviewResult = await reviewResponse.json();
+
+          if (reviewResponse.ok && reviewResult.data) {
+            setReviewData(reviewResult.data);
+            applicationStatus = (reviewResult.data as ReviewData)?.status || application.status;
+          } else {
+            setValidationError(reviewResult.message || 'Failed to fetch review data');
+          }
+        } catch (err) {
+          console.error('Failed to fetch review data:', err);
+          setValidationError('Failed to fetch review data. Please try again.');
+        } finally {
+          setIsLoadingReview(false);
+        }
+
+        // Fetch exchange rate for payment calculations
+        try {
+          const exchangeRateResponse = await apiFetch(`${baseUrl}/api/v1/certificates/reference/exchange-rate`, {
+            method: 'GET',
+          });
+
+          if (exchangeRateResponse.ok) {
+            const exchangeRateResult = await exchangeRateResponse.json();
+            if (exchangeRateResult.data) {
+              setExchangeRate(exchangeRateResult.data);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch exchange rate:', err);
+        }
+
+        // Don't auto-submit in payment flow - let user review and click Pay Now
+      } catch (err) {
+        console.error('Failed to load payment application:', err);
+      }
+    };
+
+    void loadPaymentApplication();
   }, [searchParams, certificateTypes]);
 
   // Listen for the payment-complete signal from the popup tab (see above).
@@ -1603,7 +1719,8 @@ function NewApplicationContent() {
           setPaymentData(paymentRecord);
           setPaymentCheckoutUrl(hostedUrl);
           setSelectedPaymentMethod('CARD');
-          window.location.assign(hostedUrl);
+          setStep(4); // Go to payment step instead of direct redirect
+          // Don't auto-redirect, let user click to proceed
           return true;
         }
 
@@ -2408,13 +2525,18 @@ function NewApplicationContent() {
                     )}
 
                     <div className="flex justify-end gap-2 pt-4 border-t border-[#edf0f5]">
-                      <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(2)}>← Back to Edit</button>
+                      <button
+                        className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
+                        onClick={() => isPaymentFlow ? router.push('/my-applications') : setStep(2)}
+                      >
+                        {isPaymentFlow ? '← Back to Applications' : '← Back to Edit'}
+                      </button>
                       <button
                         className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => submitApplication()}
                         disabled={!reviewData.canSubmit || isSubmittingApplication}
                       >
-                        {isSubmittingApplication ? 'Submitting...' : (reviewData.canSubmit ? 'Submit & Proceed to Payment →' : 'Cannot Submit')}
+                        {isSubmittingApplication ? 'Processing...' : (reviewData.canSubmit ? (isPaymentFlow ? 'Pay Now →' : 'Submit & Proceed to Payment →') : 'Cannot Submit')}
                       </button>
                     </div>
                   </>
@@ -2511,21 +2633,15 @@ function NewApplicationContent() {
                           )}
                         </div>
 
-                        {paymentCheckoutUrl ? (
-                          <div className="border border-[#dde3ee] rounded-[8px] overflow-hidden bg-[#f8fafd] p-4 text-[12px] text-[#1a2236]">
-                            Redirecting to the secure Payfonte payment page in your browser...
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => openPayfonteCheckout(paymentData)}
-                            disabled={isSubmittingApplication}
-                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            Pay Securely with Payfonte
-                            <FiArrowRight className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => openPayfonteCheckout(paymentData)}
+                          disabled={isSubmittingApplication}
+                          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          Pay Securely with Payfonte
+                          <FiArrowRight className="w-4 h-4" />
+                        </button>
 
                         <div className="text-center text-[10px] text-[#94a3b8] mt-3">
                           Secured by Payfonte · Redirects to the full browser checkout
@@ -2577,9 +2693,23 @@ function NewApplicationContent() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-12 text-[12px] text-[#6a7a9a]">
-                    Payment details are not available. Please return to the review step and submit again.
-                  </div>
+                  <>
+                    {isPaymentFlow ? (
+                      <div className="text-center py-12 text-[12px] text-[#6a7a9a]">
+                        <div className="mb-4">Payment details are not available.</div>
+                        <button
+                          className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold border border-[#ccd3e0] bg-white text-[#2a3a56] hover:bg-[#f1f4f9]"
+                          onClick={() => setStep(3)}
+                        >
+                          ← Back to Review
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-[12px] text-[#6a7a9a]">
+                        Payment details are not available. Please return to the review step and submit again.
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {validationError && (

@@ -99,7 +99,6 @@ function MyApplicationsContent() {
   const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
   const [isLoadingFilters, setIsLoadingFilters] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [payingId, setPayingId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -292,66 +291,9 @@ function MyApplicationsContent() {
     }
   };
 
-  const handleInitializePayment = async (id: string) => {
-    setPayingId(id);
-    setError(null);
-
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        setError('API URL not configured');
-        return;
-      }
-
-      // Get the application to determine the amount
-      const appResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const appResult = await appResponse.json();
-      if (!appResponse.ok || !appResult?.data) {
-        setError('Failed to fetch application details');
-        return;
-      }
-
-      const application = appResult.data;
-      const amount = application.totalValueFob || 0;
-
-      const response = await apiFetch(`${baseUrl}/api/v1/payments/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          purpose: 'CERTIFICATE_APPLICATION',
-          amount: amount,
-          applicationId: id,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        setError(result?.message || 'Failed to initialize payment');
-        return;
-      }
-
-      // Redirect to payment checkout URL
-      const checkoutUrl = result?.data?.shortUrl || result?.data?.checkoutUrl;
-      if (checkoutUrl) {
-        window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        setError('Payment checkout URL not available');
-      }
-    } catch (err) {
-      console.error('Failed to initialize payment:', err);
-      setError('Failed to initialize payment');
-    } finally {
-      setPayingId(null);
-    }
+  const handleInitializePayment = (id: string) => {
+    // Redirect to new-application page with the application ID and payment tab
+    router.push(`/new-application?id=${id}&tab=payment`);
   };
 
   const getActionButton = (status: Application['status'], id: string) => {
@@ -369,11 +311,10 @@ function MyApplicationsContent() {
     if (status === 'SUBMITTED' || status === 'PENDING_PAYMENT') {
       return (
         <button
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f] disabled:opacity-60 disabled:cursor-not-allowed"
-          onClick={() => handleInitializePayment(id)}
-          disabled={payingId === id}
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
+          // onClick={() => handleInitializePayment(id)}
         >
-          {payingId === id ? 'Processing...' : 'Pay Now'}
+          Pay Now
         </button>
       );
     }

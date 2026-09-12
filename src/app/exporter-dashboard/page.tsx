@@ -55,7 +55,6 @@ function ExporterDashboardContent() {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
-  const [payingId, setPayingId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -216,26 +215,32 @@ function ExporterDashboardContent() {
     if (status === 'SUBMITTED' || status === 'PENDING_PAYMENT') {
       return (
         <button 
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f] disabled:opacity-60 disabled:cursor-not-allowed"
-          onClick={() => handleInitializePayment(id)}
-          disabled={payingId === id}
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
+          // onClick={() => handleInitializePayment(id)}
         >
-          {payingId === id ? 'Processing...' : 'Pay Now'}
+          Pay Now
         </button>
       );
     }
     if (status === 'UNAPPROVED') {
       return (
         <button
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
           onClick={() => router.push(`/my-applications/${id}/edit`)}
         >
           Edit & Resubmit
         </button>
       );
     }
-    if (status === 'PAID') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[13px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => router.push(`/my-applications/${id}/review`)}>Review</button>;
+    if (status === 'DRAFT') {
+      return (
+        <button
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+          onClick={() => router.push(`/my-applications/${id}/edit`)}
+        >
+          Edit
+        </button>
+      );
     }
     return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded border border-gray-300 text-[12px] font-medium cursor-pointer transition-all bg-white text-[#2a3a56]  hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
   };
@@ -248,64 +253,9 @@ function ExporterDashboardContent() {
     }
   };
 
-  const handleInitializePayment = async (id: string) => {
-    setPayingId(id);
-    
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        console.error('API URL not configured');
-        return;
-      }
-
-      // Get the application to determine the amount
-      const appResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const appResult = await appResponse.json();
-      if (!appResponse.ok || !appResult?.data) {
-        console.error('Failed to fetch application details');
-        return;
-      }
-
-      const application = appResult.data;
-      const amount = application.totalValueFob || 0;
-
-      const response = await apiFetch(`${baseUrl}/api/v1/payments/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          purpose: 'CERTIFICATE_APPLICATION',
-          amount: amount,
-          applicationId: id,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        console.error('Failed to initialize payment:', result?.message);
-        return;
-      }
-
-      // Redirect to payment checkout URL
-      const checkoutUrl = result?.data?.shortUrl || result?.data?.checkoutUrl;
-      if (checkoutUrl) {
-        window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        console.error('Payment checkout URL not available');
-      }
-    } catch (err) {
-      console.error('Failed to initialize payment:', err);
-    } finally {
-      setPayingId(null);
-    }
+  const handleInitializePayment = (id: string) => {
+    // Redirect to new-application page with the application ID and payment tab
+    router.push(`/new-application?id=${id}&tab=payment`);
   };
 
   const MetricCardSkeleton = () => (

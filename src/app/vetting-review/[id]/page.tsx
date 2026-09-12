@@ -637,7 +637,7 @@ export default function VettingReviewPage({
                   <History className="w-5 h-5 text-gray-600" />
                   <h2 className="text-sm font-semibold text-gray-900">Review History</h2>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-[200px] oveflow-hidden overflow-scroll">
                   {history.length === 0 ? (
                     <p className="text-xs text-gray-500 text-center py-4">No history available</p>
                   ) : (

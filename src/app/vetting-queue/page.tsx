@@ -47,6 +47,9 @@ export default function VettingQueuePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [totalElements, setTotalElements] = useState(0);
   const [openDropdown, setOpenDropdown] = useState<'certType' | 'status' | 'transport' | null>(null);
+  const [assigningApplicationId, setAssigningApplicationId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -112,6 +115,10 @@ export default function VettingQueuePage() {
 
     if (app.status === 'PAID') {
       try {
+        setAssigningApplicationId(app.applicationId);
+        setErrorMessage('');
+        setSuccessMessage('');
+
         const baseUrl = getBaseUrl();
         if (!baseUrl) {
           throw new Error('API base URL is not configured');
@@ -130,16 +137,28 @@ export default function VettingQueuePage() {
         const payload = await response.json();
 
         if (!response.ok || payload?.success === false) {
-          console.error('Failed to self-assign application:', payload?.message || 'Unknown error');
+          setErrorMessage(payload?.message || 'Failed to assign application. Please try again.');
           return;
         }
+
+        setSuccessMessage('Application assigned successfully! Redirecting to review...');
+        
+        // Refresh the applications list to update the status
+        await fetchApplications();
+        
+        // Navigate to review page after a short delay
+        setTimeout(() => {
+          router.push(`/vetting-review/${app.applicationId}`);
+        }, 1000);
       } catch (err) {
         console.error('Self-assign failed:', err);
-        return;
+        setErrorMessage('Failed to assign application. Please try again.');
+      } finally {
+        setAssigningApplicationId(null);
       }
+    } else {
+      router.push(`/vetting-review/${app.applicationId}`);
     }
-
-    router.push(`/vetting-review/${app.applicationId}`);
   };
 
   const getStatusBadge = (status: string) => {
@@ -391,6 +410,20 @@ export default function VettingQueuePage() {
               </button>
             </div>
 
+            {successMessage && (
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#d1fae5] bg-[#f0fdf4] px-3 py-2.5 text-[12px] text-[#065f46]">
+                <CheckCircle className="w-4 h-4" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
+            {errorMessage && (
+              <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3 py-2.5 text-[12px] text-[#991b1b]">
+                <AlertCircle className="w-4 h-4" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
             <div className="overflow-x-auto overflow-y-auto rounded-lg border border-[#dde3ee] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
               <table className="w-full min-w-[1040px] border-collapse text-[12px]">
                 <thead className="sticky top-0 z-2">
@@ -457,15 +490,25 @@ export default function VettingQueuePage() {
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">{getStatusBadge(app.status)}</td>
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           <button
-                            className={`inline-flex items-center gap-1 rounded border-none px-[9px] py-[5px] text-[13px] font-medium transition-all ${
+                            className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${
                               app.status === 'APPROVED' 
-                                ? 'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]' 
+                                ? 'inline-flex items-center gap-1 px-[9px] py-[5px] rounded border border-gray-300 text-[12px] font-medium cursor-pointer transition-all bg-white text-[#2a3a56]  hover:bg-[#f1f4f9]' 
                                 : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
-                            }`}
+                            } ${assigningApplicationId === app.applicationId ? 'opacity-70 cursor-not-allowed' : ''}`}
                             onClick={() => handleReviewAction(app)}
+                            disabled={assigningApplicationId === app.applicationId}
                           >
-                            {app.status === 'APPROVED' ? 'View' : 'Review'}
-                            {app.status !== 'APPROVED' && <ArrowRight className="w-3.5 h-3.5" />}
+                            {assigningApplicationId === app.applicationId ? (
+                              <>
+                                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                Assigning...
+                              </>
+                            ) : (
+                              <>
+                                {app.status === 'APPROVED' ? 'View' : (app.status === 'PAID' ? 'Assign & Review' : 'Review')}
+                                {app.status !== 'APPROVED' && <ArrowRight className="w-3.5 h-3.5" />}
+                              </>
+                            )}
                           </button>
                         </td>
                       </tr>
