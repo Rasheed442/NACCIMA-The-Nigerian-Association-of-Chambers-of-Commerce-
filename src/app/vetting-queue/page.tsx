@@ -7,7 +7,7 @@ import Sidebar from '@/components/Sidebar';
 
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { Search, Ship, Plane, Truck, ChevronDown, Filter, FileText, CheckCircle,ArrowRight ,XCircle, BarChart3, Clock, AlertCircle, ChevronsUpDown, X } from 'lucide-react';
+import { Search as SearchInput, Ship, Plane, Truck, ChevronDown, Filter, FileText, CheckCircle,ArrowRight ,XCircle, BarChart3, Clock, AlertCircle, ChevronsUpDown, X, FileSearch } from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 import { format } from 'date-fns';
 
@@ -309,8 +309,19 @@ export default function VettingQueuePage() {
           <Sidebar role="vetting" />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto bg-[#fbfbfe]">
             <div className="mb-[18px]">
-              <div className="text-[16px] font-bold text-[#1a2236]">Applications Queue</div>
-              <div className="text-[11.5px] text-[#6a7a9a] mt-1">Applications requiring vetting review — oldest first (FIFO)</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[16px] font-bold text-[#1a2236]">Applications Queue</div>
+                  <div className="text-[11.5px] text-[#6a7a9a] mt-1">Applications requiring vetting review — oldest first (FIFO)</div>
+                </div>
+                <button
+                  onClick={() => router.push('/verify-certificate')}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#1a2236] border border-[#d1d5db] rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]"
+                >
+                  <FileSearch className="h-4 w-4 text-[#6b7280]" />
+                  Verify Certificate
+                </button>
+              </div>
             </div>
 
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -395,7 +406,7 @@ export default function VettingQueuePage() {
                 dropdownKey="transport"
               />
               <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <SearchInput className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search by TIN…"

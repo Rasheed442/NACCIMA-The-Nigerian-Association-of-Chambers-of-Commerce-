@@ -20,7 +20,7 @@ import {
 import { apiFetch, getBaseUrl, clearAuthData } from '@/utils/api';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
-import { ChevronDown, Calendar, FileX2 } from 'lucide-react';
+import { ChevronDown, Calendar, FileX2, FileSearch } from 'lucide-react';
 import 'react-day-picker/dist/style.css';
 
 const certificateData = [
@@ -215,6 +215,13 @@ export default function AdminPage() {
               </div>
               
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => router.push('/verify-certificate')}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#1a2236] border border-[#d1d5db] rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]"
+                >
+                  <FileSearch className="h-4 w-4 text-[#6b7280]" />
+                  Verify Certificate
+                </button>
                 <div className="relative">
                   <button
                     onClick={() => setShowFromCalendar(!showFromCalendar)}

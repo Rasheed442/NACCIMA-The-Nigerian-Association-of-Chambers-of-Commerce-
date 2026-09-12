@@ -8,6 +8,7 @@ import { FaPlus } from "react-icons/fa";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch, getBaseUrl, clearAuthData } from '@/utils/api';
 import { FaArrowUp } from "react-icons/fa6";
+import { FileSearch } from 'lucide-react';
 import { format } from 'date-fns';
 interface Application {
   applicationId: string;
@@ -321,7 +322,16 @@ function ExporterDashboardContent() {
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
           <Sidebar />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
-            <div className="text-[22px] font-bold text-[#1a2236] mb-[3px]">Welcome, {companyProfile?.companyName || 'Loading...'}</div>
+            <div className="flex items-center justify-between mb-[3px]">
+              <div className="text-[22px] font-bold text-[#1a2236]">Welcome, {companyProfile?.companyName || 'Loading...'}</div>
+              <button
+                onClick={() => router.push('/verify-certificate')}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#1a2236] border border-[#d1d5db] rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1d4ed8]"
+              >
+                <FileSearch className="h-4 w-4 text-[#6b7280]" />
+                Verify Certificate
+              </button>
+            </div>
             <div className="text-[13px] text-[#6a7a9a] mb-[10px]">TIN: {companyProfile?.tin || 'Loading...'} &nbsp;|&nbsp; Last login: Today, &apos;---&apos;</div>
             {showPaymentSuccessToast && (
               <div className="mb-[14px] flex items-center justify-between gap-3 rounded-[8px] border border-[#86efac] bg-[#ecfdf5] px-[12px] py-[10px] text-[13px] font-semibold text-[#065f46] shadow-[0_2px_8px_rgba(5,150,105,0.12)]">
