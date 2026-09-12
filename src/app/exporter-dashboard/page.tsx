@@ -39,6 +39,7 @@ interface DashboardData {
 interface CompanyProfile {
   companyName: string;
   tin: string;
+  membershipStatus:string;
 }
 
 function ExporterDashboardContent() {
@@ -189,7 +190,7 @@ function ExporterDashboardContent() {
     };
     const badge = badges[status] || { bg: 'bg-[#f3f4f6]', text: 'text-[#6b7280]' };
     return (
-      <span className={`inline-block text-[10px] font-bold px-2 py-[2px] rounded-[10px] whitespace-nowrap ${badge.bg} ${badge.text}`}>
+      <span className={`inline-block text-[13px] font-medium px-2 py-[2px] rounded whitespace-nowrap ${badge.bg} ${badge.text}`}>
         {labels[status] || status}
       </span>
     );
@@ -199,7 +200,7 @@ function ExporterDashboardContent() {
     if (status === 'ISSUED' || status === 'CERTIFICATE_ISSUED') {
       return (
         <button 
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
           onClick={() => {
             if (pdfUrl) {
               window.open(pdfUrl, '_blank');
@@ -211,7 +212,7 @@ function ExporterDashboardContent() {
       );
     }
     if (status === 'PENDING_PAYMENT') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
+      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
     }
     if (status === 'UNAPPROVED') {
       return (
@@ -224,9 +225,9 @@ function ExporterDashboardContent() {
       );
     }
     if (status === 'PAID') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => router.push(`/my-applications/${id}/review`)}>Review</button>;
+      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[13px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => router.push(`/my-applications/${id}/review`)}>Review</button>;
     }
-    return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
+    return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded border border-gray-300 text-[12px] font-medium cursor-pointer transition-all bg-white text-[#2a3a56]  hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
   };
 
   const formatDate = (dateString: string) => {
@@ -311,11 +312,13 @@ function ExporterDashboardContent() {
                 )}
               </div>
             )}
-            {dashboardData?.membership?.member && (
-              <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+            {companyProfile?.membershipStatus === "MEMBER" ?
+              <div className="flex items-center mt-4 mb-6 gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
                 ★NACCIMA Member rates apply
-              </div>
-            )}
+              </div>:    <div className="flex mt-4 mb-6 items-center gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
+                    ⚠ Not a NACCIMA Member — non-member rates apply to your application
+                  </div>
+            }
             <div className="flex gap-3 mb-[18px]">
               {isLoadingDashboard
                 ? metricCards.map((card) => <MetricCardSkeleton key={card.key} />)
@@ -340,10 +343,10 @@ function ExporterDashboardContent() {
               <div className="text-[19px] font-medium text-[#1a2236]">Recent Applications</div>
               <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]" onClick={() => router.push('/new-application')}><FaPlus color="white"/> New Application</button>
             </div>
-            <div className="overflow-x-auto pt-4">
+            <div className="overflow-x-auto mt-4 border border-gray-200 rounded">
               <table className="w-full border-collapse text-[14px]">
                 <thead>
-                  <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
+                  <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-medium">
                     <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Approval #</th>
                     <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate Type</th>
                     <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Destination</th>

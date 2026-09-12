@@ -49,6 +49,36 @@ interface TransportMode {
 // spaces before they can become encoded query characters such as `%09`.
 const normalizeSearchQuery = (value: string) => value.replace(/\s+/g, ' ').trim();
 
+function ApplicationTableSkeleton() {
+  return (
+    <table className="w-full min-w-[1040px] border-collapse text-[12px]" aria-label="Loading applications">
+      <thead>
+        <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
+          {['Approval #', 'TIN', 'Cert Type', 'Transport', 'Created', 'Last Updated', 'FOB', 'Status', 'Actions'].map((label) => (
+            <th key={label} className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">
+              {label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({ length: 6 }).map((_, rowIndex) => (
+          <tr key={rowIndex} className="border-b border-[#edf0f5] last:border-b-0">
+            {[88, 76, 132, 90, 82, 82, 104, 96, 62].map((width, cellIndex) => (
+              <td key={cellIndex} className="px-[11px] py-[13px]">
+                <div
+                  className="h-3 animate-pulse rounded-full bg-[#edf0f5]"
+                  style={{ width: `${width}px`, animationDelay: `${(rowIndex + cellIndex) * 45}ms` }}
+                />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function MyApplicationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -78,7 +108,10 @@ function MyApplicationsContent() {
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
-    const statusUpdateTimer = window.setTimeout(() => setFilterStatus(statusParam || ''), 0);
+    const statusUpdateTimer = window.setTimeout(() => {
+      setFilterStatus(statusParam || '');
+      setCurrentPage(1);
+    }, 0);
     return () => window.clearTimeout(statusUpdateTimer);
   }, [searchParams]);
 
@@ -262,7 +295,7 @@ function MyApplicationsContent() {
     if (status === 'ISSUED' || status === 'CERTIFICATE_ISSUED') {
       return (
         <button
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-semibold cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857] disabled:opacity-60 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] text-[13px] font-medium rounded cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857] disabled:opacity-60 disabled:cursor-not-allowed"
           onClick={() => handleDownloadCertificate(id)}
           disabled={downloadingId === id}
         >
@@ -271,12 +304,12 @@ function MyApplicationsContent() {
       );
     }
     if (status === 'PENDING_PAYMENT') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
+      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
     }
     if (status === 'UNAPPROVED') {
       return (
         <button
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
           onClick={() => router.push(`/my-applications/${id}/edit`)}
         >
           Edit & Resubmit
@@ -286,14 +319,14 @@ function MyApplicationsContent() {
     if (status === 'DRAFT') {
       return (
         <button
-          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] text-[13px] rounded font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
           onClick={() => router.push(`/my-applications/${id}/edit`)}
         >
           Edit
         </button>
       );
     }
-    return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[14px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
+    return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded border border-gray-300 text-[12px] font-medium cursor-pointer transition-all bg-white text-[#2a3a56]  hover:bg-[#f1f4f9]" onClick={() => router.push(`/my-applications/${id}`)}>View</button>;
   };
 
   const formatDate = (dateString?: string) => {
@@ -367,6 +400,21 @@ function MyApplicationsContent() {
     setCurrentPage(page);
   };
 
+  const updateStatusFilter = (status: string) => {
+    setFilterStatus(status);
+    setCurrentPage(1);
+  };
+
+  const updateCertificateTypeFilter = (certificateType: string) => {
+    setFilterCertType(certificateType);
+    setCurrentPage(1);
+  };
+
+  const updateTransportFilter = (transport: string) => {
+    setFilterTransport(transport);
+    setCurrentPage(1);
+  };
+
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
@@ -380,23 +428,34 @@ function MyApplicationsContent() {
             </div>
 
             {/* Summary Cards */}
-            <div className="flex gap-3 mb-4">
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">{stats.pendingReview}</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Pending Review</div>
-              </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#1a4a8a] mb-[2px]">{stats.reviewedToday}</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Reviewed Today</div>
-              </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">{stats.approvedThisMonth}</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Approved This Month</div>
-              </div>
-              <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#9b1c1c] mb-[2px]">{stats.rejectedThisMonth}</div>
-                <div className="text-[10.5px] text-[#6a7a9a] font-medium">Rejected This Month</div>
-              </div>
+            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="rounded-lg border border-[#dde3ee] bg-white px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
+                    <div className="mb-2 h-6 w-10 animate-pulse rounded bg-[#edf0f5]" style={{ animationDelay: `${index * 70}ms` }} />
+                    <div className="h-3 w-24 animate-pulse rounded bg-[#edf0f5]" style={{ animationDelay: `${index * 70 + 35}ms` }} />
+                  </div>
+                ))
+              ) : (
+                <>
+                  <div className="rounded border border-[#dde3ee] bg-white px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_3px_8px_rgba(0,0,0,0.07)]">
+                    <div className="mb-[2px] text-[24px] font-extrabold text-[#92400e]">{stats.pendingReview}</div>
+                    <div className="text-[13px] pt-2 font-medium text-[#6a7a9a]">Pending Review</div>
+                  </div>
+                  <div className="rounded border border-[#dde3ee] bg-white px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_3px_8px_rgba(0,0,0,0.07)]">
+                    <div className="mb-[2px] text-[24px] font-extrabold text-[#1a4a8a]">{stats.reviewedToday}</div>
+                    <div className="text-[13px] pt-2   font-medium text-[#6a7a9a]">Reviewed Today</div>
+                  </div>
+                  <div className="rounded border border-[#dde3ee] bg-white px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_3px_8px_rgba(0,0,0,0.07)]">
+                    <div className="mb-[2px] text-[24px] font-extrabold text-[#065f46]">{stats.approvedThisMonth}</div>
+                    <div className="text-[13px]  pt-2  font-medium text-[#6a7a9a]">Approved This Month</div>
+                  </div>
+                  <div className="rounded border border-[#dde3ee] bg-white px-[14px] py-[14px] shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_3px_8px_rgba(0,0,0,0.07)]">
+                    <div className="mb-[2px] text-[24px] font-extrabold text-[#9b1c1c]">{stats.rejectedThisMonth}</div>
+                    <div className="text-[13px]  pt-2  font-medium text-[#6a7a9a]">Rejected This Month</div>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Filter Section */}
@@ -416,7 +475,7 @@ function MyApplicationsContent() {
                   <div className="absolute top-full left-0 mt-1 bg-white border border-[#d1d5db] rounded-[4px] shadow-lg z-10 min-w-[180px]">
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterCertType(''); setCertTypeDropdownOpen(false); }}
+                      onClick={() => { updateCertificateTypeFilter(''); setCertTypeDropdownOpen(false); }}
                     >
                       All Certificate Types
                     </div>
@@ -424,7 +483,7 @@ function MyApplicationsContent() {
                       <div 
                         key={cert.id}
                         className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                        onClick={() => { setFilterCertType(cert.code); setCertTypeDropdownOpen(false); }}
+                        onClick={() => { updateCertificateTypeFilter(cert.code); setCertTypeDropdownOpen(false); }}
                       >
                         {cert.name}
                       </div>
@@ -448,37 +507,37 @@ function MyApplicationsContent() {
                   <div className="absolute top-full left-0 mt-1 bg-white border border-[#d1d5db] rounded-[4px] shadow-lg z-10 min-w-[140px]">
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterStatus(''); setStatusDropdownOpen(false); }}
+                      onClick={() => { updateStatusFilter(''); setStatusDropdownOpen(false); }}
                     >
                       All Statuses
                     </div>
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterStatus('SUBMITTED'); setStatusDropdownOpen(false); }}
+                      onClick={() => { updateStatusFilter('SUBMITTED'); setStatusDropdownOpen(false); }}
                     >
                       Submitted
                     </div>
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterStatus('PAID'); setStatusDropdownOpen(false); }}
+                      onClick={() => { updateStatusFilter('PAID'); setStatusDropdownOpen(false); }}
                     >
                       Paid
                     </div>
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterStatus('UNDER_REVIEW'); setStatusDropdownOpen(false); }}
+                      onClick={() => { updateStatusFilter('UNDER_REVIEW'); setStatusDropdownOpen(false); }}
                     >
                       Under Review
                     </div>
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterStatus('APPROVED'); setStatusDropdownOpen(false); }}
+                      onClick={() => { updateStatusFilter('APPROVED'); setStatusDropdownOpen(false); }}
                     >
                       Approved
                     </div>
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterStatus('REJECTED'); setStatusDropdownOpen(false); }}
+                      onClick={() => { updateStatusFilter('REJECTED'); setStatusDropdownOpen(false); }}
                     >
                       Rejected
                     </div>
@@ -501,7 +560,7 @@ function MyApplicationsContent() {
                   <div className="absolute top-full left-0 mt-1 bg-white border border-[#d1d5db] rounded-[4px] shadow-lg z-10 min-w-[120px]">
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                      onClick={() => { setFilterTransport(''); setTransportDropdownOpen(false); }}
+                      onClick={() => { updateTransportFilter(''); setTransportDropdownOpen(false); }}
                     >
                       All Transport
                     </div>
@@ -509,7 +568,7 @@ function MyApplicationsContent() {
                       <div 
                         key={mode.code}
                         className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
-                        onClick={() => { setFilterTransport(mode.code); setTransportDropdownOpen(false); }}
+                        onClick={() => { updateTransportFilter(mode.code); setTransportDropdownOpen(false); }}
                       >
                         {mode.name}
                       </div>
@@ -533,31 +592,31 @@ function MyApplicationsContent() {
               </button>
             </div>
 
-            <div className="overflow-x-auto pt-4 overflow-y-auto rounded-lg border border-[#dde3ee]">
+            <div className="overflow-x-auto overflow-y-auto rounded-lg border border-[#dde3ee] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
               {isLoading ? (
-                <div className="text-center py-8 text-[#6a7a9a]">Loading applications...</div>
+                <ApplicationTableSkeleton />
               ) : error ? (
                 <div className="text-center py-8 text-[#e53e3e]">{error}</div>
               ) : filteredApps.length === 0 ? (
                 <div className="text-center py-8 text-[#6a7a9a]">No applications found</div>
               ) : (
-                <table className="w-full border-collapse text-[12px]">
+                <table className="w-full min-w-[1040px] border-collapse text-[12px]">
                   <thead className="sticky top-0 z-2">
-                    <tr className="bg-[#f1f4f9] text-[12px] text-[#4a5a7a] font-semibold">
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Approval #</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">TIN</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Cert Type</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Transport</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Created</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Last Updated</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">FOB</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Status</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Actions</th>
+                    <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Approval #</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">TIN</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Cert Type</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Transport</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Created</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Last Updated</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">FOB</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Status</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCurrentItems.map((app) => (
-                      <tr key={app.id} className="hover:bg-[#f8faff] text-[12px] transition-colors">
+                      <tr key={app.id} className="text-[12px] transition-colors hover:bg-[#f8faff]">
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.id}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.tin || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.certificateType || '—'}</td>
@@ -578,20 +637,23 @@ function MyApplicationsContent() {
               )}
             </div>
             {filteredApps.length > 0 && (
-              <div className="flex items-center justify-between mt-4">
+              <div className="mt-4 flex items-center justify-between">
                 <div className="text-[11px] text-[#6a7a9a]">
                   Showing {Math.min(filteredIndexOfFirstItem + 1, filteredApps.length)}-{Math.min(filteredIndexOfLastItem, filteredApps.length)} of {filteredApps.length} applications
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <button 
-                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                    className="rounded cursor-pointer border border-[#ccd3e0] bg-white px-6 py-1.5 text-[12px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
                     Prev
                   </button>
+                  <span className="px-1 text-[11px] text-[#6a7a9a]">
+                    Page {currentPage} of {filteredTotalPages}
+                  </span>
                   <button 
-                    className="px-3 py-1.5 rounded-[6px] text-[11px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-50 disabled:cursor-not-allowed" 
+                    className="rounded cursor-pointer border border-[#ccd3e0] bg-white px-6 py-1.5 text-[12px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === filteredTotalPages}
                   >

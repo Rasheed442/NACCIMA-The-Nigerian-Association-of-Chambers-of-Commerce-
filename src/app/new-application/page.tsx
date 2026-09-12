@@ -1767,7 +1767,7 @@ function NewApplicationContent() {
               <>
                 <div className="text-[16px] font-bold text-[#1a2236] mb-[3px]">New Certificate Application</div>
                 <div className="text-[11.5px] text-[#6a7a9a] mb-5">Step 1 of 4 — Select the certificate type</div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3 border border-gray-200 px-4 py-4 rounded shadow-sm">
                   <div className="flex  items-center gap-2">
                     <div className="w-[24px] h-[24px] rounded-full border-2 border-[#1a4a8a] bg-[#1a4a8a] text-white text-[11px] font-bold flex items-center justify-center">1</div>
                     <span className="text-[13px] font-semibold text-[#1a4a8a]">Select Type</span>
@@ -1788,12 +1788,12 @@ function NewApplicationContent() {
                     <span className="text-[13px] font-semibold text-[#64748b]">Payment</span>
                   </div>
                 </div>
-                {companyProfile?.membershipActive ? (
-                  <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+                {companyProfile?.membershipStatus === "MEMBER" ? (
+                  <div className="flex items-center my-4 gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
                     ★ NACCIMA Member — member rates apply to your application
                   </div>
                 ) : (
-                  <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
+                  <div className="flex items-center my-4 gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
                     ⚠ Not a NACCIMA Member — non-member rates apply to your application
                   </div>
                 )}

@@ -139,7 +139,7 @@ function VettingReviewContent() {
     const safe = statusMap[status] || { bg: 'bg-slate-100', text: 'text-slate-700', label: status || 'Unknown', icon: <FileText className="w-3 h-3" /> };
 
     return (
-      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${safe.bg} ${safe.text}`}>
+      <span className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-semibold cursor-pointer ${safe.bg} ${safe.text}`}>
         {safe.icon}
         {safe.label}
       </span>
@@ -261,32 +261,38 @@ function VettingReviewContent() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="rounded border border-[#e6edf9] bg-white p-4 shadow-[0_2px_8px_rgba(26,34,54,0.04)]">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6381a8]">Total</span>
-                  <FileText className="w-4 h-4 text-[#3a7bd5]" />
+            <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
+              <div className="rounded border border-[#dbeafe] bg-[#f8fbff] p-4 shadow-[0_2px_10px_rgba(37,99,235,0.06)] transition-shadow hover:shadow-[0_6px_18px_rgba(37,99,235,0.10)]">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#3b6298]">All reviews</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#e8f1ff] text-[#2563eb]">
+                    <FileText className="h-[18px] w-[18px]" />
+                  </span>
                 </div>
-                <div className="text-[28px] font-bold text-[#1a2236]">{applications.length}</div>
-                <div className="text-[13px] text-[#6a7a9a]">Applications in review</div>
+                <div className="text-[28px] font-semibold text-[#1a2236]">{applications.length}</div>
+                <div className="text-[13px] font-medium text-[#59708f]">Applications in review</div>
               </div>
 
-              <div className="rounded border border-[#e6edf9] bg-white p-4 shadow-[0_2px_8px_rgba(26,34,54,0.04)]">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6381a8]">Ready</span>
-                  <Clock className="w-4 h-4 text-[#d97706]" />
+              <div className="rounded border border-[#fde7b0] bg-[#fffcf5] p-4 shadow-[0_2px_10px_rgba(180,83,9,0.05)] transition-shadow hover:shadow-[0_6px_18px_rgba(180,83,9,0.09)]">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#976527]">Pending</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#fff1d6] text-[#b45309]">
+                    <Clock className="h-[18px] w-[18px]" />
+                  </span>
                 </div>
-                <div className="text-[28px] font-bold text-[#1a2236]">{applications.filter((app) => app.status === 'SUBMITTED').length}</div>
-                <div className="text-[13px] text-[#6a7a9a]">Awaiting review</div>
+                <div className="text-[28px] font-semibold text-[#1a2236]">{applications.filter((app) => app.status === 'SUBMITTED').length}</div>
+                <div className="text-[13px] font-medium text-[#7d6747]">Awaiting review</div>
               </div>
 
-              <div className="rounded border border-[#e6edf9] bg-white p-4 shadow-[0_2px_8px_rgba(26,34,54,0.04)]">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6381a8]">Completed</span>
-                  <CheckCircle className="w-4 h-4 text-[#059669]" />
+              <div className="rounded border border-[#cdebdc] bg-[#f6fdf9] p-4 shadow-[0_2px_10px_rgba(4,120,87,0.05)] transition-shadow hover:shadow-[0_6px_18px_rgba(4,120,87,0.09)]">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#327260]">Completed</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#dff7eb] text-[#047857]">
+                    <CheckCircle className="h-[18px] w-[18px]" />
+                  </span>
                 </div>
-                <div className="text-[28px] font-bold text-[#1a2236]">{applications.filter((app) => ['APPROVED', 'REJECTED'].includes(app.status)).length}</div>
-                <div className="text-[13px] text-[#6a7a9a]">Approved or rejected</div>
+                <div className="text-[28px] font-semibold text-[#1a2236]">{applications.filter((app) => ['APPROVED', 'REJECTED'].includes(app.status)).length}</div>
+                <div className="text-[13px] font-medium text-[#537568]">Approved or rejected</div>
               </div>
             </div>
 
@@ -297,19 +303,19 @@ function VettingReviewContent() {
               </div>
             )}
 
-            <div className="overflow-hidden rounded-xl border border-[#e6edf9] bg-white shadow-[0_2px_8px_rgba(26,34,54,0.04)]">
+            <div className="overflow-hidden rounded border border-[#dce6f3] bg-white shadow-[0_4px_16px_rgba(26,34,54,0.05)]">
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-[12px]">
+                <table className="w-full min-w-[920px] border-collapse text-[12px]">
                   <thead>
-                    <tr className="bg-[#f8fafc] text-[#4a5a7a]">
-                      <th className="px-4 py-3 text-left font-semibold">TIN</th>
-                      <th className="px-4 py-3 text-left font-semibold">Approval</th>
-                      <th className="px-4 py-3 text-left font-semibold">Certificate</th>
-                      <th className="px-4 py-3 text-left font-semibold">Transport</th>
-                      <th className="px-4 py-3 text-left font-semibold">Submitted</th>
-                      <th className="px-4 py-3 text-left font-semibold">FOB Value</th>
-                      <th className="px-4 py-3 text-left font-semibold">Status</th>
-                      <th className="px-4 py-3 text-left font-semibold">Action</th>
+                    <tr className="border-b border-[#dce6f3] bg-[#f5f8fc] text-[#506582]">
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">TIN</th>
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Approval</th>
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Certificate</th>
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Transport</th>
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Submitted</th>
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">FOB Value</th>
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Status</th>
+                      <th className="px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -333,26 +339,26 @@ function VettingReviewContent() {
                       </tr>
                     ) : (
                       applications.map((app) => (
-                        <tr key={app.applicationId} className="border-t border-[#edf0f5] hover:bg-[#f8fafd] transition-colors">
-                          <td className="px-4 py-3 font-mono text-[#1a2236]">{app.tin}</td>
-                          <td className="px-4 py-3 text-[#1a2236]">{app.approvalNumber}</td>
-                          <td className="px-4 py-3 text-[#1a2236] max-w-55">
+                        <tr key={app.applicationId} className="border-b border-[#edf1f6] last:border-b-0 transition-colors hover:bg-[#f7faff]">
+                          <td className="px-4 py-3.5 font-mono text-[11px] font-medium text-[#233552]">{app.tin}</td>
+                          <td className="px-4 py-3.5 font-medium text-[#233552]">{app.approvalNumber}</td>
+                          <td className="max-w-55 px-4 py-3.5 text-[#31425d]">
                             <div className="truncate">{app.certificateType}</div>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2 text-[#1a2236]">
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2 text-[#40546f]">
                               {getTransportIcon(app.modeOfTransport)}
                               <span>{app.modeOfTransport}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-[#1a2236]">{format(new Date(app.submittedAt), 'MMM dd, yyyy')}</td>
-                          <td className="px-4 py-3 font-medium text-[#1a2236]">
+                          <td className="px-4 py-3.5 text-[#40546f]">{format(new Date(app.submittedAt), 'MMM dd, yyyy')}</td>
+                          <td className="px-4 py-3.5 font-semibold text-[#233552]">
                             {app.fobCurrency === 'USD' ? '$' : '₦'}{Number(app.fobValue || 0).toLocaleString()}
                           </td>
-                          <td className="px-4 py-3">{getStatusBadge(app.status)}</td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3.5">{getStatusBadge(app.status)}</td>
+                          <td className="px-4 py-3.5">
                             <button
-                              className="inline-flex items-center gap-1 rounded-md bg-[#1a4a8a] px-2.5 py-1.75 text-[11px] font-semibold text-white transition-colors hover:bg-[#153c70]"
+                              className="inline-flex items-center gap-1 rounded-md bg-[#1f5fae] px-2.5 py-1.75 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#194f91] hover:shadow focus:outline-none focus:ring-2 focus:ring-[#2563eb]/25"
                               onClick={() => handleReviewAction(app)}
                             >
                               {app.status === 'PAID' ? 'Assign & Review' : 'Review'}

@@ -285,54 +285,62 @@ export default function VettingQueuePage() {
               <div className="text-[11.5px] text-[#6a7a9a] mt-1">Paid applications awaiting vetting — oldest first (FIFO)</div>
             </div>
 
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <button
                 type="button"
                 onClick={() => router.push('/vetting-queue')}
-                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                className="rounded-xl border border-[#fde7b0] bg-[#fffcf5] p-4 text-left shadow-[0_2px_10px_rgba(180,83,9,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(180,83,9,0.09)] focus:outline-none focus:ring-2 focus:ring-[#b45309]/20 focus:ring-offset-2"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <Clock className="w-5 h-5 text-amber-600" />
-                  <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Pending</span>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#976527]">Pending</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#fff1d6] text-[#b45309]">
+                    <Clock className="h-[18px] w-[18px]" />
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{pendingCount}</div>
-                <div className="text-xs text-gray-500 font-medium mt-1">Awaiting Review</div>
+                <div className="text-[28px] font-semibold text-[#1a2236]">{pendingCount}</div>
+                <div className="text-[13px] font-medium text-[#7d6747]">Awaiting review</div>
               </button>
               <button
                 type="button"
                 onClick={() => router.push('/vetting-review')}
-                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                className="rounded-xl border border-[#cdebdc] bg-[#f6fdf9] p-4 text-left shadow-[0_2px_10px_rgba(4,120,87,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(4,120,87,0.09)] focus:outline-none focus:ring-2 focus:ring-[#047857]/20 focus:ring-offset-2"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <CheckCircle className="w-5 h-5 text-emerald-600" />
-                  <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Today</span>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#327260]">Today</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#dff7eb] text-[#047857]">
+                    <CheckCircle className="h-[18px] w-[18px]" />
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{reviewedToday}</div>
-                <div className="text-xs text-gray-500 font-medium mt-1">Reviewed Today</div>
+                <div className="text-[28px] font-semibold text-[#1a2236]">{reviewedToday}</div>
+                <div className="text-[13px] font-medium text-[#537568]">Reviewed today</div>
               </button>
               <button
                 type="button"
                 onClick={() => router.push('/vetting-review?status=APPROVED')}
-                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                className="rounded-xl border border-[#dbeafe] bg-[#f8fbff] p-4 text-left shadow-[0_2px_10px_rgba(37,99,235,0.06)] transition-all hover:shadow-[0_6px_18px_rgba(37,99,235,0.10)] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/20 focus:ring-offset-2"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <CheckCircle className="w-5 h-5 text-blue-600" />
-                  <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Month</span>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#3b6298]">This month</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#e8f1ff] text-[#2563eb]">
+                    <CheckCircle className="h-[18px] w-[18px]" />
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{approvedThisMonth}</div>
-                <div className="text-xs text-gray-500 font-medium mt-1">Approved This Month</div>
+                <div className="text-[28px] font-semibold text-[#1a2236]">{approvedThisMonth}</div>
+                <div className="text-[13px] font-medium text-[#59708f]">Approved applications</div>
               </button>
               <button
                 type="button"
                 onClick={() => router.push('/vetting-review?status=REJECTED')}
-                className="rounded-lg border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:border-[#1a4a8a] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2"
+                className="rounded-xl border border-[#f7d8dc] bg-[#fff8f8] p-4 text-left shadow-[0_2px_10px_rgba(190,24,93,0.05)] transition-all hover:shadow-[0_6px_18px_rgba(190,24,93,0.09)] focus:outline-none focus:ring-2 focus:ring-[#be185d]/20 focus:ring-offset-2"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <XCircle className="w-5 h-5 text-rose-600" />
-                  <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">Month</span>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9d4b60]">This month</span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#ffeaed] text-[#be185d]">
+                    <XCircle className="h-[18px] w-[18px]" />
+                  </span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{rejectedThisMonth}</div>
-                <div className="text-xs text-gray-500 font-medium mt-1">Rejected This Month</div>
+                <div className="text-[28px] font-semibold text-[#1a2236]">{rejectedThisMonth}</div>
+                <div className="text-[13px] font-medium text-[#805866]">Rejected applications</div>
               </button>
             </div>
 
@@ -374,17 +382,18 @@ export default function VettingQueuePage() {
               </button>
             </div>
 
-            <div className="overflow-x-auto pt-4">
-              <table className="w-full border-collapse text-[14px]">
+            <div className="overflow-hidden rounded-xl border border-[#dce6f3] bg-white shadow-[0_4px_16px_rgba(26,34,54,0.05)]">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] border-collapse text-[12px]">
                 <thead>
-                  <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
-                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">TIN</th>
-                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Certificate Type</th>
-                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Transport</th>
-                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Submitted</th>
-                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">FOB Value</th>
-                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Status</th>
-                    <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Actions</th>
+                  <tr className="border-b border-[#dce6f3] bg-[#f5f8fc] text-[#506582]">
+                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">TIN</th>
+                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Certificate Type</th>
+                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Transport</th>
+                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Submitted</th>
+                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">FOB Value</th>
+                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Status</th>
+                    <th className="whitespace-nowrap px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.08em]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -411,28 +420,28 @@ export default function VettingQueuePage() {
                     filteredApplications.map((app) => (
                       <tr
                         key={app.applicationId}
-                        className="hover:bg-[#f8faff]"
+                        className="border-b border-[#edf1f6] last:border-b-0 transition-colors hover:bg-[#f7faff]"
                       >
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
-                          <span className="font-mono text-[12px]">{app.tin}</span>
+                        <td className="px-4 py-3.5 align-middle font-mono text-[11px] font-medium text-[#233552]">
+                          <span>{app.tin}</span>
                         </td>
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{app.certificateType}</td>
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
-                          <div className="flex items-center gap-2">
+                        <td className="px-4 py-3.5 align-middle text-[#31425d]">{app.certificateType}</td>
+                        <td className="px-4 py-3.5 align-middle">
+                          <div className="flex items-center gap-2 text-[#40546f]">
                             {getTransportIcon(app.modeOfTransport)}
-                            <span className="text-[12px]">{app.modeOfTransport}</span>
+                            <span>{app.modeOfTransport}</span>
                           </div>
                         </td>
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle text-[12px]">
+                        <td className="px-4 py-3.5 align-middle text-[#40546f]">
                           {format(new Date(app.submittedAt), 'MMM dd, yyyy')}
                         </td>
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle font-medium">
+                        <td className="px-4 py-3.5 align-middle font-semibold text-[#233552]">
                           {app.fobCurrency === 'USD' ? '$' : '₦'}{app.fobValue.toLocaleString()}
                         </td>
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">{getStatusBadge(app.status)}</td>
-                        <td className="px-[11px] py-[8px] border-b border-[#edf0f5] text-[#2a3a56] vertical-align-middle">
+                        <td className="px-4 py-3.5 align-middle">{getStatusBadge(app.status)}</td>
+                        <td className="px-4 py-3.5 align-middle">
                           <button
-                            className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded-[6px] text-[11px] font-medium cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
+                            className="inline-flex items-center gap-1 rounded-md bg-[#1f5fae] px-2.5 py-1.75 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#194f91] hover:shadow focus:outline-none focus:ring-2 focus:ring-[#2563eb]/25"
                             onClick={() => handleReviewAction(app)}
                           >
                             Review
@@ -443,6 +452,7 @@ export default function VettingQueuePage() {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
 
             <div className="flex items-center justify-between mt-4 text-xs text-gray-500">
