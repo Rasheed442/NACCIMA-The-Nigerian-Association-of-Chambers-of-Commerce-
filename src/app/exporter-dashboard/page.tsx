@@ -8,6 +8,7 @@ import { FaPlus } from "react-icons/fa";
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch, getBaseUrl, clearAuthData } from '@/utils/api';
 import { FaArrowUp } from "react-icons/fa6";
+import { format } from 'date-fns';
 interface Application {
   applicationId: string;
   approvalNumber: string;
@@ -54,6 +55,7 @@ function ExporterDashboardContent() {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -211,8 +213,16 @@ function ExporterDashboardContent() {
         </button>
       );
     }
-    if (status === 'PENDING_PAYMENT') {
-      return <button className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]">Pay Now</button>;
+    if (status === 'SUBMITTED' || status === 'PENDING_PAYMENT') {
+      return (
+        <button 
+          className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f] disabled:opacity-60 disabled:cursor-not-allowed"
+          // onClick={() => handleInitializePayment(id)}
+          disabled={payingId === id}
+        >
+          {payingId === id ? 'Processing...' : 'Pay Now'}
+        </button>
+      );
     }
     if (status === 'UNAPPROVED') {
       return (
@@ -231,7 +241,71 @@ function ExporterDashboardContent() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    try {
+      return format(new Date(dateString), 'dd MMM yyyy');
+    } catch (error) {
+      return '—';
+    }
+  };
+
+  const handleInitializePayment = async (id: string) => {
+    setPayingId(id);
+    
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        console.error('API URL not configured');
+        return;
+      }
+
+      // Get the application to determine the amount
+      const appResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const appResult = await appResponse.json();
+      if (!appResponse.ok || !appResult?.data) {
+        console.error('Failed to fetch application details');
+        return;
+      }
+
+      const application = appResult.data;
+      const amount = application.totalValueFob || 0;
+
+      const response = await apiFetch(`${baseUrl}/api/v1/payments/initialize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          purpose: 'CERTIFICATE_APPLICATION',
+          amount: amount,
+          applicationId: id,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('Failed to initialize payment:', result?.message);
+        return;
+      }
+
+      // Redirect to payment checkout URL
+      const checkoutUrl = result?.data?.shortUrl || result?.data?.checkoutUrl;
+      if (checkoutUrl) {
+        window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        console.error('Payment checkout URL not available');
+      }
+    } catch (err) {
+      console.error('Failed to initialize payment:', err);
+    } finally {
+      setPayingId(null);
+    }
   };
 
   const MetricCardSkeleton = () => (
