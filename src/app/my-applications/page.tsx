@@ -370,7 +370,7 @@ function MyApplicationsContent() {
       return (
         <button
           className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f] disabled:opacity-60 disabled:cursor-not-allowed"
-          // onClick={() => handleInitializePayment(id)}
+          onClick={() => handleInitializePayment(id)}
           disabled={payingId === id}
         >
           {payingId === id ? 'Processing...' : 'Pay Now'}

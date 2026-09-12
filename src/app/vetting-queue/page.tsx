@@ -42,7 +42,7 @@ export default function VettingQueuePage() {
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [filterCertType, setFilterCertType] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('SUBMITTED');
+  const [filterStatus, setFilterStatus] = useState('PAID');
   const [filterTransport, setFilterTransport] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [totalElements, setTotalElements] = useState(0);
@@ -104,6 +104,12 @@ export default function VettingQueuePage() {
   };
 
   const handleReviewAction = async (app: Application) => {
+    // If already approved, just view the application
+    if (app.status === 'APPROVED') {
+      router.push(`/vetting-review/${app.applicationId}`);
+      return;
+    }
+
     if (app.status === 'PAID') {
       try {
         const baseUrl = getBaseUrl();
@@ -142,7 +148,9 @@ export default function VettingQueuePage() {
       UNDER_REVIEW: { styles: 'bg-[#fef3c7] text-[#92400e]', label: 'Under Review' },
       PAID: { styles: 'bg-[#e0e7ff] text-[#3730a3]', label: 'Paid' },
       INFO_REQUESTED: { styles: 'bg-[#dbeafe] text-[#1e40af]', label: 'Info Requested' },
-      UNAPPROVED: { styles: 'bg-[#fdf2f8] text-[#9d174d]', label: 'Unapproved' },
+      UNAPPROVED: { styles: 'bg-[#fdf2f8] text-[#9d174d]', label: 'Unapproved / Resubmitted' },
+      APPROVED: { styles: 'bg-[#d1fae5] text-[#065f46]', label: 'Approved' },
+      REJECTED: { styles: 'bg-[#fee2e2] text-[#9b1c1c]', label: 'Rejected' },
     };
 
     const s = statusMap[status] || { styles: 'bg-[#f3f4f6] text-[#6b7280]', label: status };
@@ -196,6 +204,9 @@ export default function VettingQueuePage() {
     { value: 'PAID', label: 'Paid / Unassigned' },
     { value: 'UNDER_REVIEW', label: 'Under Review' },
     { value: 'INFO_REQUESTED', label: 'Info Requested' },
+    { value: 'UNAPPROVED', label: 'Unapproved / Resubmitted' },
+    { value: 'APPROVED', label: 'Approved' },
+    { value: 'REJECTED', label: 'Rejected' },
   ];
 
   const transportOptions = [
@@ -280,7 +291,7 @@ export default function VettingQueuePage() {
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto bg-[#fbfbfe]">
             <div className="mb-[18px]">
               <div className="text-[16px] font-bold text-[#1a2236]">Applications Queue</div>
-              <div className="text-[11.5px] text-[#6a7a9a] mt-1">Paid applications awaiting vetting — oldest first (FIFO)</div>
+              <div className="text-[11.5px] text-[#6a7a9a] mt-1">Applications requiring vetting review — oldest first (FIFO)</div>
             </div>
 
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -296,7 +307,7 @@ export default function VettingQueuePage() {
                   </span>
                 </div>
                 <div className="text-[28px] font-semibold text-[#1a2236]">{pendingCount}</div>
-                <div className="text-[13px] font-medium text-[#7d6747]">Awaiting review</div>
+                <div className="text-[13px] font-medium text-[#7d6747]">Paid & awaiting review</div>
               </button>
               <button
                 type="button"
@@ -409,8 +420,16 @@ export default function VettingQueuePage() {
                     </tr>
                   ) : filteredApplications.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-[11px] py-[8px] border-b border-[#edf0f5] text-center text-[#6a7a9a]">
-                        No applications found
+                      <td colSpan={7} className="px-[11px] py-[12px] border-b border-[#edf0f5] text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-16 h-16 rounded-full bg-[#f1f4f9] flex items-center justify-center">
+                            <FileText className="w-8 h-8 text-[#9ca3af]" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-[#374151]">No applications found</p>
+                            <p className="text-xs text-[#6b7280] mt-1">Try adjusting your filters or search criteria</p>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -438,12 +457,15 @@ export default function VettingQueuePage() {
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">{getStatusBadge(app.status)}</td>
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           <button
-                            className="inline-flex items-center gap-1 rounded border-none bg-[#1a4a8a] px-[9px] py-[5px] text-[13px] font-medium text-white transition-all hover:bg-[#153c70]"
+                            className={`inline-flex items-center gap-1 rounded border-none px-[9px] py-[5px] text-[13px] font-medium transition-all ${
+                              app.status === 'APPROVED' 
+                                ? 'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]' 
+                                : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
+                            }`}
                             onClick={() => handleReviewAction(app)}
                           >
-                            Review
-                                                          <ArrowRight className="w-3.5 h-3.5" />
-                            
+                            {app.status === 'APPROVED' ? 'View' : 'Review'}
+                            {app.status !== 'APPROVED' && <ArrowRight className="w-3.5 h-3.5" />}
                           </button>
                         </td>
                       </tr>

@@ -552,68 +552,84 @@ export default function VettingReviewPage({
             {/* Sidebar */}
             <div className="space-y-4">
               {/* Review Decision Panel */}
-              <div className="bg-white rounded-lg border border-gray-200 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Scale className="w-5 h-5 text-gray-600" />
-                  <h2 className="text-sm font-semibold text-gray-900">Review Decision</h2>
-                </div>
-
-                {/* <button
-                  type="button"
-                  onClick={handleSelfAssign}
-                  disabled={selfAssigning || isSelfAssigned}
-                  className="mb-4 w-full flex items-center justify-center gap-2 rounded-lg border border-[#dbe2ee] bg-[#f8fafd] px-3 py-2 text-sm font-semibold text-[#1a2236] hover:bg-[#edf4ff] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <ClipboardList className="w-4 h-4" />
-                  {selfAssigning ? 'Assigning...' : isSelfAssigned ? 'Self-assigned for review' : 'Self assign application'}
-                </button> */}
-
-                <textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Add a review comment (required when rejecting)..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  rows={4}
-                />
-                {successMessage && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+              {application.status === 'APPROVED' ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <h2 className="text-sm font-semibold text-gray-900">Application Status</h2>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
                     <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{successMessage}</span>
+                    <div>
+                      <p className="font-medium">This application has been approved</p>
+                      <p className="text-green-600 mt-1">No further action is required. You can view the application details and review history.</p>
+                    </div>
                   </div>
-                )}
-                {decisionError && (
-                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{decisionError}</span>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Scale className="w-5 h-5 text-gray-600" />
+                    <h2 className="text-sm font-semibold text-gray-900">Review Decision</h2>
                   </div>
-                )}
-                <div className="space-y-2 mt-4">
-                  <button
-                    onClick={() => handleDecision('APPROVE')}
-                    disabled={submitting || selfAssigning}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Approve Application
-                  </button>
+
                   {/* <button
-                    onClick={() => handleDecision('REQUEST_INFO')}
-                    disabled={submitting || selfAssigning}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    type="button"
+                    onClick={handleSelfAssign}
+                    disabled={selfAssigning || isSelfAssigned}
+                    className="mb-4 w-full flex items-center justify-center gap-2 rounded-lg border border-[#dbe2ee] bg-[#f8fafd] px-3 py-2 text-sm font-semibold text-[#1a2236] hover:bg-[#edf4ff] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <ClipboardList className="w-4 h-4" />
-                    Request More Information
+                    {selfAssigning ? 'Assigning...' : isSelfAssigned ? 'Self-assigned for review' : 'Self assign application'}
                   </button> */}
-                  <button
-                    onClick={() => handleDecision('REJECT')}
-                    disabled={submitting || selfAssigning}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Reject Application
-                  </button>
+
+                  <textarea
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Add a review comment (required when rejecting)..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={4}
+                  />
+                  {successMessage && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{successMessage}</span>
+                    </div>
+                  )}
+                  {decisionError && (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{decisionError}</span>
+                    </div>
+                  )}
+                  <div className="space-y-2 mt-4">
+                    <button
+                      onClick={() => handleDecision('APPROVE')}
+                      disabled={submitting || selfAssigning}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Approve Application
+                    </button>
+                    {/* <button
+                      onClick={() => handleDecision('REQUEST_INFO')}
+                      disabled={submitting || selfAssigning}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ClipboardList className="w-4 h-4" />
+                      Request More Information
+                    </button> */}
+                    <button
+                      onClick={() => handleDecision('REJECT')}
+                      disabled={submitting || selfAssigning}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Reject Application
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Review History Panel */}
               <div className="bg-white rounded-lg border border-gray-200 p-5">
