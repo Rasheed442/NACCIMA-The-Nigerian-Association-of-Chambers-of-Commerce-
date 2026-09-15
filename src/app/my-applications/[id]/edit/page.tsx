@@ -115,6 +115,7 @@ interface ApplicationData {
   valueCurrency?: string;
   bulkQtyMt?: number;
   status?: string;
+  criteria?: string;
   fields?: Record<string, string | number | boolean>;
   goods?: Array<{
     id?: string;
@@ -169,6 +170,7 @@ export default function EditResubmissionPage() {
   const destinationRef = useRef<HTMLDivElement>(null);
   const manufacturingRef = useRef<HTMLDivElement>(null);
   const totalValueFOBRef = useRef<HTMLInputElement>(null);
+  const errorAlertRef = useRef<HTMLDivElement>(null);
   const [goodsLineItems, setGoodsLineItems] = useState<GoodsLineItem[]>([]);
   const lineItemIdRef = useRef(0);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, File>>({});
@@ -213,6 +215,7 @@ export default function EditResubmissionPage() {
       TOTAL_VALUE_FOB: String(appData.totalValueFob ?? ''),
       BULK_QUANTITY_MT: String(appData.bulkQtyMt ?? ''),
       TOTAL_ITEMS: String(appData.totalItems ?? ''),
+      CRITERIA: appData.criteria || '',
     };
 
     Object.entries(fallbackValues).forEach(([key, value]) => {
@@ -312,6 +315,13 @@ export default function EditResubmissionPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Scroll to error when error state changes
+  useEffect(() => {
+    if ((validationError || error) && errorAlertRef.current) {
+      errorAlertRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [validationError, error]);
 
   useEffect(() => {
     if (!applicationId) return;
@@ -1376,7 +1386,7 @@ export default function EditResubmissionPage() {
                 >
                   ← Back to {isPaymentMode ? 'Dashboard' : (isAdminUser ? 'Admin Applications' : 'Applications')}
                 </button>
-                <div className="text-[20px] font-medium text-[#1a2236]">{isPaymentMode ? 'Pay Now' : 'Edit &amp; Resubmit Application'}</div>
+                <div className="text-[20px] font-medium text-[#1a2236]">{isPaymentMode ? 'Pay Now' : 'Edit & Resubmit Application'}</div>
                 <div className="text-[12px] text-[#6a7a9a]">Application {application.id}</div>
               </div>
               <span className="inline-flex items-center gap-2 rounded-full bg-[#fdf2f8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#9d174d]">
@@ -1398,10 +1408,10 @@ export default function EditResubmissionPage() {
             )}
 
             {(validationError || error) && (
-              <div className="mb-4 rounded-[8px] border border-[#fca5a5] bg-[#fef2f2] p-3 text-[12px] text-[#991b1b] flex items-start gap-2">
+              <div ref={errorAlertRef} className="mb-4 rounded-[8px] border border-[#fca5a5] bg-[#fef2f2] p-3 text-[12px] text-[#991b1b] flex items-start gap-2">
                 <span className="text-[14px]">⚠️</span>
                 <span className="flex-1">{validationError || error}</span>
-                <button 
+                <button
                   onClick={() => { setValidationError(null); setError(null); }}
                   className="text-[#991b1b] hover:text-[#7c2d12] font-semibold"
                 >

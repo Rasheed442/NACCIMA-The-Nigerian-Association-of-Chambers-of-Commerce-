@@ -142,7 +142,7 @@ export default function DashboardScreen({ activeScreen, onScreenChange }: Dashbo
                           <td>Ghana</td>
                           <td>15 Mar 2026</td>
                           <td><span className="badge b-unapproved">Unapproved</span></td>
-                          <td><div className="actions"><button className="btn btn-amber btn-sm" onClick={() => onScreenChange('s-resubmit')}>Edit &amp; Resubmit</button></div></td>
+                          <td><div className="actions"><button className="btn btn-amber btn-sm" onClick={() => onScreenChange('s-resubmit')}>Edit & Resubmit</button></div></td>
                         </tr>
                         <tr>
                           <td>NACC-2026-00341</td>
