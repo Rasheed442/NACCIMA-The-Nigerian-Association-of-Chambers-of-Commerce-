@@ -188,6 +188,7 @@ export default function EditResubmissionPage() {
   const [paymentData, setPaymentData] = useState<Record<string, unknown> | null>(null);
   const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CARD' | 'BANK_TRANSFER' | 'USSD'>('CARD');
+  const [reviewDocuments, setReviewDocuments] = useState<Array<{ documentType: string; fileName: string; fileUrl: string }>>([]);
 
   const prefillDynamicFields = (appData: ApplicationData) => {
     const fieldValues: Record<string, string | boolean | string[]> = {};
@@ -346,6 +347,90 @@ export default function EditResubmissionPage() {
           fetchCompanyProfile(),
         ]);
 
+        // In payment mode, call review endpoint first
+        if (isPaymentMode) {
+          const reviewResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          const reviewResult = await reviewResponse.json();
+          if (!reviewResponse.ok || !reviewResult?.data) {
+            throw new Error(reviewResult?.message || 'Failed to load application review data');
+          }
+
+          const reviewData = reviewResult.data;
+          console.log('Review data loaded:', reviewData);
+
+          // Use application data from review response
+          if (reviewData.application) {
+            const appData = reviewData.application as ApplicationData;
+            setApplication(appData);
+
+            // Prefill dynamic fields from review data
+            prefillDynamicFields(appData);
+
+            // Set transport mode
+            if (appData.modeOfTransport) {
+              setTransportMode(appData.modeOfTransport);
+              await fetchTransportModeDetails(appData.modeOfTransport);
+            }
+
+            // Set certificate type
+            if (appData.certificateType && types.length > 0) {
+              const matchedCertificate = types.find(
+                cert => cert.code === appData.certificateType || cert.id === appData.certificateType || cert.name === appData.certificateType
+              );
+
+              if (matchedCertificate) {
+                await fetchCertificateFields(matchedCertificate.id, matchedCertificate);
+              }
+            }
+
+            // Prefill goods line items from review data
+            if (appData.goods && appData.goods.length > 0) {
+              const items = appData.goods.map((item, index) => ({
+                id: item.id || `goods-${index}`,
+                hsCode: item.hsCode || '',
+                description: item.description || '',
+                marksNo: item.marksNo || '',
+                quantity: formatNumberWithCommas(String(item.quantity ?? '')),
+                grossWeight: formatNumberWithCommas(String(item.grossWeight ?? '')),
+                nomenclature: item.nomenclature || '',
+                unit: item.unit || '',
+                value: formatNumberWithCommas(String(item.value ?? '')),
+              }));
+              setGoodsLineItems(items);
+              lineItemIdRef.current = items.length;
+            }
+
+            // Set payment data from review response
+            if (reviewData.totalPayable || reviewData.certificateFee) {
+              setPaymentData({
+                amount: reviewData.totalPayable || reviewData.certificateFee,
+                currency: 'NGN',
+                checkoutUrl: reviewData.checkoutUrl,
+                certificateFee: reviewData.certificateFee,
+                vatAmount: reviewData.vatAmount,
+                vatRate: reviewData.vatRate,
+                membershipStatus: reviewData.membershipStatus,
+                exchangeRate: reviewData.exchangeRate,
+              });
+            }
+
+            // Set documents from review response
+            if (reviewData.documents && Array.isArray(reviewData.documents)) {
+              setReviewDocuments(reviewData.documents);
+            }
+          }
+
+          if (isMounted) {
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // Normal mode: load application from regular endpoint
         const appResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
@@ -431,7 +516,7 @@ export default function EditResubmissionPage() {
     return () => {
       isMounted = false;
     };
-  }, [applicationId]);
+  }, [applicationId, isPaymentMode]);
 
   async function fetchCertificateTypes(): Promise<CertificateType[]> {
     setIsLoadingCerts(true);
@@ -1141,60 +1226,102 @@ export default function EditResubmissionPage() {
         throw new Error('API URL not configured');
       }
 
-      // Update application details (skip in payment mode since data is read-only)
-      if (!isPaymentMode) {
-        const payload = {
-          modeOfTransport: transportMode,
-          fields: buildApplicationFieldsPayload(),
-        };
-
-        const updateResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
-          method: 'PUT',
+      // In payment mode, directly call submit endpoint
+      if (isPaymentMode) {
+        const submissionResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/submit`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
         });
 
-        const updateResult = await updateResponse.json();
-        if (!updateResponse.ok) {
-          throw new Error(updateResult?.message || 'Failed to save your changes');
+        const submissionResult = await submissionResponse.json();
+        if (!submissionResponse.ok) {
+          throw new Error(submissionResult?.message || 'Failed to submit application');
         }
 
-        // Update goods items
-        if (goodsLineItems.length > 0) {
-          const itemsPayload = {
-            items: goodsLineItems.map(item => ({
-              hsCode: item.hsCode,
-              marksNo: item.marksNo,
-              description: item.description,
-              unit: item.unit,
-              quantity: parseFloat(item.quantity.replace(/,/g, '')) || 0,
-              grossWeight: parseFloat(item.grossWeight.replace(/,/g, '')) || 0,
-              nomenclature: item.nomenclature,
-              value: parseFloat(item.value.replace(/,/g, '')) || 0,
-            })),
-          };
+        const submissionData = submissionResult.data;
 
-          const goodsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(itemsPayload),
-          });
+        // Handle payment flow
+        if (submissionData) {
+          const paymentRecord = submissionData as Record<string, unknown>;
+          const hostedUrl = getHostedPaymentUrl(paymentRecord);
 
-          if (!goodsResponse.ok) {
-            const goodsResult = await goodsResponse.json();
-            throw new Error(goodsResult?.message || 'Failed to save goods items');
+          if (hostedUrl) {
+            setPaymentData(paymentRecord);
+            setPaymentCheckoutUrl(hostedUrl);
+            setSelectedPaymentMethod('CARD');
+            // Auto-open the payment checkout
+            openPayfonteCheckout(paymentRecord);
+            setSuccessMessage('Proceeding to payment...');
+            setIsSaving(false);
+            return;
           }
         }
 
-        // Upload documents
-        const docEntries = Object.entries(uploadedDocuments);
-        for (const [docCode, file] of docEntries) {
-          try {
-            await uploadDocumentToServer(docCode, file);
-          } catch (err) {
-            console.error(`Failed to upload document ${docCode}:`, err);
-            throw new Error(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        // If no payment URL, redirect based on status
+        setSuccessMessage('Application submitted successfully!');
+
+        setTimeout(() => {
+          if (submissionData.status === 'PAID') {
+            router.push(dashboardPath + '?status=PAID');
+          } else {
+            router.push(dashboardPath + '?status=PENDING');
           }
+        }, 2000);
+        return;
+      }
+
+      // Normal edit/resubmit flow (non-payment mode)
+      const payload = {
+        modeOfTransport: transportMode,
+        fields: buildApplicationFieldsPayload(),
+      };
+
+      const updateResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const updateResult = await updateResponse.json();
+      if (!updateResponse.ok) {
+        throw new Error(updateResult?.message || 'Failed to save your changes');
+      }
+
+      // Update goods items
+      if (goodsLineItems.length > 0) {
+        const itemsPayload = {
+          items: goodsLineItems.map(item => ({
+            hsCode: item.hsCode,
+            marksNo: item.marksNo,
+            description: item.description,
+            unit: item.unit,
+            quantity: parseFloat(item.quantity.replace(/,/g, '')) || 0,
+            grossWeight: parseFloat(item.grossWeight.replace(/,/g, '')) || 0,
+            nomenclature: item.nomenclature,
+            value: parseFloat(item.value.replace(/,/g, '')) || 0,
+          })),
+        };
+
+        const goodsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(itemsPayload),
+        });
+
+        if (!goodsResponse.ok) {
+          const goodsResult = await goodsResponse.json();
+          throw new Error(goodsResult?.message || 'Failed to save goods items');
+        }
+      }
+
+      // Upload documents
+      const docEntries = Object.entries(uploadedDocuments);
+      for (const [docCode, file] of docEntries) {
+        try {
+          await uploadDocumentToServer(docCode, file);
+        } catch (err) {
+          console.error(`Failed to upload document ${docCode}:`, err);
+          throw new Error(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
         }
       }
 
@@ -1241,7 +1368,7 @@ export default function EditResubmissionPage() {
 
       const submissionData = submissionResult.data;
 
-      // Handle payment flow for both normal and payment mode
+      // Handle payment flow for normal mode
       if (submissionData) {
         const paymentRecord = submissionData as Record<string, unknown>;
         const hostedUrl = getHostedPaymentUrl(paymentRecord);
@@ -1252,7 +1379,7 @@ export default function EditResubmissionPage() {
           setSelectedPaymentMethod('CARD');
           // Auto-open the payment checkout
           openPayfonteCheckout(paymentRecord);
-          setSuccessMessage(isPaymentMode ? 'Proceeding to payment...' : (isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!'));
+          setSuccessMessage(isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!');
           setIsSaving(false);
           return;
         }
@@ -1749,12 +1876,15 @@ export default function EditResubmissionPage() {
                 <div className="flex flex-wrap gap-3 mb-3">
                   {getSelectedTransportMode()?.documents.map((doc) => {
                     const isUploaded = uploadedDocuments[doc.code];
+                    const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === doc.code);
                     const isUploading = uploadingDoc === doc.code;
+                    const reviewDoc = isPaymentMode ? reviewDocuments.find(r => r.documentType === doc.code) : null;
+
                     return (
                       <div
                         key={doc.code}
                         className={`border-[1.5px] border-dashed rounded-[6px] px-[14px] py-[10px] text-[11px] text-center min-w-[140px] relative ${
-                          isUploaded
+                          isUploaded || isReviewUploaded
                             ? 'border-[#059669] bg-[#d1fae5] text-[#065f46]'
                             : 'border-[#d1d5db] text-[#6a7a9a]'
                         } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''} ${isPaymentMode ? 'cursor-not-allowed' : 'cursor-pointer hover:border-[#3a7bd5] hover:text-[#3a7bd5]'}`}
@@ -1781,6 +1911,12 @@ export default function EditResubmissionPage() {
                                 ✕
                               </button>
                             )}
+                          </>
+                        ) : isReviewUploaded ? (
+                          <>
+                            <span className="block mb-1">✅</span>
+                            <span className="block font-semibold">{doc.name}</span>
+                            <span className="block text-[10px]">{reviewDoc?.fileName || 'Uploaded'}</span>
                           </>
                         ) : (
                           <>
@@ -1809,7 +1945,11 @@ export default function EditResubmissionPage() {
               {(() => {
                 const transportMode = getSelectedTransportMode();
                 if (!transportMode) return null;
-                const missingDocs = transportMode.documents?.filter(d => d.required && !uploadedDocuments[d.code]);
+                const missingDocs = transportMode.documents?.filter(d => {
+                  const isUploaded = uploadedDocuments[d.code];
+                  const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === d.code);
+                  return d.required && !isUploaded && !isReviewUploaded;
+                });
                 if (missingDocs.length === 0) return null;
                 return (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
@@ -1821,7 +1961,7 @@ export default function EditResubmissionPage() {
             </div>
 
             {/* Payment Section - Only shown when payment data is available */}
-            {paymentData && (
+            {/* {paymentData && (
               <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">7</div>
@@ -1940,7 +2080,7 @@ export default function EditResubmissionPage() {
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
 
             <div className="flex justify-end gap-2">
               <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
