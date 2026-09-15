@@ -242,8 +242,13 @@ export default function EditResubmissionPage() {
       if (event.key !== 'nacc-payment-complete' || !event.newValue) return;
 
       let reference: string | null = null;
+      let paymentId: string | null = null;
+      let status: string | null = null;
       try {
-        reference = JSON.parse(event.newValue)?.reference ?? null;
+        const paymentData = JSON.parse(event.newValue);
+        reference = paymentData.reference ?? null;
+        paymentId = paymentData.paymentId ?? null;
+        status = paymentData.status ?? null;
       } catch {
         // ignore malformed payload
       }
@@ -251,13 +256,18 @@ export default function EditResubmissionPage() {
       setSuccessMessage(reference ? `Payment successful. Reference: ${reference}` : 'Payment successful.');
       stopPaymentStatusPolling();
       setTimeout(() => {
-        router.push(`${dashboardPath}?status=success` + (reference ? `&reference=${reference}` : ''));
+        const redirectUrl = `${dashboardPath}?status=success`;
+        const params = new URLSearchParams();
+        if (reference) params.append('reference', reference);
+        if (paymentId) params.append('paymentId', paymentId);
+        if (status) params.append('status', status);
+        router.push(redirectUrl + (params.toString() ? `&${params.toString()}` : ''));
       }, 2000);
     };
 
     window.addEventListener('storage', handleStorageEvent);
     return () => window.removeEventListener('storage', handleStorageEvent);
-  }, [isPaymentMode, router]);
+  }, [isPaymentMode, router, dashboardPath]);
 
   // Stop polling if the component unmounts while a payment tab is open
   useEffect(() => {
@@ -284,11 +294,12 @@ export default function EditResubmissionPage() {
           });
           const result = await response.json();
           const data = result?.data as any;
-          const isPaid = data?.paymentStatus === 'PAID' || data?.status === 'PAYMENT_COMPLETE';
+          const isPaid = data?.paymentStatus === 'PAID' || data?.status === 'PAYMENT_COMPLETE' || data?.application?.status === 'PAID';
 
           if (response.ok && isPaid) {
             stopPaymentStatusPolling();
-            router.push(`${dashboardPath}?status=success`);
+            const reference = data?.paymentId || data?.reference || '';
+            router.push(`${dashboardPath}?status=success${reference ? `&reference=${reference}` : ''}`);
             return;
           }
         }
@@ -760,25 +771,38 @@ export default function EditResubmissionPage() {
     return checkoutUrl.trim();
   };
 
+  const handlePaymentResponse = (paymentData: Record<string, unknown>) => {
+    const checkoutUrl = paymentData.checkoutUrl as string;
+    const paymentId = paymentData.paymentId as string;
+    const reference = paymentData.reference as string;
+    const status = paymentData.status as string;
+    const amount = paymentData.amount as number;
+    const currency = paymentData.currency as string;
+
+    return {
+      checkoutUrl,
+      paymentId,
+      reference,
+      status,
+      amount,
+      currency,
+    };
+  };
+
   const openPayfonteCheckout = (paymentData: Record<string, unknown>) => {
     if (typeof window === 'undefined') {
       return false;
     }
 
-    const checkoutUrl = getHostedPaymentUrl(paymentData);
+    const checkoutUrl = paymentData.checkoutUrl as string;
     if (!checkoutUrl) {
       setValidationError('The Payfonte checkout URL is unavailable. Please try again.');
       return false;
     }
 
-    paymentTabRef.current = window.open(checkoutUrl, 'nacc-payment', 'width=500,height=700,scrollbars=yes,resizable=yes');
-    if (paymentTabRef.current) {
-      startPaymentStatusPolling();
-      return true;
-    }
-
-    setValidationError('Failed to open payment checkout. Please check your popup blocker settings.');
-    return false;
+    // Redirect in the same tab instead of opening a new window
+    window.location.href = checkoutUrl;
+    return true;
   };
 
 
@@ -1226,29 +1250,44 @@ export default function EditResubmissionPage() {
         throw new Error('API URL not configured');
       }
 
-      // In payment mode, directly call submit endpoint
+      // In payment mode, call payment endpoint
       if (isPaymentMode) {
-        const submissionResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/submit`, {
+        const paymentResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/payment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
 
-        const submissionResult = await submissionResponse.json();
-        if (!submissionResponse.ok) {
-          throw new Error(submissionResult?.message || 'Failed to submit application');
+        const paymentResult = await paymentResponse.json();
+        if (!paymentResponse.ok) {
+          throw new Error(paymentResult?.message || 'Failed to initiate payment');
         }
 
-        const submissionData = submissionResult.data;
+        const paymentData = paymentResult.data;
 
-        // Handle payment flow
-        if (submissionData) {
-          const paymentRecord = submissionData as Record<string, unknown>;
-          const hostedUrl = getHostedPaymentUrl(paymentRecord);
+        // Handle payment flow with returned data
+        if (paymentData) {
+          const paymentRecord = paymentData as Record<string, unknown>;
+          const checkoutUrl = paymentRecord.checkoutUrl as string;
+          const paymentId = paymentRecord.paymentId as string;
+          const reference = paymentRecord.reference as string;
+          const status = paymentRecord.status as string;
+          const amount = paymentRecord.amount as number;
+          const currency = paymentRecord.currency as string;
 
-          if (hostedUrl) {
-            setPaymentData(paymentRecord);
-            setPaymentCheckoutUrl(hostedUrl);
+          if (checkoutUrl) {
+            // Store payment data for tracking
+            setPaymentData({
+              ...paymentRecord,
+              checkoutUrl,
+              paymentId,
+              reference,
+              status,
+              amount,
+              currency,
+            });
+            setPaymentCheckoutUrl(checkoutUrl);
             setSelectedPaymentMethod('CARD');
+
             // Auto-open the payment checkout
             openPayfonteCheckout(paymentRecord);
             setSuccessMessage('Proceeding to payment...');
@@ -1257,17 +1296,8 @@ export default function EditResubmissionPage() {
           }
         }
 
-        // If no payment URL, redirect based on status
-        setSuccessMessage('Application submitted successfully!');
-
-        setTimeout(() => {
-          if (submissionData.status === 'PAID') {
-            router.push(dashboardPath + '?status=PAID');
-          } else {
-            router.push(dashboardPath + '?status=PENDING');
-          }
-        }, 2000);
-        return;
+        // If no checkout URL, show error
+        throw new Error('Payment checkout URL not available');
       }
 
       // Normal edit/resubmit flow (non-payment mode)
@@ -1961,126 +1991,59 @@ export default function EditResubmissionPage() {
             </div>
 
             {/* Payment Section - Only shown when payment data is available */}
-            {/* {paymentData && (
+            {paymentData && (
               <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">7</div>
                   <div className="text-[13px] font-bold text-[#1a2236]">Payment</div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-5">
-                  <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
-                    <div className="flex items-center justify-between mb-5">
-                      <div>
-                        <div className="text-[14px] font-bold text-[#1a2236]">Checkout</div>
-                        <div className="text-[11px] text-[#6a7a9a] mt-1">Choose a payment option to continue securely.</div>
-                      </div>
-                      <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
-                        🔒 Secure
-                      </div>
+                <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
+                  <div className="flex items-center justify-between mb-5">
+                    <div>
+                      <div className="text-[14px] font-bold text-[#1a2236]">Payment Summary</div>
+                      <div className="text-[11px] text-[#6a7a9a] mt-1">Review your payment details before proceeding</div>
                     </div>
-
-                    <div className="space-y-3 mb-5">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPaymentMethod('CARD')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-all ${
-                          selectedPaymentMethod === 'CARD'
-                            ? 'border-[#1a4a8a] bg-[#e8f0fe]'
-                            : 'border-[#dde3ee] bg-white hover:border-[#1a4a8a]'
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-[#1a4a8a] text-white flex items-center justify-center text-[12px] font-bold">
-                          💳
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="text-[12px] font-bold text-[#1a2236]">Pay with Card</div>
-                          <div className="text-[10.5px] text-[#6a7a9a]">Visa, Mastercard, Verve</div>
-                        </div>
-                        {selectedPaymentMethod === 'CARD' && <Check className="w-4 h-4 text-[#1a4a8a]" />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPaymentMethod('BANK_TRANSFER')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-all ${
-                          selectedPaymentMethod === 'BANK_TRANSFER'
-                            ? 'border-[#1a4a8a] bg-[#e8f0fe]'
-                            : 'border-[#dde3ee] bg-white hover:border-[#1a4a8a]'
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-[#1a4a8a] text-white flex items-center justify-center text-[12px] font-bold">
-                          🏦
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="text-[12px] font-bold text-[#1a2236]">Bank Transfer</div>
-                          <div className="text-[10.5px] text-[#6a7a9a]">Transfer from your bank account</div>
-                        </div>
-                        {selectedPaymentMethod === 'BANK_TRANSFER' && <Check className="w-4 h-4 text-[#1a4a8a]" />}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPaymentMethod('USSD')}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-all ${
-                          selectedPaymentMethod === 'USSD'
-                            ? 'border-[#1a4a8a] bg-[#e8f0fe]'
-                            : 'border-[#dde3ee] bg-white hover:border-[#1a4a8a]'
-                        }`}
-                      >
-                        <div className="w-8 h-8 rounded-full bg-[#1a4a8a] text-white flex items-center justify-center text-[12px] font-bold">
-                          📱
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="text-[12px] font-bold text-[#1a2236]">Pay with USSD</div>
-                          <div className="text-[10.5px] text-[#6a7a9a]">
-                            Payfonte will show the available USSD options for your payment.
-                          </div>
-                        </div>
-                        {selectedPaymentMethod === 'USSD' && <Check className="w-4 h-4 text-[#1a4a8a]" />}
-                      </button>
+                    <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
+                      🔒 Secure
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => openPayfonteCheckout(paymentData)}
-                      disabled={isSaving}
-                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {isSaving ? 'Processing...' : 'Proceed to Payment'}
-                    </button>
                   </div>
 
-                  <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
-                    <div className="text-[14px] font-bold text-[#1a2236] mb-4">Payment Summary</div>
-
-                    <div className="space-y-3 mb-4">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-[#6a7a9a]">Application Fee</span>
-                        <span className="text-[#1a2236]">
-                          {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-[#6a7a9a]">Processing Fee</span>
-                        <span className="text-[#1a2236]">Included</span>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-[#dde3ee] pt-3 flex justify-between gap-4">
-                      <span className="font-bold text-[#1a2236]">Total Payable</span>
-                      <span className="font-bold text-[#1a4a8a] text-[15px]">
+                  <div className="space-y-3 mb-5">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-[#6a7a9a]">Application Fee</span>
+                      <span className="text-[#1a2236]">
                         {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
                       </span>
                     </div>
-
-                    <div className="mt-5 p-3 rounded-[7px] bg-[#ecfdf5] border border-[#a7f3d0] text-[10.5px] text-[#065f46]">
-                      Once payment is confirmed successfully, you will be redirected to your dashboard.
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-[#6a7a9a]">Processing Fee</span>
+                      <span className="text-[#1a2236]">Included</span>
                     </div>
                   </div>
+
+                  <div className="border-t border-[#dde3ee] pt-3 flex justify-between gap-4 mb-5">
+                    <span className="font-bold text-[#1a2236]">Total Payable</span>
+                    <span className="font-bold text-[#1a4a8a] text-[15px]">
+                      {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
+                    </span>
+                  </div>
+
+                  {/* <button
+                    type="button"
+                    onClick={() => openPayfonteCheckout(paymentData)}
+                    disabled={isSaving}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? 'Processing...' : 'Proceed to Payment'}
+                  </button> */}
+
+                  {/* <div className="mt-4 p-3 rounded-[7px] bg-[#ecfdf5] border border-[#a7f3d0] text-[10.5px] text-[#065f46]">
+                    Once payment is confirmed successfully, you will be redirected to your dashboard.
+                  </div> */}
                 </div>
               </div>
-            )} */}
+            )}
 
             <div className="flex justify-end gap-2">
               <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
@@ -2092,7 +2055,7 @@ export default function EditResubmissionPage() {
                 onClick={handleSaveAndResubmit}
                 disabled={isSaving}
               >
-                {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Pay Now' : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit'))}
+                {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Proceed to Payment' : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit'))}
               </button>
             </div>
           </div>

@@ -174,6 +174,11 @@ function NewApplicationContent() {
   const marksNoRef = useRef<HTMLInputElement>(null);
   const ecowasNumberRef = useRef<HTMLInputElement>(null);
   const criteriaRef = useRef<HTMLInputElement>(null);
+  const certErrorRef = useRef<HTMLDivElement>(null);
+  const step2ValidationErrorRef = useRef<HTMLDivElement>(null);
+  const step4ValidationErrorRef = useRef<HTMLDivElement>(null);
+  const uploadErrorRef = useRef<HTMLDivElement>(null);
+  const step3ReviewErrorsRef = useRef<HTMLDivElement>(null);
   const [goodsLineItems, setGoodsLineItems] = useState<GoodsLineItem[]>([]);
   const lineItemIdRef = useRef(0);
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
@@ -501,6 +506,41 @@ function NewApplicationContent() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Auto-scroll to certificate error when it appears
+  useEffect(() => {
+    if (certError && certErrorRef.current) {
+      smoothScrollToElement(certErrorRef.current, 800);
+    }
+  }, [certError]);
+
+  // Auto-scroll to step 2 validation error when it appears
+  useEffect(() => {
+    if (validationError && step === 2 && step2ValidationErrorRef.current) {
+      smoothScrollToElement(step2ValidationErrorRef.current, 800);
+    }
+  }, [validationError, step]);
+
+  // Auto-scroll to step 3 review validation errors when they appear
+  useEffect(() => {
+    if (reviewData?.validationErrors && reviewData.validationErrors.length > 0 && step === 3 && step3ReviewErrorsRef.current) {
+      smoothScrollToElement(step3ReviewErrorsRef.current, 800);
+    }
+  }, [reviewData, step]);
+
+  // Auto-scroll to step 4 validation error when it appears
+  useEffect(() => {
+    if (validationError && step === 4 && step4ValidationErrorRef.current) {
+      smoothScrollToElement(step4ValidationErrorRef.current, 800);
+    }
+  }, [validationError, step]);
+
+  // Auto-scroll to upload error when it appears
+  useEffect(() => {
+    if (uploadError && uploadErrorRef.current) {
+      smoothScrollToElement(uploadErrorRef.current, 800);
+    }
+  }, [uploadError]);
 
   async function fetchCertificateTypes() {
     setIsLoadingCerts(true);
@@ -1917,7 +1957,7 @@ function NewApplicationContent() {
                 )}
 
                 {certError && (
-                  <div className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">
+                  <div ref={certErrorRef} className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">
                     <span>⚠️</span>
                     <span>{certError}</span>
                   </div>
@@ -2332,7 +2372,7 @@ function NewApplicationContent() {
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                   />
                   {uploadError && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e]">
+                    <div ref={uploadErrorRef} className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e]">
                       <span>⚠️</span>
                       <span>{uploadError}</span>
                     </div>
@@ -2373,7 +2413,7 @@ function NewApplicationContent() {
                   </button>
                 </div>
                 {validationError && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mt-3">
+                  <div ref={step2ValidationErrorRef} className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mt-3">
                     <span>⚠️</span>
                     <span>{validationError}</span>
                   </div>
@@ -2519,7 +2559,7 @@ function NewApplicationContent() {
                     </div>
 
                     {reviewData.validationErrors && reviewData.validationErrors.length > 0 && (
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mb-4">
+                      <div ref={step3ReviewErrorsRef} className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mb-4">
                         <span>⚠️</span>
                         <span>{reviewData.validationErrors.join(', ')}</span>
                       </div>
@@ -2714,7 +2754,7 @@ function NewApplicationContent() {
                 )}
 
                 {validationError && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mt-4">
+                  <div ref={step4ValidationErrorRef} className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e] mt-4">
                     <span>⚠️</span>
                     <span>{validationError}</span>
                   </div>
