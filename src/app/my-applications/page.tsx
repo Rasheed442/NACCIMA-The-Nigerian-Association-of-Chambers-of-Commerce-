@@ -26,7 +26,7 @@ interface Application {
   totalValueFob: number;
   valueCurrency: string;
   bulkQtyMt: number;
-  status: 'DRAFT' | 'SUBMITTED' | 'PAID' | 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ISSUED' | 'CERTIFICATE_ISSUED' | 'UNAPPROVED';
+  status: 'DRAFT' | 'SUBMITTED' | 'PAID' | 'PENDING_PAYMENT' | 'PAYMENT_PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ISSUED' | 'CERTIFICATE_ISSUED' | 'UNAPPROVED';
   createdAt?: string;
   updatedAt?: string;
   submittedAt?: string;
@@ -225,6 +225,7 @@ function MyApplicationsContent() {
       SUBMITTED: 'bg-[#dbeafe] text-[#1e40af]',
       PAID: 'bg-[#e0e7ff] text-[#3730a3]',
       PENDING_PAYMENT: 'bg-[#dbeafe] text-[#1e40af]',
+      PAYMENT_PENDING: 'bg-[#dbeafe] text-[#1e40af]',
       UNDER_REVIEW: 'bg-[#fef3c7] text-[#92400e]',
       APPROVED: 'bg-[#d1fae5] text-[#065f46]',
       REJECTED: 'bg-[#fee2e2] text-[#9b1c1c]',
@@ -237,6 +238,7 @@ function MyApplicationsContent() {
       SUBMITTED: 'Submitted',
       PAID: 'Paid',
       PENDING_PAYMENT: 'Pending Payment',
+      PAYMENT_PENDING: 'Pending Payment',
       UNDER_REVIEW: 'Under Review',
       APPROVED: 'Approved',
       REJECTED: 'Rejected',
@@ -310,7 +312,7 @@ function MyApplicationsContent() {
         </button>
       );
     }
-    if (status === 'SUBMITTED' || status === 'PENDING_PAYMENT') {
+    if (status === 'SUBMITTED' || status === 'PENDING_PAYMENT' || status === 'PAYMENT_PENDING') {
       return (
         <button
           className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"

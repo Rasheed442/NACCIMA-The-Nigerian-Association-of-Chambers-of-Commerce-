@@ -171,6 +171,7 @@ function ExporterDashboardContent() {
       SUBMITTED: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
       PAID: { bg: 'bg-[#e0e7ff]', text: 'text-[#3730a3]' },
       PENDING_PAYMENT: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
+      PAYMENT_PENDING: { bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
       UNDER_REVIEW: { bg: 'bg-[#fef3c7]', text: 'text-[#92400e]' },
       APPROVED: { bg: 'bg-[#d1fae5]', text: 'text-[#065f46]' },
       REJECTED: { bg: 'bg-[#fee2e2]', text: 'text-[#9b1c1c]' },
@@ -183,6 +184,7 @@ function ExporterDashboardContent() {
       SUBMITTED: 'Submitted',
       PAID: 'Paid',
       PENDING_PAYMENT: 'Pending Payment',
+      PAYMENT_PENDING: 'Pending Payment',
       UNDER_REVIEW: 'Under Review',
       APPROVED: 'Approved',
       REJECTED: 'Rejected',
@@ -213,7 +215,7 @@ function ExporterDashboardContent() {
         </button>
       );
     }
-    if (status === 'SUBMITTED' || status === 'PENDING_PAYMENT') {
+    if (status === 'SUBMITTED' || status === 'PENDING_PAYMENT' || status === 'PAYMENT_PENDING') {
       return (
         <button
           className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
