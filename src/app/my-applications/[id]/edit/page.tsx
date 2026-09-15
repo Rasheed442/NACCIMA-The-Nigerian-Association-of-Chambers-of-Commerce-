@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AppHeader from '@/components/AppHeader';
 import Sidebar from '@/components/Sidebar';
 import LogoutModal from '@/components/LogoutModal';
@@ -132,7 +132,12 @@ interface ApplicationData {
 export default function EditResubmissionPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const applicationId = params.id as string;
+  const isPaymentMode = searchParams.get('mode') === 'payment';
+  const isAdminUser = searchParams.get('user') === 'admin';
+  const userRole = isAdminUser ? 'admin' : 'exporter';
+  const dashboardPath = isAdminUser ? '/admin/my-applications' : '/exporter-dashboard';
 
   const [application, setApplication] = useState<ApplicationData | null>(null);
   const [comments, setComments] = useState<string[]>([]);
@@ -174,6 +179,13 @@ export default function EditResubmissionPage() {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string | boolean | string[]>>({});
+
+  // Payment-related state
+  const paymentTabRef = useRef<Window | null>(null);
+  const paymentPollIntervalRef = useRef<number | null>(null);
+  const [paymentData, setPaymentData] = useState<Record<string, unknown> | null>(null);
+  const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CARD' | 'BANK_TRANSFER' | 'USSD'>('CARD');
 
   const prefillDynamicFields = (appData: ApplicationData) => {
     const fieldValues: Record<string, string | boolean | string[]> = {};
@@ -217,6 +229,74 @@ export default function EditResubmissionPage() {
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
+
+  // Listen for the payment-complete signal from the popup tab
+  useEffect(() => {
+    if (!isPaymentMode) return;
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key !== 'nacc-payment-complete' || !event.newValue) return;
+
+      let reference: string | null = null;
+      try {
+        reference = JSON.parse(event.newValue)?.reference ?? null;
+      } catch {
+        // ignore malformed payload
+      }
+
+      setSuccessMessage(reference ? `Payment successful. Reference: ${reference}` : 'Payment successful.');
+      stopPaymentStatusPolling();
+      setTimeout(() => {
+        router.push(`${dashboardPath}?status=success` + (reference ? `&reference=${reference}` : ''));
+      }, 2000);
+    };
+
+    window.addEventListener('storage', handleStorageEvent);
+    return () => window.removeEventListener('storage', handleStorageEvent);
+  }, [isPaymentMode, router]);
+
+  // Stop polling if the component unmounts while a payment tab is open
+  useEffect(() => {
+    return () => stopPaymentStatusPolling();
+  }, []);
+
+  const stopPaymentStatusPolling = () => {
+    if (paymentPollIntervalRef.current !== null) {
+      window.clearInterval(paymentPollIntervalRef.current);
+      paymentPollIntervalRef.current = null;
+    }
+  };
+
+  const startPaymentStatusPolling = () => {
+    if (!applicationId) return;
+    stopPaymentStatusPolling();
+
+    paymentPollIntervalRef.current = window.setInterval(async () => {
+      try {
+        const baseUrl = getBaseUrl();
+        if (baseUrl) {
+          const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+            method: 'GET',
+          });
+          const result = await response.json();
+          const data = result?.data as any;
+          const isPaid = data?.paymentStatus === 'PAID' || data?.status === 'PAYMENT_COMPLETE';
+
+          if (response.ok && isPaid) {
+            stopPaymentStatusPolling();
+            router.push(`${dashboardPath}?status=success`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Payment status poll failed:', err);
+      }
+
+      if (paymentTabRef.current?.closed) {
+        stopPaymentStatusPolling();
+      }
+    }, 4000);
+  };
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -308,6 +388,8 @@ export default function EditResubmissionPage() {
           setGoodsLineItems(items);
           lineItemIdRef.current = items.length;
         }
+
+
 
         const trackingResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/tracking`, {
           method: 'GET',
@@ -540,6 +622,24 @@ export default function EditResubmissionPage() {
     return field ? field.applicable : false;
   };
 
+  const getPaymentDisplayAmount = (paymentData: Record<string, unknown>): number => {
+    const amount = paymentData.amount as number | string | undefined;
+    return typeof amount === 'number' ? amount : typeof amount === 'string' ? parseFloat(amount) : 0;
+  };
+
+  const getPaymentCurrency = (paymentData: Record<string, unknown>): string => {
+    return String(paymentData.currency || 'NGN');
+  };
+
+  const formatCurrency = (amount: number, currency: string): string => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
   const isFieldRequired = (fieldCode: string) => {
     if (!certificateFields) return false;
     const field = certificateFields?.fields?.find(f => f.code === fieldCode);
@@ -551,6 +651,42 @@ export default function EditResubmissionPage() {
     const field = certificateFields?.fields?.find(f => f.code === fieldCode);
     return field ? field.name : fieldCode;
   };
+
+  const getHostedPaymentUrl = (paymentData: Record<string, unknown>) => {
+    const checkoutUrl = String(
+      paymentData.checkoutUrl ||
+      paymentData.authorizationUrl ||
+      paymentData.paymentUrl ||
+      paymentData.redirectUrl ||
+      paymentData.url ||
+      ''
+    );
+
+    return checkoutUrl.trim();
+  };
+
+  const openPayfonteCheckout = (paymentData: Record<string, unknown>) => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const checkoutUrl = getHostedPaymentUrl(paymentData);
+    if (!checkoutUrl) {
+      setValidationError('The Payfonte checkout URL is unavailable. Please try again.');
+      return false;
+    }
+
+    paymentTabRef.current = window.open(checkoutUrl, 'nacc-payment', 'width=500,height=700,scrollbars=yes,resizable=yes');
+    if (paymentTabRef.current) {
+      startPaymentStatusPolling();
+      return true;
+    }
+
+    setValidationError('Failed to open payment checkout. Please check your popup blocker settings.');
+    return false;
+  };
+
+
 
   const getDynamicFieldValue = (field: CertificateField): string | boolean | string[] => {
     if (field.repeatable) return dynamicFieldValues[field.code] || [''];
@@ -643,11 +779,13 @@ export default function EditResubmissionPage() {
             <button
               type="button"
               onClick={() => {
-                setDestinationDropdownOpen(!destinationDropdownOpen);
-                setDestinationSearchQuery('');
+                if (!isPaymentMode) {
+                  setDestinationDropdownOpen(!destinationDropdownOpen);
+                  setDestinationSearchQuery('');
+                }
               }}
               className="w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between border-[#d1d5db]"
-              disabled={isLoadingCountries}
+              disabled={isLoadingCountries || isPaymentMode}
             >
               <span>{String(getDynamicFieldValue(field)) || '-- Select Country --'}</span>
               <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${destinationDropdownOpen ? 'rotate-180' : ''}`} />
@@ -781,7 +919,7 @@ export default function EditResubmissionPage() {
     }
 
     const value = getDynamicFieldValue(field);
-    const inputClassName = `px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] focus:outline-none focus:border-[#3a7bd5] ${field.readOnly ? 'border-[#d1d5db] bg-[#f3f4f6]' : 'border-[#d1d5db] bg-white'}`;
+    const inputClassName = `px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] focus:outline-none focus:border-[#3a7bd5] ${field.readOnly || isPaymentMode ? 'border-[#d1d5db] bg-[#f3f4f6]' : 'border-[#d1d5db] bg-white'}`;
     const renderInput = (inputValue: string | boolean, onChange: (value: string | boolean) => void, key?: string) => {
       if (field.templateComponent === 'MULTI_LINE_TEXT') {
         return <textarea key={key} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)} />;
@@ -993,58 +1131,60 @@ export default function EditResubmissionPage() {
         throw new Error('API URL not configured');
       }
 
-      // Update application details
-      const payload = {
-        modeOfTransport: transportMode,
-        fields: buildApplicationFieldsPayload(),
-      };
-
-      const updateResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const updateResult = await updateResponse.json();
-      if (!updateResponse.ok) {
-        throw new Error(updateResult?.message || 'Failed to save your changes');
-      }
-
-      // Update goods items
-      if (goodsLineItems.length > 0) {
-        const itemsPayload = {
-          items: goodsLineItems.map(item => ({
-            hsCode: item.hsCode,
-            marksNo: item.marksNo,
-            description: item.description,
-            unit: item.unit,
-            quantity: parseFloat(item.quantity.replace(/,/g, '')) || 0,
-            grossWeight: parseFloat(item.grossWeight.replace(/,/g, '')) || 0,
-            nomenclature: item.nomenclature,
-            value: parseFloat(item.value.replace(/,/g, '')) || 0,
-          })),
+      // Update application details (skip in payment mode since data is read-only)
+      if (!isPaymentMode) {
+        const payload = {
+          modeOfTransport: transportMode,
+          fields: buildApplicationFieldsPayload(),
         };
 
-        const goodsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
+        const updateResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(itemsPayload),
+          body: JSON.stringify(payload),
         });
 
-        if (!goodsResponse.ok) {
-          const goodsResult = await goodsResponse.json();
-          throw new Error(goodsResult?.message || 'Failed to save goods items');
+        const updateResult = await updateResponse.json();
+        if (!updateResponse.ok) {
+          throw new Error(updateResult?.message || 'Failed to save your changes');
         }
-      }
 
-      // Upload documents
-      const docEntries = Object.entries(uploadedDocuments);
-      for (const [docCode, file] of docEntries) {
-        try {
-          await uploadDocumentToServer(docCode, file);
-        } catch (err) {
-          console.error(`Failed to upload document ${docCode}:`, err);
-          throw new Error(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        // Update goods items
+        if (goodsLineItems.length > 0) {
+          const itemsPayload = {
+            items: goodsLineItems.map(item => ({
+              hsCode: item.hsCode,
+              marksNo: item.marksNo,
+              description: item.description,
+              unit: item.unit,
+              quantity: parseFloat(item.quantity.replace(/,/g, '')) || 0,
+              grossWeight: parseFloat(item.grossWeight.replace(/,/g, '')) || 0,
+              nomenclature: item.nomenclature,
+              value: parseFloat(item.value.replace(/,/g, '')) || 0,
+            })),
+          };
+
+          const goodsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(itemsPayload),
+          });
+
+          if (!goodsResponse.ok) {
+            const goodsResult = await goodsResponse.json();
+            throw new Error(goodsResult?.message || 'Failed to save goods items');
+          }
+        }
+
+        // Upload documents
+        const docEntries = Object.entries(uploadedDocuments);
+        for (const [docCode, file] of docEntries) {
+          try {
+            await uploadDocumentToServer(docCode, file);
+          } catch (err) {
+            console.error(`Failed to upload document ${docCode}:`, err);
+            throw new Error(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          }
         }
       }
 
@@ -1090,16 +1230,34 @@ export default function EditResubmissionPage() {
       }
 
       const submissionData = submissionResult.data;
+
+      // Handle payment flow for both normal and payment mode
+      if (submissionData) {
+        const paymentRecord = submissionData as Record<string, unknown>;
+        const hostedUrl = getHostedPaymentUrl(paymentRecord);
+
+        if (hostedUrl) {
+          setPaymentData(paymentRecord);
+          setPaymentCheckoutUrl(hostedUrl);
+          setSelectedPaymentMethod('CARD');
+          // Auto-open the payment checkout
+          openPayfonteCheckout(paymentRecord);
+          setSuccessMessage(isPaymentMode ? 'Proceeding to payment...' : (isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!'));
+          setIsSaving(false);
+          return;
+        }
+      }
+
+      // If no payment URL, redirect based on status
       setSuccessMessage(isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!');
-      
-      // Redirect after a short delay to show the success message
+
       setTimeout(() => {
         if (submissionData.status === 'PAID') {
           // Application is already paid, redirect to applications
-          router.push('/my-applications?status=SUBMITTED');
+          router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=SUBMITTED');
         } else {
           // Application needs payment, handle payment flow
-          router.push('/my-applications?status=PENDING');
+          router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=PENDING');
         }
       }, 2000);
     } catch (err) {
@@ -1169,9 +1327,9 @@ export default function EditResubmissionPage() {
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col">
-        <AppHeader role="exporter" />
+        <AppHeader role={userRole} />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
-          <Sidebar />
+          <Sidebar role={userRole} />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto flex items-center justify-center">
             <div className="text-[14px] text-[#6a7a9a]">Loading application details...</div>
           </div>
@@ -1185,17 +1343,17 @@ export default function EditResubmissionPage() {
   if (!application) {
     return (
       <div className="h-screen flex flex-col">
-        <AppHeader role="exporter" />
+        <AppHeader role={userRole} />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
-          <Sidebar />
+          <Sidebar role={userRole} />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto flex flex-col items-center justify-center">
             <div className="text-[16px] font-semibold text-[#1a2236] mb-2">Unable to load this application</div>
             <div className="text-[13px] text-[#e53e3e] mb-4">{error || 'Application not found.'}</div>
             <button
               className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
-              onClick={() => router.push('/my-applications')}
+              onClick={() => router.push(isAdminUser ? '/admin/my-applications' : '/my-applications')}
             >
-              ← Back to Applications
+              ← Back to {isAdminUser ? 'Admin Applications' : 'Applications'}
             </button>
           </div>
         </div>
@@ -1206,19 +1364,19 @@ export default function EditResubmissionPage() {
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
-        <AppHeader role="exporter" />
+        <AppHeader role={userRole} />
         <div className="flex-1 flex overflow-hidden min-h-[560px]">
-          <Sidebar />
+          <Sidebar role={userRole} />
           <div className="flex-1 px-[22px] py-[20px] overflow-x-hidden overflow-auto">
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <button
                   className="text-[#1a4a8a] text-[13px] font-medium hover:underline mb-2"
-                  onClick={() => router.push('/my-applications')}
+                  onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}
                 >
-                  ← Back to Applications
+                  ← Back to {isPaymentMode ? 'Dashboard' : (isAdminUser ? 'Admin Applications' : 'Applications')}
                 </button>
-                <div className="text-[20px] font-medium text-[#1a2236]">Edit &amp; Resubmit Application</div>
+                <div className="text-[20px] font-medium text-[#1a2236]">{isPaymentMode ? 'Pay Now' : 'Edit &amp; Resubmit Application'}</div>
                 <div className="text-[12px] text-[#6a7a9a]">Application {application.id}</div>
               </div>
               <span className="inline-flex items-center gap-2 rounded-full bg-[#fdf2f8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#9d174d]">
@@ -1284,7 +1442,7 @@ export default function EditResubmissionPage() {
               </div>
               {isLoadingFields || isLoadingProfile ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="text-[12px] text-[#6a7a9a]">Loading exporter fields...</div>
+                  <div className="text-[12px] text-[#6a7a9a]">Loading application fields...</div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
@@ -1292,7 +1450,7 @@ export default function EditResubmissionPage() {
                     ?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly)
                     .map(field => renderDynamicField(field))}
                   {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly).length === 0 && (
-                    <div className="col-span-2 text-[12px] text-[#6a7a9a]">No applicable exporter fields for this certificate type.</div>
+                    <div className="col-span-2 text-[12px] text-[#6a7a9a]">No applicable fields for this certificate type.</div>
                   )}
                 </div>
               )}
@@ -1312,8 +1470,8 @@ export default function EditResubmissionPage() {
                   return (
                     <div
                       key={t.code}
-                      className={`p-4 rounded-[8px] border cursor-pointer transition-all text-center ${transportMode === t.code ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`}
-                      onClick={() => handleSelectTransportMode(t.code)}
+                      className={`p-4 rounded-[8px] border transition-all text-center ${transportMode === t.code ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee]'} ${isPaymentMode ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:border-[#3a7bd5]'}`}
+                      onClick={() => !isPaymentMode && handleSelectTransportMode(t.code)}
                     >
                       <div className="text-[24px] mb-2">{icon}</div>
                       <div className="text-[12px] font-bold text-[#1a2236] mb-1">{t.name}</div>
@@ -1392,6 +1550,8 @@ export default function EditResubmissionPage() {
                   placeholder="🔍 Search by HS code or description…"
                   value={hsSearchQuery}
                   onChange={handleHsSearchChange}
+                  disabled={isPaymentMode}
+                  readOnly={isPaymentMode}
                 />
               </div>
               {isSearchingHs && (
@@ -1401,8 +1561,8 @@ export default function EditResubmissionPage() {
                 {hsCodes.map((hs) => (
                   <div
                     key={hs.id}
-                    className="flex items-center gap-2 px-3 py-2 rounded-[6px] hover:bg-[#edf2ff] cursor-pointer"
-                    onClick={() => handleHsCodeSelect(hs)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-[6px] ${isPaymentMode ? 'cursor-not-allowed opacity-75' : 'hover:bg-[#edf2ff] cursor-pointer'}`}
+                    onClick={() => !isPaymentMode && handleHsCodeSelect(hs)}
                   >
                     <span className="text-[13px] font-bold text-[#1a4a8a]">{hs.cetCode}</span>
                     <span className="text-[13px] text-[#374151] capitalize">{hs.description}</span>
@@ -1454,24 +1614,30 @@ export default function EditResubmissionPage() {
                             <input
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
                               value={item.hsCode}
-                              onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
+                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'hsCode', e.target.value)}
                               placeholder="Code"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
                           <td className="px-2 py-2 border-b border-[#edf0f5]">
                             <input
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
                               value={item.description}
-                              onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'description', e.target.value)}
                               placeholder="Description"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
                           <td className="px-2 py-2 border-b border-[#edf0f5]">
                             <input
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
                               value={item.marksNo}
-                              onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
+                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'marksNo', e.target.value)}
                               placeholder="Marks"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
                           <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -1479,12 +1645,16 @@ export default function EditResubmissionPage() {
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
                               value={item.quantity}
                               onChange={(e) => {
-                                const value = e.target.value.replace(/,/g, '');
-                                if (/^\d*$/.test(value)) {
-                                  updateLineItem(item.id, 'quantity', formatNumberWithCommas(value));
+                                if (!isPaymentMode) {
+                                  const value = e.target.value.replace(/,/g, '');
+                                  if (/^\d*$/.test(value)) {
+                                    updateLineItem(item.id, 'quantity', formatNumberWithCommas(value));
+                                  }
                                 }
                               }}
                               placeholder="1,000"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
                           <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -1492,28 +1662,36 @@ export default function EditResubmissionPage() {
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
                               value={item.grossWeight}
                               onChange={(e) => {
-                                const value = e.target.value.replace(/,/g, '');
-                                if (/^\d*$/.test(value)) {
-                                  updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
+                                if (!isPaymentMode) {
+                                  const value = e.target.value.replace(/,/g, '');
+                                  if (/^\d*$/.test(value)) {
+                                    updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
+                                  }
                                 }
                               }}
                               placeholder="200"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
                           <td className="px-2 py-2 border-b border-[#edf0f5]">
                             <input
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
                               value={item.nomenclature}
-                              onChange={(e) => updateLineItem(item.id, 'nomenclature', e.target.value)}
+                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'nomenclature', e.target.value)}
                               placeholder="Nomenclature"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
                           <td className="px-2 py-2 border-b border-[#edf0f5]">
                             <input
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
                               value={item.unit}
-                              onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
+                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'unit', e.target.value)}
                               placeholder="KG"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
                           <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -1521,15 +1699,19 @@ export default function EditResubmissionPage() {
                               className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
                               value={item.value}
                               onChange={(e) => {
-                                const value = e.target.value.replace(/,/g, '');
-                                if (/^\d*\.?\d*$/.test(value)) {
-                                  updateLineItem(item.id, 'value', formatNumberWithCommas(value));
+                                if (!isPaymentMode) {
+                                  const value = e.target.value.replace(/,/g, '');
+                                  if (/^\d*\.?\d*$/.test(value)) {
+                                    updateLineItem(item.id, 'value', formatNumberWithCommas(value));
+                                  }
                                 }
                               }}
                               placeholder="0.00"
+                              disabled={isPaymentMode}
+                              readOnly={isPaymentMode}
                             />
                           </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => removeLineItem(item.id)}>✕</td>
+                          <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => !isPaymentMode && removeLineItem(item.id)}>{!isPaymentMode && '✕'}</td>
                         </tr>
                       ))
                     )}
@@ -1537,7 +1719,7 @@ export default function EditResubmissionPage() {
                 </table>
               </div>
               <div className="flex justify-start items-center mt-4">
-                <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem}>➕ Add Line Item</button>
+                <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem} disabled={isPaymentMode}>➕ Add Line Item</button>
               </div>
             </div>
 
@@ -1561,12 +1743,12 @@ export default function EditResubmissionPage() {
                     return (
                       <div
                         key={doc.code}
-                        className={`border-[1.5px] border-dashed rounded-[6px] px-[14px] py-[10px] text-[11px] cursor-pointer text-center min-w-[140px] relative ${
+                        className={`border-[1.5px] border-dashed rounded-[6px] px-[14px] py-[10px] text-[11px] text-center min-w-[140px] relative ${
                           isUploaded
                             ? 'border-[#059669] bg-[#d1fae5] text-[#065f46]'
-                            : 'border-[#d1d5db] text-[#6a7a9a] hover:border-[#3a7bd5] hover:text-[#3a7bd5]'
-                        } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        onClick={() => !isUploaded && !isUploading && handleFileSelect(doc.code)}
+                            : 'border-[#d1d5db] text-[#6a7a9a]'
+                        } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''} ${isPaymentMode ? 'cursor-not-allowed' : 'cursor-pointer hover:border-[#3a7bd5] hover:text-[#3a7bd5]'}`}
+                        onClick={() => !isPaymentMode && !isUploaded && !isUploading && handleFileSelect(doc.code)}
                       >
                         {isUploading ? (
                           <>
@@ -1581,12 +1763,14 @@ export default function EditResubmissionPage() {
                             <span className="block mb-1">✅</span>
                             <span className="block font-semibold">{doc.name}</span>
                             <span className="block text-[10px]">{uploadedDocuments[doc.code].name}</span>
-                            <button
-                              className="absolute top-1 right-1 text-[#e53e3e] hover:text-[#dc2626] text-[10px]"
-                              onClick={(e) => { e.stopPropagation(); removeDocument(doc.code); }}
-                            >
-                              ✕
-                            </button>
+                            {!isPaymentMode && (
+                              <button
+                                className="absolute top-1 right-1 text-[#e53e3e] hover:text-[#dc2626] text-[10px]"
+                                onClick={(e) => { e.stopPropagation(); removeDocument(doc.code); }}
+                              >
+                                ✕
+                              </button>
+                            )}
                           </>
                         ) : (
                           <>
@@ -1626,15 +1810,139 @@ export default function EditResubmissionPage() {
               })()}
             </div>
 
+            {/* Payment Section - Only shown when payment data is available */}
+            {paymentData && (
+              <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">7</div>
+                  <div className="text-[13px] font-bold text-[#1a2236]">Payment</div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-5">
+                  <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
+                    <div className="flex items-center justify-between mb-5">
+                      <div>
+                        <div className="text-[14px] font-bold text-[#1a2236]">Checkout</div>
+                        <div className="text-[11px] text-[#6a7a9a] mt-1">Choose a payment option to continue securely.</div>
+                      </div>
+                      <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
+                        🔒 Secure
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 mb-5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaymentMethod('CARD')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-all ${
+                          selectedPaymentMethod === 'CARD'
+                            ? 'border-[#1a4a8a] bg-[#e8f0fe]'
+                            : 'border-[#dde3ee] bg-white hover:border-[#1a4a8a]'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#1a4a8a] text-white flex items-center justify-center text-[12px] font-bold">
+                          💳
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="text-[12px] font-bold text-[#1a2236]">Pay with Card</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">Visa, Mastercard, Verve</div>
+                        </div>
+                        {selectedPaymentMethod === 'CARD' && <Check className="w-4 h-4 text-[#1a4a8a]" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaymentMethod('BANK_TRANSFER')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-all ${
+                          selectedPaymentMethod === 'BANK_TRANSFER'
+                            ? 'border-[#1a4a8a] bg-[#e8f0fe]'
+                            : 'border-[#dde3ee] bg-white hover:border-[#1a4a8a]'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#1a4a8a] text-white flex items-center justify-center text-[12px] font-bold">
+                          🏦
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="text-[12px] font-bold text-[#1a2236]">Bank Transfer</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">Transfer from your bank account</div>
+                        </div>
+                        {selectedPaymentMethod === 'BANK_TRANSFER' && <Check className="w-4 h-4 text-[#1a4a8a]" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaymentMethod('USSD')}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-all ${
+                          selectedPaymentMethod === 'USSD'
+                            ? 'border-[#1a4a8a] bg-[#e8f0fe]'
+                            : 'border-[#dde3ee] bg-white hover:border-[#1a4a8a]'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#1a4a8a] text-white flex items-center justify-center text-[12px] font-bold">
+                          📱
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="text-[12px] font-bold text-[#1a2236]">Pay with USSD</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">
+                            Payfonte will show the available USSD options for your payment.
+                          </div>
+                        </div>
+                        {selectedPaymentMethod === 'USSD' && <Check className="w-4 h-4 text-[#1a4a8a]" />}
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => openPayfonteCheckout(paymentData)}
+                      disabled={isSaving}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isSaving ? 'Processing...' : 'Proceed to Payment'}
+                    </button>
+                  </div>
+
+                  <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
+                    <div className="text-[14px] font-bold text-[#1a2236] mb-4">Payment Summary</div>
+
+                    <div className="space-y-3 mb-4">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-[#6a7a9a]">Application Fee</span>
+                        <span className="text-[#1a2236]">
+                          {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-[#6a7a9a]">Processing Fee</span>
+                        <span className="text-[#1a2236]">Included</span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-[#dde3ee] pt-3 flex justify-between gap-4">
+                      <span className="font-bold text-[#1a2236]">Total Payable</span>
+                      <span className="font-bold text-[#1a4a8a] text-[15px]">
+                        {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 p-3 rounded-[7px] bg-[#ecfdf5] border border-[#a7f3d0] text-[10.5px] text-[#065f46]">
+                      Once payment is confirmed successfully, you will be redirected to your dashboard.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2">
-              <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push('/my-applications')}>Cancel</button>
-              <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
+              <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
+              {!isPaymentMode && (
+                <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
+              )}
               <button
                 className="inline-flex items-center justify-center gap-1 px-[16px] py-[8px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleSaveAndResubmit}
                 disabled={isSaving}
               >
-                {isSaving ? (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...') : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit')}
+                {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Pay Now' : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit'))}
               </button>
             </div>
           </div>

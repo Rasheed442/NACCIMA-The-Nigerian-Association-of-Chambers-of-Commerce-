@@ -292,8 +292,10 @@ function MyApplicationsContent() {
   };
 
   const handleInitializePayment = (id: string) => {
-    // Redirect to new-application page with the application ID and payment tab
-    router.push(`/new-application?id=${id}&tab=payment`);
+    // Redirect to edit page with payment mode
+    // router.push(`/my-applications/${id}/edit?mode=payment&user=exporter`);
+        router.push(`/my-applications/${id}/edit?mode=payment&user=exporter`);
+
   };
 
   const getActionButton = (status: Application['status'], id: string) => {
@@ -313,6 +315,8 @@ function MyApplicationsContent() {
         <button
           className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#92400e] text-white hover:bg-[#78350f]"
           // onClick={() => handleInitializePayment(id)}
+          onClick={() => handleInitializePayment(id)}
+
         >
           Pay Now
         </button>
