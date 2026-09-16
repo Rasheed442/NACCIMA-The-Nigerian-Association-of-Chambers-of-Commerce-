@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import RegisterStep1Screen from '../../components/screens/RegisterStep1Screen';
 import RegisterStep2Screen from '../../components/screens/RegisterStep2Screen';
-import RegisterStep3Screen from '../../components/screens/RegisterStep3Screen';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,10 +19,6 @@ export default function RegisterPage() {
     setAuthScreen('register-2');
   };
 
-  const handleRegisterContinueToStep3 = () => {
-    setAuthScreen('register-3');
-  };
-
   const handleRegisterComplete = () => {
     // Registration complete - redirect to login
     window.location.href = '/login';
@@ -33,28 +28,18 @@ export default function RegisterPage() {
     setAuthScreen('register-1');
   };
 
-  const handleRegisterBackToStep2 = () => {
-    setAuthScreen('register-2');
-  };
-
   return (
     <>
       {authScreen === 'register-1' && (
-        <RegisterStep1Screen 
-          onBackToLogin={handleBackToLogin} 
-          onContinue={handleRegisterContinue} 
+        <RegisterStep1Screen
+          onBackToLogin={handleBackToLogin}
+          onContinue={handleRegisterContinue}
         />
       )}
       {authScreen === 'register-2' && (
-        <RegisterStep2Screen 
-          onBack={handleRegisterBackToStep1} 
-          onContinue={handleRegisterContinueToStep3} 
-        />
-      )}
-      {authScreen === 'register-3' && (
-        <RegisterStep3Screen 
-          onBack={handleRegisterBackToStep2} 
-          onComplete={handleRegisterComplete} 
+        <RegisterStep2Screen
+          onBack={handleRegisterBackToStep1}
+          onComplete={handleRegisterComplete}
         />
       )}
     </>

@@ -1,17 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getTinVerification } from '../../utils/tinVerification';
-import CustomSelect from '../CustomSelect';
-
-interface Designation {
-  code: string;
-  name: string;
-}
+import { getTinVerificationToken, clearTinVerification, getTinVerification } from '../../utils/tinVerification';
 
 interface RegisterStep2ScreenProps {
   onBack: () => void;
-  onContinue: () => void;
+  onComplete: () => void;
 }
 
 function getBaseApiUrl(): string {
@@ -22,16 +16,14 @@ function getBaseApiUrl(): string {
   return rawBaseUrl.replace(/\/+$/, '');
 }
 
-export default function RegisterStep2Screen({ onBack, onContinue }: RegisterStep2ScreenProps) {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    designationCode: '',
-    email: '',
-    phoneNumber: '',
-  });
-  const [designations, setDesignations] = useState<Designation[]>([]);
-  const [isLoadingDesignations, setIsLoadingDesignations] = useState(false);
+export default function RegisterStep2Screen({ onBack, onComplete }: RegisterStep2ScreenProps) {
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
   const [companyInfo, setCompanyInfo] = useState<{ registeredName: string; tin: string } | null>(null);
 
@@ -44,85 +36,109 @@ export default function RegisterStep2Screen({ onBack, onContinue }: RegisterStep
         tin: tinData.tin,
       });
     }
-
-    // Load designations
-    fetchDesignations();
   }, []);
 
-  const fetchDesignations = async () => {
-    const baseUrl = getBaseApiUrl();
-    if (!baseUrl) {
-      setError('API base URL is not configured.');
-      return;
-    }
-
-    setIsLoadingDesignations(true);
-    try {
-      const response = await fetch(`${baseUrl}/api/v1/reference/designations`);
-      const result = await response.json();
-      
-      if (response.ok && result.success && result.data) {
-        setDesignations(result.data);
-      } else {
-        setError('Failed to load designations.');
-      }
-    } catch (err) {
-      setError('Failed to load designations. Please try again.');
-    } finally {
-      setIsLoadingDesignations(false);
-    }
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (error) setError('');
-  };
-
   const validateForm = (): boolean => {
-    if (!formData.firstName.trim()) {
-      setError('First name is required.');
-      return false;
-    }
-    if (!formData.lastName.trim()) {
-      setError('Last name is required.');
-      return false;
-    }
-    if (!formData.designationCode) {
-      setError('Designation is required.');
-      return false;
-    }
-    if (!formData.email.trim()) {
+    if (!email.trim()) {
       setError('Email is required.');
       return false;
     }
-    if (!formData.phoneNumber.trim()) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Please enter a valid email address.');
+      return false;
+    }
+    if (!phoneNumber.trim()) {
       setError('Phone number is required.');
       return false;
     }
-    // const phoneDigits = formData.phoneNumber.replace(/\D/g, '');
-    // if (phoneDigits.length <= 11) {
-    //   setError('Phone number must be less than 11 digits.');
-    //   return false;
-    // }
+    if (!password) {
+      setError('Password is required.');
+      return false;
+    }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return false;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setError('Password must contain at least one uppercase letter.');
+      return false;
+    }
+    if (!/[0-9]/.test(password)) {
+      setError('Password must contain at least one number.');
+      return false;
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      setError('Password must contain at least one special character.');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return false;
+    }
     return true;
   };
 
-  const handleContinue = () => {
+  const handleRegister = async () => {
     if (!validateForm()) {
       return;
     }
 
-    // Store contact person data for step 3
-    localStorage.setItem('naccima_contact_person', JSON.stringify(formData));
-    onContinue();
+    const registrationToken = getTinVerificationToken();
+    if (!registrationToken) {
+      setError('Registration token not found. Please verify your TIN again.');
+      return;
+    }
+
+    setIsRegistering(true);
+    setError('');
+
+    try {
+      const baseUrl = getBaseApiUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/onboarding/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          registrationToken,
+          contactPerson: {
+            firstName: 'Not Applicable',
+            lastName: 'Not Applicable',
+            designationCode: 'Not Applicable',
+            email: email,
+            phoneNumber: phoneNumber,
+            password,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Registration failed.');
+      }
+
+      // Clear stored data after successful registration
+      clearTinVerification();
+      // Redirect to login page
+      window.location.href = '/login';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   return (
     <div className="h-screen w-full">
       <div className="h-screen w-full grid grid-cols-2">
         <div className="bg-gradient-to-br from-[#1a3a5c] to-[#0f2240] pb-30 px-[34px] flex flex-col justify-center">
-          <div className="text-[34px] font-extrabold text-white mb-[6px]">Contact Person</div>
-          <div className="text-[14px] text-[#7ab8dc] mb-5 font-medium">Provide your contact details</div>
+          <div className="text-[34px] font-extrabold text-white mb-[6px]">Complete Registration</div>
+          <div className="text-[14px] text-[#7ab8dc] mb-5 font-medium">Set your account credentials</div>
           {companyInfo && (
             <div className="bg-[rgba(255,255,255,.07)] border border-[rgba(255,255,255,.15)] rounded-[7px] p-[14px] mb-3">
               <div className="text-[10px] font-bold text-[#7ab8dc] uppercase tracking-[0.5px] mb-[6px]">✅ NRS-Verified Company</div>
@@ -130,65 +146,90 @@ export default function RegisterStep2Screen({ onBack, onContinue }: RegisterStep
               <div className="text-[11px] text-[#7ab8dc] mt-[2px] font-mono">TIN: {companyInfo.tin}</div>
             </div>
           )}
-          <div className="text-[11px] text-[#5a7a9a] mt-3 leading-relaxed">This person will receive verification emails and support notices.</div>
+          <div className="text-[11px] text-[#5a7a9a] mt-3 leading-relaxed">Your contact information will be used for verification and notifications.</div>
         </div>
         <div className="px-[34px] flex flex-col justify-center bg-white">
-          <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Step 2 of 3 — Contact Person Details</div>
-          <div className="text-[11.5px] text-[#6a7a9a] mb-5">Enter the contact details for the person responsible for this account.</div>
-          
-          <div className="grid grid-cols-2 gap-4 mb-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-semibold text-[#374151]">First Name <span className="text-[#e53e3e]">*</span></label>
-              <input 
-                className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
-                placeholder="First name" 
-                value={formData.firstName}
-                onChange={(e) => handleInputChange('firstName', e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-semibold text-[#374151]">Last Name <span className="text-[#e53e3e]">*</span></label>
-              <input 
-                className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
-                placeholder="Last name" 
-                value={formData.lastName}
-                onChange={(e) => handleInputChange('lastName', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 mb-3">
-            <label className="text-[11px] font-semibold text-[#374151]">Designation <span className="text-[#e53e3e]">*</span></label>
-            <CustomSelect
-              options={designations}
-              value={formData.designationCode}
-              onChange={(value) => handleInputChange('designationCode', value)}
-              placeholder="Select designation..."
-              isLoading={isLoadingDesignations}
-              error={!formData.designationCode && error?.includes('Designation') ? 'Designation is required' : undefined}
-            />
-          </div>
+          <div className="text-[24px] font-bold text-[#1a2236] mb-[3px]">Step 2 of 2 — Complete Registration</div>
+          <div className="text-[11.5px] text-[#6a7a9a] mb-5">Enter your contact details and set a secure password</div>
 
           <div className="flex flex-col gap-1 mb-3">
             <label className="text-[11px] font-semibold text-[#374151]">Email Address <span className="text-[#e53e3e]">*</span></label>
-            <input 
-              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
-              type="email" 
-              placeholder="contact@example.com" 
-              value={formData.email}
-              onChange={(e) => handleInputChange('email', e.target.value)}
+            <input
+              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
+              type="email"
+              placeholder="contact@example.com"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError('');
+              }}
             />
             <div className="text-[10px] text-[#6b7280] mt-[2px]">This email is used for verification and notifications.</div>
           </div>
 
-          <div className="flex flex-col gap-1 mb-[18px]">
+          <div className="flex flex-col gap-1 mb-3">
             <label className="text-[11px] font-semibold text-[#374151]">Phone Number <span className="text-[#e53e3e]">*</span></label>
-            <input 
-              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]" 
-              placeholder="e.g. +234 800 000 0000" 
-              value={formData.phoneNumber}
-              onChange={(e) => handleInputChange('phoneNumber', e.target.value)}
+            <input
+              className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
+              placeholder="e.g. +234 800 000 0000"
+              value={phoneNumber}
+              onChange={(e) => {
+                setPhoneNumber(e.target.value);
+                if (error) setError('');
+              }}
             />
+          </div>
+
+          <div className="flex flex-col gap-1 mb-3">
+            <label className="text-[11px] font-semibold text-[#374151]">Password <span className="text-[#e53e3e]">*</span></label>
+            <div className="relative">
+              <input
+                className="w-full px-[10px] py-[7px] pr-[38px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Min 8 chars, 1 uppercase, 1 number, 1 special"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError('');
+                }}
+              />
+              <button
+                type="button"
+                className="absolute right-[10px] top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#3a7bd5] cursor-pointer bg-transparent border-none"
+                onClick={() => setShowPassword(prev => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <div className="text-[10px] text-[#6b7280] mt-[2px]">Minimum 8 characters, 1 uppercase, 1 number, 1 special character</div>
+          </div>
+
+          <div className="flex flex-col gap-1 mb-[18px]">
+            <label className="text-[11px] font-semibold text-[#374151]">Confirm Password <span className="text-[#e53e3e]">*</span></label>
+            <div className="relative">
+              <input
+                className="w-full px-[10px] py-[7px] pr-[38px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
+                type={showConfirmPassword ? 'text' : 'password'}
+                placeholder="Re-enter password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError('');
+                }}
+              />
+              <button
+                type="button"
+                className="absolute right-[10px] top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#3a7bd5] cursor-pointer bg-transparent border-none"
+                onClick={() => setShowConfirmPassword(prev => !prev)}
+                aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+              >
+                {showConfirmPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {confirmPassword && password !== confirmPassword && (
+              <div className="text-[10px] text-[#e53e3e] mt-[2px]">Passwords do not match</div>
+            )}
           </div>
 
           {error && (
@@ -199,18 +240,20 @@ export default function RegisterStep2Screen({ onBack, onContinue }: RegisterStep
           )}
 
           <div className="flex gap-2">
-            <button 
-              className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" 
+            <button
+              className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
               onClick={onBack}
+              disabled={isRegistering}
             >← Back</button>
-            <button 
-              className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white flex-1 hover:bg-[#153c70]" 
-              onClick={handleContinue}
+            <button
+              className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white flex-1 hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleRegister}
+              disabled={isRegistering}
             >
-              Continue to Password
+              {isRegistering ? 'Registering...' : 'Complete Registration'}
             </button>
           </div>
-          <div className="text-[10.5px] text-[#9ca3af] mt-[10px] text-center">By continuing, you confirm this contact person is authorised to receive registration emails and support information.</div>
+          <div className="text-[10.5px] text-[#9ca3af] mt-[10px] text-center">By completing registration, you agree to our terms and conditions.</div>
         </div>
       </div>
     </div>
