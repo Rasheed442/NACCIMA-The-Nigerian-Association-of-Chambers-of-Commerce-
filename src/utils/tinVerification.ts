@@ -17,12 +17,16 @@ export interface VerifyTinData {
   taxpayerType: string;
 }
 
+export interface VerifyTinErrorResponse {
+  [key: string]: string;
+}
+
 export interface VerifyTinResponse {
   success: boolean;
   code: string;
   message: string;
   timestamp: string;
-  data: VerifyTinData;
+  data: VerifyTinData | VerifyTinErrorResponse;
 }
 
 function getBaseApiUrl(): string {
@@ -60,15 +64,29 @@ export async function verifyTin(payload: VerifyTinRequest): Promise<VerifyTinDat
   }
 
   if (!response.ok || !result?.success) {
+    // Check for specific validation errors in the data field
+    if (result?.data && typeof result.data === 'object') {
+      const dataErrors = Object.values(result.data).filter(
+        (value): value is string => typeof value === 'string' && value.length > 0
+      );
+      if (dataErrors.length > 0) {
+        throw new Error(dataErrors.join(', '));
+      }
+    }
     const fallbackMessage = result?.message || 'TIN verification failed.';
     throw new Error(fallbackMessage);
   }
 
-  if (!result.data?.verified) {
+  // Type guard to ensure we have valid verification data
+  if (!('verified' in result.data) || !('registrationToken' in result.data)) {
+    throw new Error('Invalid TIN verification response format.');
+  }
+
+  if (!result.data.verified) {
     throw new Error(result.message || 'TIN verification returned an unverified record.');
   }
 
-  return result.data;
+  return result.data as VerifyTinData;
 }
 
 export function saveTinVerification(data: VerifyTinData): void {

@@ -99,11 +99,11 @@ export default function RegisterStep2Screen({ onBack, onContinue }: RegisterStep
       setError('Phone number is required.');
       return false;
     }
-    const phoneDigits = formData.phoneNumber.replace(/\D/g, '');
-    if (phoneDigits.length <= 11) {
-      setError('Phone number must be more than 11 digits.');
-      return false;
-    }
+    // const phoneDigits = formData.phoneNumber.replace(/\D/g, '');
+    // if (phoneDigits.length <= 11) {
+    //   setError('Phone number must be less than 11 digits.');
+    //   return false;
+    // }
     return true;
   };
 

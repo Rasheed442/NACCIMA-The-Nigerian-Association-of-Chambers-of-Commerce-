@@ -20,7 +20,7 @@ export default function RegisterStep1Screen({ onBackToLogin, onContinue }: Regis
     tin: string;
   } | null>(null);
 
-  const isValidTin = tin.trim().length > 0;
+  const isValidTin = tin.trim().length === 13;
 
   const handleVerifyTin = async () => {
     const normalizedTin = tin.trim();
@@ -99,7 +99,7 @@ export default function RegisterStep1Screen({ onBackToLogin, onContinue }: Regis
                     setError('');
                   }
                 }}
-                placeholder="e.g. 12345678901"
+                placeholder="e.g. 1234567890123"
               />
               <button
                 type="button"
@@ -110,7 +110,7 @@ export default function RegisterStep1Screen({ onBackToLogin, onContinue }: Regis
                 {isVerifying ? 'Verifying...' : 'Verify'}
               </button>
             </div>
-            <div className="text-[10px] text-[#6b7280] mt-[2px]">11-digit number issued by the Nigeria Revenue Service (NRS)</div>
+            <div className="text-[10px] text-[#6b7280] mt-[2px]">13-digit number issued by the Nigeria Revenue Service (NRS)</div>
           </div>
 
           {verification && (

@@ -526,7 +526,7 @@ function NewApplicationContent() {
     if (reviewData?.validationErrors && reviewData.validationErrors.length > 0 && step === 3 && step3ReviewErrorsRef.current) {
       smoothScrollToElement(step3ReviewErrorsRef.current, 800);
     }
-  }, [reviewData, step]);
+  }, [reviewData?.validationErrors, step]);
 
   // Auto-scroll to step 4 validation error when it appears
   useEffect(() => {
