@@ -1890,21 +1890,47 @@ function NewApplicationContent() {
     ));
   };
 
+  /**
+   * HS Code selection (Section 4) should populate the goods line item the
+   * user is currently working on (Section 5) rather than always appending a
+   * brand-new row. If the user has already clicked "+ Add Line Item" and
+   * left it empty (no HS code chosen yet), that row gets filled in-place.
+   * Only when there is no such "open" row do we create a new one.
+   *
+   * HS Code and Nomenclature are sourced entirely from this lookup and are
+   * rendered read-only in the table (see the render section below).
+   * Description is intentionally left blank here so the user can type their
+   * own description rather than have it forced to match the HS nomenclature.
+   */
   const handleHsCodeSelect = (hs: HSCode) => {
-    // Add new line item with selected HS code
-    lineItemIdRef.current += 1;
-    const newItem: GoodsLineItem = {
-      id: lineItemIdRef.current.toString(),
-      hsCode: hs.cetCode,
-      description: hs.description,
-      marksNo: '',
-      quantity: '',
-      grossWeight: '',
-      nomenclature: hs.description,
-      unit: '',
-      value: '',
-    };
-    setGoodsLineItems([...goodsLineItems, newItem]);
+    setGoodsLineItems(current => {
+      const emptySlotIndex = current.findIndex(item => !item.hsCode);
+
+      if (emptySlotIndex !== -1) {
+        const updated = [...current];
+        updated[emptySlotIndex] = {
+          ...updated[emptySlotIndex],
+          hsCode: hs.cetCode,
+          nomenclature: hs.description,
+        };
+        return updated;
+      }
+
+      lineItemIdRef.current += 1;
+      const newItem: GoodsLineItem = {
+        id: lineItemIdRef.current.toString(),
+        hsCode: hs.cetCode,
+        description: '',
+        marksNo: '',
+        quantity: '',
+        grossWeight: '',
+        nomenclature: hs.description,
+        unit: '',
+        value: '',
+      };
+      return [...current, newItem];
+    });
+
     setHsSearchQuery('');
     setHsCodes([]);
   };
@@ -2217,10 +2243,11 @@ function NewApplicationContent() {
                               <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
                                 <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px] bg-[#f3f4f6] text-[#6a7a9a] cursor-not-allowed"
                                   value={item.hsCode}
-                                  onChange={(e) => updateLineItem(item.id, 'hsCode', e.target.value)}
-                                  placeholder="Code"
+                                  readOnly
+                                  title="Select an HS code via the HS Code Lookup above"
+                                  placeholder="From lookup"
                                 />
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -2228,7 +2255,7 @@ function NewApplicationContent() {
                                   className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
                                   value={item.description}
                                   onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                                  placeholder="Description"
+                                  placeholder="Enter description"
                                 />
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -2267,10 +2294,11 @@ function NewApplicationContent() {
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
                                 <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px] bg-[#f3f4f6] text-[#6a7a9a] cursor-not-allowed"
                                   value={item.nomenclature}
-                                  onChange={(e) => updateLineItem(item.id, 'nomenclature', e.target.value)}
-                                  placeholder="Nomenclature"
+                                  readOnly
+                                  title="Auto-filled from the selected HS Code"
+                                  placeholder="From lookup"
                                 />
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -2393,7 +2421,7 @@ function NewApplicationContent() {
 
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(1)}>← Back</button>
-                  <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
+                  {/* <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button> */}
                   <button
                     className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleContinueToStep3}

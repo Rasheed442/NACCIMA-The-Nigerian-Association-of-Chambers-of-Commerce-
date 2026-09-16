@@ -2047,9 +2047,9 @@ export default function EditResubmissionPage() {
 
             <div className="flex justify-end gap-2">
               <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
-              {!isPaymentMode && (
+              {/* {!isPaymentMode && (
                 <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
-              )}
+              )} */}
               <button
                 className="inline-flex items-center justify-center gap-1 px-[16px] py-[8px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleSaveAndResubmit}
