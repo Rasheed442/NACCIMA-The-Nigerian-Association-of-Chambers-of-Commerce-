@@ -44,13 +44,10 @@ export default function CompanyProfilePage() {
 
   // Form state for editable fields
   const [formData, setFormData] = useState({
-    email: '',
-    phoneNumber: '',
     businessType: '',
     natureOfBusiness: '',
     website: '',
     yearOfIncorporation: '',
-    rcNumber: '',
   });
 
   useEffect(() => {
@@ -94,13 +91,10 @@ export default function CompanyProfilePage() {
 
       setProfile(result.data);
       setFormData({
-        email: result.data.email || '',
-        phoneNumber: result.data.phoneNumber || '',
         businessType: result.data.businessType || '',
         natureOfBusiness: result.data.natureOfBusiness || '',
         website: result.data.website || '',
         yearOfIncorporation: result.data.yearOfIncorporation?.toString() || '',
-        rcNumber: result.data.rcNumber || '',
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch company profile. Please try again.');
@@ -126,13 +120,10 @@ export default function CompanyProfilePage() {
       }
 
       const payload = {
-        email: formData.email,
-        phoneNumber: formData.phoneNumber,
         businessType: formData.businessType,
         natureOfBusiness: formData.natureOfBusiness,
         website: formData.website,
         yearOfIncorporation: parseInt(formData.yearOfIncorporation) || 0,
-        rcNumber: formData.rcNumber,
       };
 
       const response = await fetch(`${baseUrl}/api/v1/companies/profile`, {
@@ -218,7 +209,7 @@ export default function CompanyProfilePage() {
 
             <div className="bg-white border border-[#dde3ee] rounded p-6 shadow-[0_1px_4px_rgba(0,0,0,0.05)] mb-6">
               <div className="text-[17px] font-medium text-[#1a2236] mb-4">Company Information</div>
-              
+
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-[13px] font-semibold text-[#374151]">Company Name</label>
@@ -256,43 +247,34 @@ export default function CompanyProfilePage() {
                     {profile?.lga || '-'}
                   </div>
                 </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[13px] font-semibold text-[#374151]">Email Address</label>
+                  <div className="px-[10px] py-[7px] border border-[#e5e7eb] rounded-[5px] text-[12px] text-[#6b7280] bg-[#f9fafb]">
+                    {profile?.email || '-'}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[13px] font-semibold text-[#374151]">Phone Number</label>
+                  <div className="px-[10px] py-[7px] border border-[#e5e7eb] rounded-[5px] text-[12px] text-[#6b7280] bg-[#f9fafb]">
+                    {profile?.phoneNumber || '-'}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[13px] font-semibold text-[#374151]">RC Number</label>
+                  <div className="px-[10px] py-[7px] border border-[#e5e7eb] rounded-[5px] text-[12px] text-[#6b7280] bg-[#f9fafb]">
+                    {profile?.rcNumber || '-'}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="bg-white border border-[#dde3ee] rounded p-6 shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
               <div className="text-[17px] font-medium text-[#1a2236] mb-4">Editable Information</div>
-              
+
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[13px] font-semibold text-[#374151]">Email Address <span className="text-[#e53e3e]">*</span></label>
-                  <input 
-                    className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[13px] font-semibold text-[#374151]">Phone Number <span className="text-[#e53e3e]">*</span></label>
-                  <input 
-                    className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
-                    type="text"
-                    value={formData.phoneNumber}
-                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-[13px] font-semibold text-[#374151]">RC Number <span className="text-[#e53e3e]">*</span></label>
-                  <input 
-                    className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
-                    type="text"
-                    value={formData.rcNumber}
-                    onChange={(e) => setFormData({ ...formData, rcNumber: e.target.value })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
                   <label className="text-[13px] font-semibold text-[#374151]">Business Type <span className="text-[#e53e3e]">*</span></label>
-                  <input 
+                  <input
                     className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
                     type="text"
                     value={formData.businessType}
@@ -301,7 +283,7 @@ export default function CompanyProfilePage() {
                 </div>
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-[13px] font-semibold text-[#374151]">Nature of Business <span className="text-[#e53e3e]">*</span></label>
-                  <input 
+                  <input
                     className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
                     type="text"
                     value={formData.natureOfBusiness}
@@ -310,7 +292,7 @@ export default function CompanyProfilePage() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[13px] font-semibold text-[#374151]">Website</label>
-                  <input 
+                  <input
                     className="px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] focus:shadow-[0_0_0_2px_rgba(58,123,213,0.15)]"
                     type="url"
                     value={formData.website}

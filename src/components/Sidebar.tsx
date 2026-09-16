@@ -418,10 +418,11 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   );
 
   return (
-    <nav className={`w-[250px] relative ${sidebarBg} border-r ${borderColor} flex-shrink-0 py-[18px] overflow-y-auto opacity-100 transition-opacity duration-200`}>
-      {role === 'admin' ? renderAdminSidebar() : role === 'vetting' ? renderVettingSidebar() : renderExporterSidebar()}
-      <div className="flex-1"></div>
-      <div className="px-[16px] py-[20px] flex items-center gap-2 text-[15px] text-[#e53e3e] cursor-pointer w-full transition-all hover:bg-[#fef2f2] hover:text-[#dc2626] absolute bottom-30 border-t-1 border-[#dc2626]" onClick={() => window.dispatchEvent(new CustomEvent('open-logout-modal'))}>
+    <nav className={`w-[250px] ${sidebarBg} border-r ${borderColor} flex-shrink-0 flex flex-col h-screen opacity-100 transition-opacity duration-200`}>
+      <div className="flex-1 overflow-y-auto py-[18px]">
+        {role === 'admin' ? renderAdminSidebar() : role === 'vetting' ? renderVettingSidebar() : renderExporterSidebar()}
+      </div>
+      <div className="px-[16px] py-[20px] flex items-center gap-2 text-[15px] text-[#e53e3e] cursor-pointer w-full transition-all hover:bg-[#fef2f2] hover:text-[#dc2626] border-t border-[#dc2626]" onClick={() => window.dispatchEvent(new CustomEvent('open-logout-modal'))}>
         <span className="text-[15px] w-3.75 text-center">🚪</span> Log Out
       </div>
     </nav>
