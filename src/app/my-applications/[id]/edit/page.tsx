@@ -1590,15 +1590,13 @@ export default function EditResubmissionPage() {
               </div>
             )}
 
-            {companyProfile?.membershipActive ? (
-              <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
-                ★ NACCIMA Member — member rates apply to your application
-              </div>
-            ) : (
-              <div className="flex items-center gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
-                ⚠ Not a NACCIMA Member — non-member rates apply to your application
-              </div>
-            )}
+               {companyProfile?.membershipStatus === "MEMBER" ?
+              <div className="flex items-center mt-4 mb-6 gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+                ★NACCIMA Member rates apply
+              </div>:    <div className="flex mt-4 mb-6 items-center gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
+                    ⚠ Not a NACCIMA Member — non-member rates apply to your application
+                  </div>
+            }
 
             {/* Section 1: Shipper/Exporter Details */}
             <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
