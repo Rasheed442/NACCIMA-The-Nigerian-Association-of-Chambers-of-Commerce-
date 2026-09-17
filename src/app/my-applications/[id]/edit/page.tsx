@@ -189,6 +189,9 @@ export default function EditResubmissionPage() {
   const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CARD' | 'BANK_TRANSFER' | 'USSD'>('CARD');
   const [reviewDocuments, setReviewDocuments] = useState<Array<{ documentType: string; fileName: string; fileUrl: string }>>([]);
+  // When true, the page shows the "Secure Payment" step (mirroring the New
+  // Application flow's step 4) instead of the editable form/sections.
+  const [showPaymentStep, setShowPaymentStep] = useState(false);
 
   const prefillDynamicFields = (appData: ApplicationData) => {
     const fieldValues: Record<string, string | boolean | string[]> = {};
@@ -794,7 +797,7 @@ export default function EditResubmissionPage() {
       return false;
     }
 
-    const checkoutUrl = paymentData.checkoutUrl as string;
+    const checkoutUrl = getHostedPaymentUrl(paymentData);
     if (!checkoutUrl) {
       setValidationError('The Payfonte checkout URL is unavailable. Please try again.');
       return false;
@@ -1262,38 +1265,19 @@ export default function EditResubmissionPage() {
           throw new Error(paymentResult?.message || 'Failed to initiate payment');
         }
 
-        const paymentData = paymentResult.data;
+        const paymentRecord = paymentResult.data as Record<string, unknown> | undefined;
+        const hostedUrl = paymentRecord ? getHostedPaymentUrl(paymentRecord) : '';
 
-        // Handle payment flow with returned data
-        if (paymentData) {
-          const paymentRecord = paymentData as Record<string, unknown>;
-          const checkoutUrl = paymentRecord.checkoutUrl as string;
-          const paymentId = paymentRecord.paymentId as string;
-          const reference = paymentRecord.reference as string;
-          const status = paymentRecord.status as string;
-          const amount = paymentRecord.amount as number;
-          const currency = paymentRecord.currency as string;
-
-          if (checkoutUrl) {
-            // Store payment data for tracking
-            setPaymentData({
-              ...paymentRecord,
-              checkoutUrl,
-              paymentId,
-              reference,
-              status,
-              amount,
-              currency,
-            });
-            setPaymentCheckoutUrl(checkoutUrl);
-            setSelectedPaymentMethod('CARD');
-
-            // Auto-open the payment checkout
-            openPayfonteCheckout(paymentRecord);
-            setSuccessMessage('Proceeding to payment...');
-            setIsSaving(false);
-            return;
-          }
+        // Instead of auto-redirecting to Payfonte, surface the "Secure
+        // Payment" step (same as the New Application flow) so the user can
+        // review the summary and choose a payment method first.
+        if (paymentRecord && hostedUrl) {
+          setPaymentData(paymentRecord);
+          setPaymentCheckoutUrl(hostedUrl);
+          setSelectedPaymentMethod('CARD');
+          setShowPaymentStep(true);
+          setIsSaving(false);
+          return;
         }
 
         // If no checkout URL, show error
@@ -1398,7 +1382,9 @@ export default function EditResubmissionPage() {
 
       const submissionData = submissionResult.data;
 
-      // Handle payment flow for normal mode
+      // Show the "Secure Payment" step instead of redirecting straight to
+      // Payfonte — this mirrors the New Application flow, where the review
+      // step is followed by a dedicated payment step the user confirms.
       if (submissionData) {
         const paymentRecord = submissionData as Record<string, unknown>;
         const hostedUrl = getHostedPaymentUrl(paymentRecord);
@@ -1407,8 +1393,7 @@ export default function EditResubmissionPage() {
           setPaymentData(paymentRecord);
           setPaymentCheckoutUrl(hostedUrl);
           setSelectedPaymentMethod('CARD');
-          // Auto-open the payment checkout
-          openPayfonteCheckout(paymentRecord);
+          setShowPaymentStep(true);
           setSuccessMessage(isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!');
           setIsSaving(false);
           return;
@@ -1543,15 +1528,19 @@ export default function EditResubmissionPage() {
                 >
                   ← Back to {isPaymentMode ? 'Dashboard' : (isAdminUser ? 'Admin Applications' : 'Applications')}
                 </button>
-                <div className="text-[20px] font-medium text-[#1a2236]">{isPaymentMode ? 'Pay Now' : 'Edit & Resubmit Application'}</div>
+                <div className="text-[20px] font-medium text-[#1a2236]">
+                  {showPaymentStep ? 'Secure Payment' : (isPaymentMode ? 'Pay Now' : 'Edit & Resubmit Application')}
+                </div>
                 <div className="text-[12px] text-[#6a7a9a]">Application {application.id}</div>
               </div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-[#fdf2f8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#9d174d]">
-                Unapproved
-              </span>
+              {!showPaymentStep && (
+                <span className="inline-flex items-center gap-2 rounded-full bg-[#fdf2f8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#9d174d]">
+                  Unapproved
+                </span>
+              )}
             </div>
 
-            {comments.length > 0 && (
+            {!showPaymentStep && comments.length > 0 && (
               <div className="mb-5 rounded-[10px] border border-[#fed7aa] bg-[#fff7ed] p-[14px] text-[12px] text-[#92400e]">
                 <div className="text-[12px] font-bold uppercase tracking-[0.08em] mb-2">Review feedback to correct</div>
                 <div className="space-y-2">
@@ -1590,472 +1579,531 @@ export default function EditResubmissionPage() {
               </div>
             )}
 
-               {companyProfile?.membershipStatus === "MEMBER" ?
-              <div className="flex items-center mt-4 mb-6 gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
-                ★NACCIMA Member rates apply
-              </div>:    <div className="flex mt-4 mb-6 items-center gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
-                    ⚠ Not a NACCIMA Member — non-member rates apply to your application
-                  </div>
-            }
-
-            {/* Section 1: Shipper/Exporter Details */}
-            <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">1</div>
-                <div className="text-[13px] font-bold text-[#1a2236]">Shipper / Exporter Details</div>
-                <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">NRS-Verified · Read-Only</span>
-              </div>
-              {isLoadingFields || isLoadingProfile ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="text-[12px] text-[#6a7a9a]">Loading application fields...</div>
+            {showPaymentStep && paymentData ? (
+              /* ---------------------------------------------------------- */
+              /* Secure Payment step — shown after Save & Submit / Save &   */
+              /* Resubmit / Proceed to Payment succeeds, mirroring step 4   */
+              /* ("Secure Payment") of the New Application flow.            */
+              /* ---------------------------------------------------------- */
+              <>
+                <div className="text-[11.5px] text-[#6a7a9a] mb-5">
+                  Complete your payment without leaving this page
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {certificateFields?.fields
-                    ?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly)
-                    .map(field => renderDynamicField(field))}
-                  {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly).length === 0 && (
-                    <div className="col-span-2 text-[12px] text-[#6a7a9a]">No applicable fields for this certificate type.</div>
-                  )}
-                </div>
-              )}
-            </div>
 
-            {/* Section 2: Mode of Transport */}
-            <div className={`bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4 ${isFieldApplicable('MODE_OF_TRANSPORT') ? '' : 'hidden'}`}>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
-                <div className="text-[13px] font-bold text-[#1a2236]">{getFieldLabel('MODE_OF_TRANSPORT')} {isFieldRequired('MODE_OF_TRANSPORT') && <span className="text-[#e53e3e]">*</span>}</div>
-                {isSavingTransportMode && <span className="text-[10px] text-[#6a7a9a]">Saving…</span>}
-              </div>
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                {transportModes.map((t) => {
-                  const icon = getTransportModeIcon(t.code);
-                  const docs = t.documents.map(d => d.name).join(' + ');
-                  return (
-                    <div
-                      key={t.code}
-                      className={`p-4 rounded-[8px] border transition-all text-center ${transportMode === t.code ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee]'} ${isPaymentMode ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:border-[#3a7bd5]'}`}
-                      onClick={() => !isPaymentMode && handleSelectTransportMode(t.code)}
-                    >
-                      <div className="text-[24px] mb-2">{icon}</div>
-                      <div className="text-[12px] font-bold text-[#1a2236] mb-1">{t.name}</div>
-                      <div className="text-[10px] text-[#6a7a9a]">Required docs: {docs}</div>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-5">
+                  <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
+                    <div className="flex items-center justify-between mb-5">
+                      <div>
+                        <div className="text-[14px] font-bold text-[#1a2236]">Checkout</div>
+                        <div className="text-[11px] text-[#6a7a9a] mt-1">Choose a payment option to continue securely.</div>
+                      </div>
+                      <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
+                        🔒 Secure
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
-              {getSelectedTransportMode() && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[11px] text-[#1e40af]">
-                  <span>ℹ️</span>
-                  <span className='text-[14px]'><strong>{getSelectedTransportMode()?.name} selected:</strong> You must upload {getSelectedTransportMode()?.documents.map(d => d.name).join(', ')} before submitting.</span>
-                </div>
-              )}
-            </div>
 
-            {/* Section 3: Consignee & Shipment Details */}
-            <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">3</div>
-                <div className="text-[13px] font-bold text-[#1a2236]">Consignee & Shipment Details</div>
-              </div>
-
-              {/* Add CRITERIA field as it's required for validation */}
-              <div className="flex flex-col gap-1 mb-4">
-                <label className="text-[11px] font-semibold text-[#374151]">
-                  Criteria <span className="text-[#e53e3e]">*</span>
-                </label>
-                <textarea
-                  className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] border-[#d1d5db]"
-                  placeholder="Enter criteria..."
-                  rows={3}
-                  value={String(dynamicFieldValues.CRITERIA || '')}
-                  onChange={(e) => setDynamicFieldValues(current => ({ ...current, CRITERIA: e.target.value }))}
-                />
-                <div className="text-[10px] text-[#6b7280]">Required field for certificate validation</div>
-              </div>
-
-              {isLoadingFields ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="text-[12px] text-[#6a7a9a]">Loading form fields...</div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT')
-                    .map(field => renderDynamicField(field))}
-                  {!certificateFields?.fields?.some(field => field.code === 'DESTINATION_PORT' && field.applicable) && (
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[11px] font-semibold text-[#374151]">Destination Port</label>
-                      <input
-                        className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] border-[#d1d5db]"
-                        placeholder="Enter destination port"
-                        value={typeof dynamicFieldValues.DESTINATION_PORT === 'string' ? dynamicFieldValues.DESTINATION_PORT : ''}
-                        onChange={(event) => setDynamicFieldValues(current => ({ ...current, DESTINATION_PORT: event.target.value }))}
-                      />
+                    <div className="grid grid-cols-3 gap-2 mb-5">
+                      {[
+                        { key: 'CARD' as const, label: 'Card', icon: '💳' },
+                        { key: 'BANK_TRANSFER' as const, label: 'Bank Transfer', icon: '🏦' },
+                        { key: 'USSD' as const, label: 'USSD', icon: '📱' },
+                      ].map((method) => (
+                        <button
+                          key={method.key}
+                          type="button"
+                          onClick={() => setSelectedPaymentMethod(method.key)}
+                          className={`px-3 py-3 rounded-[8px] border text-[11px] font-semibold transition-all ${
+                            selectedPaymentMethod === method.key
+                              ? 'border-[#3a7bd5] bg-[#e8f0fe] text-[#1a4a8a]'
+                              : 'border-[#dde3ee] bg-white text-[#4a5a7a] hover:border-[#3a7bd5]'
+                          }`}
+                        >
+                          <div className="text-[18px] mb-1">{method.icon}</div>
+                          {method.label}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                  {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT').length === 0 && (
-                    <div className="col-span-2 text-[12px] text-[#6a7a9a]">
-                      No applicable fields for this certificate type.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
 
-            {/* Section 4: HS Code Lookup */}
-            <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
-                <div className="text-[13px] font-bold text-[#1a2236]">HS Code Lookup</div>
-              </div>
-              <div className="flex gap-2 mb-3">
-                <input
-                  className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
-                  placeholder="🔍 Search by HS code or description…"
-                  value={hsSearchQuery}
-                  onChange={handleHsSearchChange}
-                  disabled={isPaymentMode}
-                  readOnly={isPaymentMode}
-                />
-              </div>
-              {isSearchingHs && (
-                <div className="text-[11px] text-[#6a7a9a] py-2">Searching...</div>
-              )}
-              <div className="space-y-1 max-h-[200px] overflow-hidden overflow-scroll">
-                {hsCodes.map((hs) => (
-                  <div
-                    key={hs.id}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-[6px] ${isPaymentMode ? 'cursor-not-allowed opacity-75' : 'hover:bg-[#edf2ff] cursor-pointer'}`}
-                    onClick={() => !isPaymentMode && handleHsCodeSelect(hs)}
-                  >
-                    <span className="text-[13px] font-bold text-[#1a4a8a]">{hs.cetCode}</span>
-                    <span className="text-[13px] text-[#374151] capitalize">{hs.description}</span>
-                  </div>
-                ))}
-                {hsCodes.length === 0 && hsSearchQuery.length >= 2 && !isSearchingHs && (
-                  <div className="text-[11px] text-[#6a7a9a] py-2">No results found</div>
-                )}
-              </div>
-            </div>
-
-            {/* Section 5: Goods Line Items */}
-            <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">5</div>
-                <div className="text-[13px] font-bold text-[#1a2236]">Goods Line Items</div>
-              </div>
-              <div className="overflow-x-auto mb-3">
-                <table className="w-full border-collapse text-[11px]">
-                  <thead>
-                    <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code <span className="text-[#e53e3e]">*</span></th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description <span className="text-[#e53e3e]">*</span></th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No. <span className="text-[#e53e3e]">*</span></th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt. <span className="text-[#e53e3e]">*</span></th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature {isFieldRequired('NOMENCLATURE') && <span className="text-[#e53e3e]">*</span>}</th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Unit</th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) {isFieldRequired('VALUE') && <span className="text-[#e53e3e]">*</span>}</th>
-                      <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {goodsLineItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="px-4 py-8 text-center">
-                          <div className="flex flex-col items-center gap-2">
-                            <span className="text-[24px]">📦</span>
-                            <span className="text-[12px] text-[#6a7a9a]">Add Line Items</span>
+                    <div className="rounded-[8px] bg-[#f8fafd] border border-[#dde3ee] p-4 mb-5">
+                      {selectedPaymentMethod === 'CARD' ? (
+                        <>
+                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Card</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">
+                            Your card details will be entered securely on the Payfonte checkout page. They are not stored or sent through this application.
                           </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      goodsLineItems.map((item, index) => (
-                        <tr key={item.id} className="hover:bg-[#f8faff]">
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                              value={item.hsCode}
-                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'hsCode', e.target.value)}
-                              placeholder="Code"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
-                              value={item.description}
-                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'description', e.target.value)}
-                              placeholder="Description"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                              value={item.marksNo}
-                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'marksNo', e.target.value)}
-                              placeholder="Marks"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
-                              value={item.quantity}
-                              onChange={(e) => {
-                                if (!isPaymentMode) {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  if (/^\d*$/.test(value)) {
-                                    updateLineItem(item.id, 'quantity', formatNumberWithCommas(value));
-                                  }
-                                }
-                              }}
-                              placeholder="1,000"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                              value={item.grossWeight}
-                              onChange={(e) => {
-                                if (!isPaymentMode) {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  if (/^\d*$/.test(value)) {
-                                    updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
-                                  }
-                                }
-                              }}
-                              placeholder="200"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
-                              value={item.nomenclature}
-                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'nomenclature', e.target.value)}
-                              placeholder="Nomenclature"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
-                              value={item.unit}
-                              onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'unit', e.target.value)}
-                              placeholder="KG"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5]">
-                            <input
-                              className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
-                              value={item.value}
-                              onChange={(e) => {
-                                if (!isPaymentMode) {
-                                  const value = e.target.value.replace(/,/g, '');
-                                  if (/^\d*\.?\d*$/.test(value)) {
-                                    updateLineItem(item.id, 'value', formatNumberWithCommas(value));
-                                  }
-                                }
-                              }}
-                              placeholder="0.00"
-                              disabled={isPaymentMode}
-                              readOnly={isPaymentMode}
-                            />
-                          </td>
-                          <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => !isPaymentMode && removeLineItem(item.id)}>{!isPaymentMode && '✕'}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex justify-start items-center mt-4">
-                <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem} disabled={isPaymentMode}>➕ Add Line Item</button>
-              </div>
-            </div>
+                        </>
+                      ) : selectedPaymentMethod === 'BANK_TRANSFER' ? (
+                        <>
+                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Bank Transfer</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">
+                            Payfonte will provide the secure bank-transfer instructions after you continue.
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with USSD</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">
+                            Payfonte will show the available USSD options for your payment.
+                          </div>
+                        </>
+                      )}
+                    </div>
 
-            {/* Section 6: Supporting Documents */}
-            <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
-                <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
-                <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
-              </div>
-              {!transportMode ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
-                  <span>⚠️</span>
-                  <span>Please select a mode of transport above to see required documents</span>
+                    <button
+                      type="button"
+                      onClick={() => openPayfonteCheckout(paymentData)}
+                      disabled={isSaving}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Pay Securely with Payfonte
+                      <FiArrowRight className="w-4 h-4" />
+                    </button>
+
+                    <div className="text-center text-[10px] text-[#94a3b8] mt-3">
+                      Secured by Payfonte · Redirects to the full browser checkout
+                    </div>
+                  </div>
+
+                  <div className="h-fit bg-[#f8fafd] border border-[#dde3ee] rounded-[10px] p-5">
+                    <div className="text-[12px] font-bold text-[#1a2236] mb-4">Payment Summary</div>
+                    <div className="space-y-3 text-[11px]">
+                      <div className="flex justify-between gap-4">
+                        <span className="text-[#6a7a9a]">Application</span>
+                        <span className="font-semibold text-[#1a2236] text-right">{application.id}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-[#6a7a9a]">Certificate</span>
+                        <span className="font-semibold text-[#1a2236] text-right">{application.certificateType || 'NACCIMA'}</span>
+                      </div>
+                      <div className="border-t border-[#dde3ee] pt-3 flex justify-between gap-4">
+                        <span className="font-bold text-[#1a2236]">Total Payable</span>
+                        <span className="font-bold text-[#1a4a8a] text-[15px]">
+                          {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 p-3 rounded-[7px] bg-[#ecfdf5] border border-[#a7f3d0] text-[10.5px] text-[#065f46]">
+                      Once payment is confirmed successfully, you will be redirected to your dashboard.
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="flex flex-wrap gap-3 mb-3">
-                  {getSelectedTransportMode()?.documents.map((doc) => {
-                    const isUploaded = uploadedDocuments[doc.code];
-                    const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === doc.code);
-                    const isUploading = uploadingDoc === doc.code;
-                    const reviewDoc = isPaymentMode ? reviewDocuments.find(r => r.documentType === doc.code) : null;
 
-                    return (
+                <div className="flex justify-start pt-5 mt-5 border-t border-[#edf0f5]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isPaymentMode) {
+                        router.push(dashboardPath);
+                        return;
+                      }
+                      setPaymentCheckoutUrl('');
+                      setShowPaymentStep(false);
+                      setPaymentData(null);
+                    }}
+                    className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold border border-[#ccd3e0] bg-white text-[#2a3a56] hover:bg-[#f1f4f9]"
+                  >
+                    ← Back to {isPaymentMode ? 'Dashboard' : 'Edit'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {companyProfile?.membershipStatus === "MEMBER" ?
+                  <div className="flex items-center mt-4 mb-6 gap-[10px] px-[12px] py-[8px] rounded-[7px] mb-[14px] text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+                    ★NACCIMA Member rates apply
+                  </div>:    <div className="flex mt-4 mb-6 items-center gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
+                        ⚠ Not a NACCIMA Member — non-member rates apply to your application
+                      </div>
+                }
+
+                {/* Section 1: Shipper/Exporter Details */}
+                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">1</div>
+                    <div className="text-[13px] font-bold text-[#1a2236]">Shipper / Exporter Details</div>
+                    <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">NRS-Verified · Read-Only</span>
+                  </div>
+                  {isLoadingFields || isLoadingProfile ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-[12px] text-[#6a7a9a]">Loading application fields...</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {certificateFields?.fields
+                        ?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly)
+                        .map(field => renderDynamicField(field))}
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly).length === 0 && (
+                        <div className="col-span-2 text-[12px] text-[#6a7a9a]">No applicable fields for this certificate type.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 2: Mode of Transport */}
+                <div className={`bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4 ${isFieldApplicable('MODE_OF_TRANSPORT') ? '' : 'hidden'}`}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
+                    <div className="text-[13px] font-bold text-[#1a2236]">{getFieldLabel('MODE_OF_TRANSPORT')} {isFieldRequired('MODE_OF_TRANSPORT') && <span className="text-[#e53e3e]">*</span>}</div>
+                    {isSavingTransportMode && <span className="text-[10px] text-[#6a7a9a]">Saving…</span>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    {transportModes.map((t) => {
+                      const icon = getTransportModeIcon(t.code);
+                      const docs = t.documents.map(d => d.name).join(' + ');
+                      return (
+                        <div
+                          key={t.code}
+                          className={`p-4 rounded-[8px] border transition-all text-center ${transportMode === t.code ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee]'} ${isPaymentMode ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:border-[#3a7bd5]'}`}
+                          onClick={() => !isPaymentMode && handleSelectTransportMode(t.code)}
+                        >
+                          <div className="text-[24px] mb-2">{icon}</div>
+                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">{t.name}</div>
+                          <div className="text-[10px] text-[#6a7a9a]">Required docs: {docs}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {getSelectedTransportMode() && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#dbeafe] text-[11px] text-[#1e40af]">
+                      <span>ℹ️</span>
+                      <span className='text-[14px]'><strong>{getSelectedTransportMode()?.name} selected:</strong> You must upload {getSelectedTransportMode()?.documents.map(d => d.name).join(', ')} before submitting.</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 3: Consignee & Shipment Details */}
+                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">3</div>
+                    <div className="text-[13px] font-bold text-[#1a2236]">Consignee & Shipment Details</div>
+                  </div>
+
+                  {isLoadingFields ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="text-[12px] text-[#6a7a9a]">Loading form fields...</div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT')
+                        .map(field => renderDynamicField(field))}
+                      {!certificateFields?.fields?.some(field => field.code === 'DESTINATION_PORT' && field.applicable) && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[11px] font-semibold text-[#374151]">Destination Port</label>
+                          <input
+                            className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] border-[#d1d5db]"
+                            placeholder="Enter destination port"
+                            value={typeof dynamicFieldValues.DESTINATION_PORT === 'string' ? dynamicFieldValues.DESTINATION_PORT : ''}
+                            onChange={(event) => setDynamicFieldValues(current => ({ ...current, DESTINATION_PORT: event.target.value }))}
+                          />
+                        </div>
+                      )}
+                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT').length === 0 && (
+                        <div className="col-span-2 text-[12px] text-[#6a7a9a]">
+                          No applicable fields for this certificate type.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 4: HS Code Lookup */}
+                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
+                    <div className="text-[13px] font-bold text-[#1a2236]">HS Code Lookup</div>
+                  </div>
+                  <div className="flex gap-2 mb-3">
+                    <input
+                      className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
+                      placeholder="🔍 Search by HS code or description…"
+                      value={hsSearchQuery}
+                      onChange={handleHsSearchChange}
+                      disabled={isPaymentMode}
+                      readOnly={isPaymentMode}
+                    />
+                  </div>
+                  {isSearchingHs && (
+                    <div className="text-[11px] text-[#6a7a9a] py-2">Searching...</div>
+                  )}
+                  <div className="space-y-1 max-h-[200px] overflow-hidden overflow-scroll">
+                    {hsCodes.map((hs) => (
                       <div
-                        key={doc.code}
-                        className={`border-[1.5px] border-dashed rounded-[6px] px-[14px] py-[10px] text-[11px] text-center min-w-[140px] relative ${
-                          isUploaded || isReviewUploaded
-                            ? 'border-[#059669] bg-[#d1fae5] text-[#065f46]'
-                            : 'border-[#d1d5db] text-[#6a7a9a]'
-                        } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''} ${isPaymentMode ? 'cursor-not-allowed' : 'cursor-pointer hover:border-[#3a7bd5] hover:text-[#3a7bd5]'}`}
-                        onClick={() => !isPaymentMode && !isUploaded && !isUploading && handleFileSelect(doc.code)}
+                        key={hs.id}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-[6px] ${isPaymentMode ? 'cursor-not-allowed opacity-75' : 'hover:bg-[#edf2ff] cursor-pointer'}`}
+                        onClick={() => !isPaymentMode && handleHsCodeSelect(hs)}
                       >
-                        {isUploading ? (
-                          <>
-                            <svg className="animate-spin h-5 w-5 text-[#6a7a9a] mx-auto mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span className="block">Uploading...</span>
-                          </>
-                        ) : isUploaded ? (
-                          <>
-                            <span className="block mb-1">✅</span>
-                            <span className="block font-semibold">{doc.name}</span>
-                            <span className="block text-[10px]">{uploadedDocuments[doc.code].name}</span>
-                            {!isPaymentMode && (
-                              <button
-                                className="absolute top-1 right-1 text-[#e53e3e] hover:text-[#dc2626] text-[10px]"
-                                onClick={(e) => { e.stopPropagation(); removeDocument(doc.code); }}
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </>
-                        ) : isReviewUploaded ? (
-                          <>
-                            <span className="block mb-1">✅</span>
-                            <span className="block font-semibold">{doc.name}</span>
-                            <span className="block text-[10px]">{reviewDoc?.fileName || 'Uploaded'}</span>
-                          </>
+                        <span className="text-[13px] font-bold text-[#1a4a8a]">{hs.cetCode}</span>
+                        <span className="text-[13px] text-[#374151] capitalize">{hs.description}</span>
+                      </div>
+                    ))}
+                    {hsCodes.length === 0 && hsSearchQuery.length >= 2 && !isSearchingHs && (
+                      <div className="text-[11px] text-[#6a7a9a] py-2">No results found</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Section 5: Goods Line Items */}
+                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">5</div>
+                    <div className="text-[13px] font-bold text-[#1a2236]">Goods Line Items</div>
+                  </div>
+                  <div className="overflow-x-auto mb-3">
+                    <table className="w-full border-collapse text-[11px]">
+                      <thead>
+                        <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No. <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt. <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature {isFieldRequired('NOMENCLATURE') && <span className="text-[#e53e3e]">*</span>}</th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Unit</th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) {isFieldRequired('VALUE') && <span className="text-[#e53e3e]">*</span>}</th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {goodsLineItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="px-4 py-8 text-center">
+                              <div className="flex flex-col items-center gap-2">
+                                <span className="text-[24px]">📦</span>
+                                <span className="text-[12px] text-[#6a7a9a]">Add Line Items</span>
+                              </div>
+                            </td>
+                          </tr>
                         ) : (
-                          <>
-                            <span className="block mb-1">📎</span>
-                            <span className="block">{doc.name}</span>
-                            <span className="text-[10px] text-[#e53e3e]">Required {doc.required ? '✓' : '✕'}</span>
-                          </>
+                          goodsLineItems.map((item, index) => (
+                            <tr key={item.id} className="hover:bg-[#f8faff]">
+                              <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  value={item.hsCode}
+                                  onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'hsCode', e.target.value)}
+                                  placeholder="Code"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
+                                  value={item.description}
+                                  onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'description', e.target.value)}
+                                  placeholder="Description"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  value={item.marksNo}
+                                  onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'marksNo', e.target.value)}
+                                  placeholder="Marks"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    if (!isPaymentMode) {
+                                      const value = e.target.value.replace(/,/g, '');
+                                      if (/^\d*$/.test(value)) {
+                                        updateLineItem(item.id, 'quantity', formatNumberWithCommas(value));
+                                      }
+                                    }
+                                  }}
+                                  placeholder="1,000"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  value={item.grossWeight}
+                                  onChange={(e) => {
+                                    if (!isPaymentMode) {
+                                      const value = e.target.value.replace(/,/g, '');
+                                      if (/^\d*$/.test(value)) {
+                                        updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
+                                      }
+                                    }
+                                  }}
+                                  placeholder="200"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
+                                  value={item.nomenclature}
+                                  onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'nomenclature', e.target.value)}
+                                  placeholder="Nomenclature"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
+                                  value={item.unit}
+                                  onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'unit', e.target.value)}
+                                  placeholder="KG"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
+                                  value={item.value}
+                                  onChange={(e) => {
+                                    if (!isPaymentMode) {
+                                      const value = e.target.value.replace(/,/g, '');
+                                      if (/^\d*\.?\d*$/.test(value)) {
+                                        updateLineItem(item.id, 'value', formatNumberWithCommas(value));
+                                      }
+                                    }
+                                  }}
+                                  placeholder="0.00"
+                                  disabled={isPaymentMode}
+                                  readOnly={isPaymentMode}
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => !isPaymentMode && removeLineItem(item.id)}>{!isPaymentMode && '✕'}</td>
+                            </tr>
+                          ))
                         )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex justify-start items-center mt-4">
+                    <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem} disabled={isPaymentMode}>➕ Add Line Item</button>
+                  </div>
+                </div>
+
+                {/* Section 6: Supporting Documents */}
+                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
+                    <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
+                    <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
+                  </div>
+                  {!transportMode ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
+                      <span>⚠️</span>
+                      <span>Please select a mode of transport above to see required documents</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-3 mb-3">
+                      {getSelectedTransportMode()?.documents.map((doc) => {
+                        const isUploaded = uploadedDocuments[doc.code];
+                        const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === doc.code);
+                        const isUploading = uploadingDoc === doc.code;
+                        const reviewDoc = isPaymentMode ? reviewDocuments.find(r => r.documentType === doc.code) : null;
+
+                        return (
+                          <div
+                            key={doc.code}
+                            className={`border-[1.5px] border-dashed rounded-[6px] px-[14px] py-[10px] text-[11px] text-center min-w-[140px] relative ${
+                              isUploaded || isReviewUploaded
+                                ? 'border-[#059669] bg-[#d1fae5] text-[#065f46]'
+                                : 'border-[#d1d5db] text-[#6a7a9a]'
+                            } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''} ${isPaymentMode ? 'cursor-not-allowed' : 'cursor-pointer hover:border-[#3a7bd5] hover:text-[#3a7bd5]'}`}
+                            onClick={() => !isPaymentMode && !isUploaded && !isUploading && handleFileSelect(doc.code)}
+                          >
+                            {isUploading ? (
+                              <>
+                                <svg className="animate-spin h-5 w-5 text-[#6a7a9a] mx-auto mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span className="block">Uploading...</span>
+                              </>
+                            ) : isUploaded ? (
+                              <>
+                                <span className="block mb-1">✅</span>
+                                <span className="block font-semibold">{doc.name}</span>
+                                <span className="block text-[10px]">{uploadedDocuments[doc.code].name}</span>
+                                {!isPaymentMode && (
+                                  <button
+                                    className="absolute top-1 right-1 text-[#e53e3e] hover:text-[#dc2626] text-[10px]"
+                                    onClick={(e) => { e.stopPropagation(); removeDocument(doc.code); }}
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </>
+                            ) : isReviewUploaded ? (
+                              <>
+                                <span className="block mb-1">✅</span>
+                                <span className="block font-semibold">{doc.name}</span>
+                                <span className="block text-[10px]">{reviewDoc?.fileName || 'Uploaded'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="block mb-1">📎</span>
+                                <span className="block">{doc.name}</span>
+                                <span className="text-[10px] text-[#e53e3e]">Required {doc.required ? '✓' : '✕'}</span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                  {uploadError && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e]">
+                      <span>⚠️</span>
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
+                  {(() => {
+                    const transportMode = getSelectedTransportMode();
+                    if (!transportMode) return null;
+                    const missingDocs = transportMode.documents?.filter(d => {
+                      const isUploaded = uploadedDocuments[d.code];
+                      const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === d.code);
+                      return d.required && !isUploaded && !isReviewUploaded;
+                    });
+                    if (missingDocs.length === 0) return null;
+                    return (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
+                        <span>⚠️</span>
+                        <span>{missingDocs.map(d => d.name).join(', ')} are required for {transportMode.name} transport. Upload before submitting.</span>
                       </div>
                     );
-                  })}
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-              />
-              {uploadError && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fee2e2] text-[11px] text-[#e53e3e]">
-                  <span>⚠️</span>
-                  <span>{uploadError}</span>
-                </div>
-              )}
-              {(() => {
-                const transportMode = getSelectedTransportMode();
-                if (!transportMode) return null;
-                const missingDocs = transportMode.documents?.filter(d => {
-                  const isUploaded = uploadedDocuments[d.code];
-                  const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === d.code);
-                  return d.required && !isUploaded && !isReviewUploaded;
-                });
-                if (missingDocs.length === 0) return null;
-                return (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
-                    <span>⚠️</span>
-                    <span>{missingDocs.map(d => d.name).join(', ')} are required for {transportMode.name} transport. Upload before submitting.</span>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Payment Section - Only shown when payment data is available */}
-            {paymentData && (
-              <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">7</div>
-                  <div className="text-[13px] font-bold text-[#1a2236]">Payment</div>
+                  })()}
                 </div>
 
-                <div className="bg-white border border-[#dde3ee] rounded-[10px] p-5">
-                  <div className="flex items-center justify-between mb-5">
-                    <div>
-                      <div className="text-[14px] font-bold text-[#1a2236]">Payment Summary</div>
-                      <div className="text-[11px] text-[#6a7a9a] mt-1">Review your payment details before proceeding</div>
-                    </div>
-                    <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
-                      🔒 Secure
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 mb-5">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-[#6a7a9a]">Application Fee</span>
-                      <span className="text-[#1a2236]">
-                        {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-[#6a7a9a]">Processing Fee</span>
-                      <span className="text-[#1a2236]">Included</span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-[#dde3ee] pt-3 flex justify-between gap-4 mb-5">
-                    <span className="font-bold text-[#1a2236]">Total Payable</span>
-                    <span className="font-bold text-[#1a4a8a] text-[15px]">
-                      {formatCurrency(getPaymentDisplayAmount(paymentData), getPaymentCurrency(paymentData))}
-                    </span>
-                  </div>
-
-                  {/* <button
-                    type="button"
-                    onClick={() => openPayfonteCheckout(paymentData)}
+                <div className="flex justify-end gap-2">
+                  <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
+                  <button
+                    className="inline-flex items-center justify-center gap-1 px-[16px] py-[8px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={handleSaveAndResubmit}
                     disabled={isSaving}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-[7px] border-none bg-[#1a4a8a] text-white text-[12px] font-bold hover:bg-[#153c70] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {isSaving ? 'Processing...' : 'Proceed to Payment'}
-                  </button> */}
-
-                  {/* <div className="mt-4 p-3 rounded-[7px] bg-[#ecfdf5] border border-[#a7f3d0] text-[10.5px] text-[#065f46]">
-                    Once payment is confirmed successfully, you will be redirected to your dashboard.
-                  </div> */}
+                    {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Proceed to Payment' : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit'))}
+                  </button>
                 </div>
-              </div>
+              </>
             )}
-
-            <div className="flex justify-end gap-2">
-              <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
-              {/* {!isPaymentMode && (
-                <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button>
-              )} */}
-              <button
-                className="inline-flex items-center justify-center gap-1 px-[16px] py-[8px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleSaveAndResubmit}
-                disabled={isSaving}
-              >
-                {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Proceed to Payment' : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit'))}
-              </button>
-            </div>
           </div>
         </div>
       </div>
