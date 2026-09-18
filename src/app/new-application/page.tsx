@@ -884,6 +884,11 @@ function NewApplicationContent() {
       fields.DESTINATION_PORT = destinationPort.trim();
     }
 
+    // Always include DESTINATION_PORT as "Not Set" if not already set
+    if (!fields.DESTINATION_PORT) {
+      fields.DESTINATION_PORT = "Not Set";
+    }
+
     return fields;
   };
 
@@ -2168,13 +2173,13 @@ function NewApplicationContent() {
                       {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT')
                         .map(field => renderDynamicField(field))}
                       {!certificateFields?.fields?.some(field => field.code === 'DESTINATION_PORT' && field.applicable) && (
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1 hidden">
                           <label className="text-[11px] font-semibold text-[#374151]">Destination Port</label>
                           <input
                             className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] border-[#d1d5db]"
                             placeholder="Enter destination port"
-                            value={typeof dynamicFieldValues.DESTINATION_PORT === 'string' ? dynamicFieldValues.DESTINATION_PORT : ''}
-                            onChange={(event) => setDynamicFieldValues(current => ({ ...current, DESTINATION_PORT: event.target.value }))}
+                             value="Not Set"
+                            onChange={(event) => setDynamicFieldValues(current => ({ ...current,  DESTINATION_PORT: "Not Set" }))}
                           />
                         </div>
                       )}
