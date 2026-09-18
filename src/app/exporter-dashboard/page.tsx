@@ -277,7 +277,7 @@ function ExporterDashboardContent() {
       value: dashboardData?.activeApplications || 0,
       meta: `${dashboardData?.newApplicationsThisWeek || 0} new this week`,
       color: 'text-[#2c5282]',
-      href: '/my-applications',
+      href: '/my-applications?status=PAID',
       highlight: 'text-[#059669]',
       accent: 'bg-[#eaf7f2]',
       icon: <FaArrowUp className="text-[#059669]" />
@@ -288,7 +288,7 @@ function ExporterDashboardContent() {
       value: dashboardData?.pendingPayment || 0,
       meta: 'Action required',
       color: 'text-[#92400e]',
-      href: '/my-applications?status=PENDING_PAYMENT',
+      href: '/my-applications?status=PENDING',
       highlight: 'text-[#92400e]',
       accent: 'bg-[#fff1e6]',
       icon: null

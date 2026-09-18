@@ -544,6 +544,12 @@ function MyApplicationsContent() {
                     </div>
                     <div 
                       className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
+                      onClick={() => { updateStatusFilter('DRAFT'); setStatusDropdownOpen(false); }}
+                    >
+                      DRAFT
+                    </div>
+                    <div 
+                      className="px-3 py-2 hover:bg-[#f1f4f9] cursor-pointer text-[12px]"
                       onClick={() => { updateStatusFilter('UNDER_REVIEW'); setStatusDropdownOpen(false); }}
                     >
                       Under Review

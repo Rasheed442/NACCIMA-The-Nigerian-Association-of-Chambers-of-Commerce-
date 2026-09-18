@@ -386,7 +386,7 @@ const ApplicableFieldsPanel = forwardRef<ApplicableFieldsRef, ApplicableFieldsPr
   }
 
   return (
-    <div className="h-full flex flex-col text-slate-900">
+    <div className="h-full flex flex-col text-slate-900 p-6">
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3 mb-6">

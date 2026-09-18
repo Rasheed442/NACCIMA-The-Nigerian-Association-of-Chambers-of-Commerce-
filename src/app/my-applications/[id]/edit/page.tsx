@@ -50,6 +50,7 @@ interface HSCode {
   id: string;
   cetCode: string;
   description: string;
+  unit?: string;
 }
 
 interface Country {
@@ -160,6 +161,7 @@ export default function EditResubmissionPage() {
   const [hsCodes, setHsCodes] = useState<HSCode[]>([]);
   const [hsSearchQuery, setHsSearchQuery] = useState('');
   const [isSearchingHs, setIsSearchingHs] = useState(false);
+  const [activeHsCodeRowId, setActiveHsCodeRowId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
@@ -192,6 +194,8 @@ export default function EditResubmissionPage() {
   // When true, the page shows the "Secure Payment" step (mirroring the New
   // Application flow's step 4) instead of the editable form/sections.
   const [showPaymentStep, setShowPaymentStep] = useState(false);
+  const [showReviewStep, setShowReviewStep] = useState(false);
+  const [reviewData, setReviewData] = useState<any>(null);
 
   const prefillDynamicFields = (appData: ApplicationData) => {
     const fieldValues: Record<string, string | boolean | string[]> = {};
@@ -1171,16 +1175,26 @@ export default function EditResubmissionPage() {
     const newItem: GoodsLineItem = {
       id: lineItemIdRef.current.toString(),
       hsCode: hs.cetCode,
-      description: hs.description,
+      description: '',
       marksNo: '',
       quantity: '',
       grossWeight: '',
       nomenclature: hs.description,
-      unit: '',
+      unit: hs.unit || '',
       value: '',
     };
     setGoodsLineItems([...goodsLineItems, newItem]);
     setHsSearchQuery('');
+    setHsCodes([]);
+  };
+
+  const handleInlineHsCodeSelect = (rowId: string, hs: HSCode) => {
+    setGoodsLineItems(current => current.map(item =>
+      item.id === rowId
+        ? { ...item, hsCode: hs.cetCode, nomenclature: hs.description, unit: hs.unit || '' }
+        : item
+    ));
+    setActiveHsCodeRowId(null);
     setHsCodes([]);
   };
 
@@ -1253,35 +1267,26 @@ export default function EditResubmissionPage() {
         throw new Error('API URL not configured');
       }
 
-      // In payment mode, call payment endpoint
+      // In payment mode, call review endpoint first then show review step
       if (isPaymentMode) {
-        const paymentResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/payment`, {
-          method: 'POST',
+        const reviewResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+          method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         });
 
-        const paymentResult = await paymentResponse.json();
-        if (!paymentResponse.ok) {
-          throw new Error(paymentResult?.message || 'Failed to initiate payment');
+        const reviewResult = await reviewResponse.json();
+        if (!reviewResponse.ok) {
+          throw new Error(reviewResult?.message || 'Failed to validate application');
         }
 
-        const paymentRecord = paymentResult.data as Record<string, unknown> | undefined;
-        const hostedUrl = paymentRecord ? getHostedPaymentUrl(paymentRecord) : '';
+        const reviewData = reviewResult.data;
 
-        // Instead of auto-redirecting to Payfonte, surface the "Secure
-        // Payment" step (same as the New Application flow) so the user can
-        // review the summary and choose a payment method first.
-        if (paymentRecord && hostedUrl) {
-          setPaymentData(paymentRecord);
-          setPaymentCheckoutUrl(hostedUrl);
-          setSelectedPaymentMethod('CARD');
-          setShowPaymentStep(true);
-          setIsSaving(false);
-          return;
-        }
-
-        // If no checkout URL, show error
-        throw new Error('Payment checkout URL not available');
+        // Show review step first before proceeding to payment
+        // (Don't validate strictly - allow review even if there are warnings)
+        setReviewData(reviewData);
+        setShowReviewStep(true);
+        setIsSaving(false);
+        return;
       }
 
       // Normal edit/resubmit flow (non-payment mode)
@@ -1368,6 +1373,63 @@ export default function EditResubmissionPage() {
         return;
       }
 
+      // Show review step first before proceeding to payment
+      setReviewData(reviewData);
+      setShowReviewStep(true);
+      setIsSaving(false);
+      return;
+    } catch (err) {
+      console.error('Failed to submit application:', err);
+      setError(err instanceof Error ? err.message : 'Failed to submit application');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleProceedToPayment = async () => {
+    if (!applicationId) {
+      setError('Application ID is missing.');
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API URL not configured');
+      }
+
+      // If in payment mode (from Pay Now button), call payment endpoint directly
+      if (isPaymentMode) {
+        const paymentResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const paymentResult = await paymentResponse.json();
+        if (!paymentResponse.ok) {
+          throw new Error(paymentResult?.message || 'Failed to initiate payment');
+        }
+
+        const paymentRecord = paymentResult.data as Record<string, unknown> | undefined;
+        const hostedUrl = paymentRecord ? getHostedPaymentUrl(paymentRecord) : '';
+
+        if (paymentRecord && hostedUrl) {
+          setPaymentData(paymentRecord);
+          setPaymentCheckoutUrl(hostedUrl);
+          setSelectedPaymentMethod('CARD');
+          setShowPaymentStep(true);
+          setShowReviewStep(false);
+          setIsSaving(false);
+          return;
+        }
+
+        throw new Error('Payment checkout URL not available');
+      }
+
+      // Normal submission flow (from Save & Submit)
       const isDraft = application?.status === 'DRAFT';
       const submissionAction = isDraft ? 'submit' : 'resubmit';
       const submissionResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/${submissionAction}`, {
@@ -1394,6 +1456,7 @@ export default function EditResubmissionPage() {
           setPaymentCheckoutUrl(hostedUrl);
           setSelectedPaymentMethod('CARD');
           setShowPaymentStep(true);
+          setShowReviewStep(false);
           setSuccessMessage(isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!');
           setIsSaving(false);
           return;
@@ -1529,7 +1592,7 @@ export default function EditResubmissionPage() {
                   ← Back to {isPaymentMode ? 'Dashboard' : (isAdminUser ? 'Admin Applications' : 'Applications')}
                 </button>
                 <div className="text-[20px] font-medium text-[#1a2236]">
-                  {showPaymentStep ? 'Secure Payment' : (isPaymentMode ? 'Pay Now' : 'Edit & Resubmit Application')}
+                  {showPaymentStep ? 'Secure Payment' : (showReviewStep ? 'Review Application' : (isPaymentMode ? 'Pay Now' : 'Edit & Resubmit Application'))}
                 </div>
                 <div className="text-[12px] text-[#6a7a9a]">Application {application.id}</div>
               </div>
@@ -1579,15 +1642,167 @@ export default function EditResubmissionPage() {
               </div>
             )}
 
-            {showPaymentStep && paymentData ? (
+            {showReviewStep && reviewData ? (
+              /* ---------------------------------------------------------- */
+              /* Review step — shown after Save & Submit succeeds, before    */
+              /* proceeding to the Secure Payment step.                     */
+              /* ---------------------------------------------------------- */
+              <>
+                <div className="flex items-center gap-2 mb-3 flex items-center gap-2 mb-3 border border-gray-200 px-4 py-4 rounded shadow-sm">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full border-2 border-[#059669] bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Application Details</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full border-2 border-[#3a7bd5] bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">3</div>
+                    <span className="text-[10px] font-semibold text-[#3a7bd5]">Review & Submit</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#e2e8f0]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full border-2 border-[#e2e8f0] bg-[#e2e8f0] text-[#64748b] text-[11px] font-bold flex items-center justify-center">4</div>
+                    <span className="text-[10px] font-semibold text-[#64748b]">Payment</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
+                    <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Certificate Type</div>
+                    <div className="text-[13.5px] font-bold text-[#1a2236]">{application.certificateType?.name || 'NACCIMA'}</div>
+                  </div>
+                  <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
+                    <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Exporter</div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Company</span><span className="text-[#1a2236]">{application.companyName || '—'}</span></div>
+                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">TIN</span><span className="text-[#1a2236] font-mono">{application.tin || '—'}</span></div>
+                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Membership</span><span className={`text-[10px] font-bold px-2 py-[2px] rounded-[10px] ${application.membershipActive ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fef3c7] text-[#92400e]'}`}>{application.membershipActive ? '★ MEMBER' : 'NON-MEMBER'}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4 mb-3">
+                  <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Shipment Details</div>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Consignee</span><br/><span className="text-[#1a2236]">{reviewData.application?.consignee || '—'}</span></div>
+                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Destination</span><br/><span className="text-[#1a2236]">{reviewData.application?.destinationCountry || '—'}</span></div>
+                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Mode of Transport</span><br/><span className="text-[#1a2236]">{transportMode || '—'}</span></div>
+                    <div className="text-[11px]"><span className="text-[#6a7a9a]">Carrier</span><br/><span className="text-[#1a2236]">{reviewData.application?.carrier || '—'}</span></div>
+                  </div>
+                </div>
+
+                <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Goods Line Items</div>
+                <div className="overflow-x-auto mb-4">
+                  <table className="w-full border-collapse text-[11px]">
+                    <thead>
+                      <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
+                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
+                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
+                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description</th>
+                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY</th>
+                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
+                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature</th>
+                        <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {goodsLineItems.map((item, index) => (
+                        <tr key={item.id} className="hover:bg-[#f8faff]">
+                          <td className="px-2 py-2 border-b border-[#edf0f5]">{index + 1}</td>
+                          <td className="px-2 py-2 border-b border-[#edf0f5]"><span className="font-mono font-bold text-[#1a4a8a]">{item.hsCode || '—'}</span></td>
+                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.description || '—'}</td>
+                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.quantity || '—'}</td>
+                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.grossWeight || '—'}</td>
+                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.nomenclature || '—'}</td>
+                          <td className="px-2 py-2 border-b border-[#edf0f5]">{item.value ? `$${item.value}` : '—'}</td>
+                        </tr>
+                      ))}
+                      {goodsLineItems.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-2 py-4 text-center text-[#6a7a9a]">No line items added</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Supporting Documents</div>
+                    <div className="space-y-1 mb-3">
+                      {Object.entries(uploadedDocuments).map(([docCode, file]) => (
+                        <div key={docCode} className="flex items-center gap-2 text-[11.5px] text-[#065f46]">✅ {docCode} — {file.name}</div>
+                      ))}
+                      {Object.keys(uploadedDocuments).length === 0 && (
+                        <div className="text-[11.5px] text-[#6a7a9a]">No documents uploaded</div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="bg-[#fef3c7] border border-[#fbbf24] rounded-[8px] p-4 mb-3">
+                      <div className="text-[11px] font-bold text-[#92400e] mb-2">💱 FOB Value Conversion (Certificate of Origin)</div>
+                      <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">{reviewData.application?.totalValueFob || '—'}</span></div>
+                    </div>
+                    <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
+                      <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
+                      <div className="text-[11px] text-[#6a7a9a]">Payment will be calculated after submission</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4 border-t border-[#edf0f5]">
+                  <button
+                    className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]"
+                    onClick={() => setShowReviewStep(false)}
+                    disabled={isSaving}
+                  >
+                    ← Back to Edit
+                  </button>
+                  <button
+                    className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={handleProceedToPayment}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? 'Processing...' : 'Submit & Proceed to Payment →'}
+                  </button>
+                </div>
+              </>
+            ) : showPaymentStep && paymentData ? (
               /* ---------------------------------------------------------- */
               /* Secure Payment step — shown after Save & Submit / Save &   */
               /* Resubmit / Proceed to Payment succeeds, mirroring step 4   */
               /* ("Secure Payment") of the New Application flow.            */
               /* ---------------------------------------------------------- */
               <>
+                <div className="text-[16px] font-bold text-[#1a2236] mb-[3px]">Secure Payment</div>
                 <div className="text-[11.5px] text-[#6a7a9a] mb-5">
-                  Complete your payment without leaving this page
+                  Step 4 of 4 — Complete your payment without leaving this page
+                </div>
+
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Select Type</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Application Details</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#059669]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full bg-[#059669] text-white text-[11px] font-bold flex items-center justify-center">✓</div>
+                    <span className="text-[10px] font-semibold text-[#059669]">Review & Submit</span>
+                  </div>
+                  <div className="h-[2px] flex-1 bg-[#3a7bd5]"></div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-[24px] h-[24px] rounded-full border-2 border-[#3a7bd5] bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
+                    <span className="text-[10px] font-semibold text-[#3a7bd5]">Payment</span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-5">
@@ -1595,58 +1810,17 @@ export default function EditResubmissionPage() {
                     <div className="flex items-center justify-between mb-5">
                       <div>
                         <div className="text-[14px] font-bold text-[#1a2236]">Checkout</div>
-                        <div className="text-[11px] text-[#6a7a9a] mt-1">Choose a payment option to continue securely.</div>
                       </div>
                       <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
                         🔒 Secure
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 mb-5">
-                      {[
-                        { key: 'CARD' as const, label: 'Card', icon: '💳' },
-                        { key: 'BANK_TRANSFER' as const, label: 'Bank Transfer', icon: '🏦' },
-                        { key: 'USSD' as const, label: 'USSD', icon: '📱' },
-                      ].map((method) => (
-                        <button
-                          key={method.key}
-                          type="button"
-                          onClick={() => setSelectedPaymentMethod(method.key)}
-                          className={`px-3 py-3 rounded-[8px] border text-[11px] font-semibold transition-all ${
-                            selectedPaymentMethod === method.key
-                              ? 'border-[#3a7bd5] bg-[#e8f0fe] text-[#1a4a8a]'
-                              : 'border-[#dde3ee] bg-white text-[#4a5a7a] hover:border-[#3a7bd5]'
-                          }`}
-                        >
-                          <div className="text-[18px] mb-1">{method.icon}</div>
-                          {method.label}
-                        </button>
-                      ))}
-                    </div>
-
                     <div className="rounded-[8px] bg-[#f8fafd] border border-[#dde3ee] p-4 mb-5">
-                      {selectedPaymentMethod === 'CARD' ? (
-                        <>
-                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Card</div>
-                          <div className="text-[10.5px] text-[#6a7a9a]">
-                            Your card details will be entered securely on the Payfonte checkout page. They are not stored or sent through this application.
-                          </div>
-                        </>
-                      ) : selectedPaymentMethod === 'BANK_TRANSFER' ? (
-                        <>
-                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Bank Transfer</div>
-                          <div className="text-[10.5px] text-[#6a7a9a]">
-                            Payfonte will provide the secure bank-transfer instructions after you continue.
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with USSD</div>
-                          <div className="text-[10.5px] text-[#6a7a9a]">
-                            Payfonte will show the available USSD options for your payment.
-                          </div>
-                        </>
-                      )}
+                      <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay Securely with Payfonte</div>
+                      <div className="text-[10.5px] text-[#6a7a9a]">
+                        You will be redirected to the secure Payfonte checkout page to complete your payment.
+                      </div>
                     </div>
 
                     <button
@@ -1807,7 +1981,9 @@ export default function EditResubmissionPage() {
                   )}
                 </div>
 
-                {/* Section 4: HS Code Lookup */}
+                {/* Section 4: HS Code Lookup — disabled. HS Code search now
+                    happens inline on the HS Code column of the Goods Line
+                    Items table below (still labelled Section 4).
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
@@ -1842,19 +2018,21 @@ export default function EditResubmissionPage() {
                     )}
                   </div>
                 </div>
+                */}
 
-                {/* Section 5: Goods Line Items */}
+                {/* Section 4: Goods Line Items */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">5</div>
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Goods Line Items</div>
+                    <span className="text-[10px] text-[#9ca3af]">Type in the HS Code column for suggestions</span>
                   </div>
-                  <div className="overflow-x-auto mb-3">
+                  <div className={activeHsCodeRowId ? "overflow-visible mb-3" : "overflow-x-auto mb-3"}>
                     <table className="w-full border-collapse text-[11px]">
                       <thead>
                         <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">#</th>
-                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">HS Code</th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No. <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
@@ -1879,15 +2057,55 @@ export default function EditResubmissionPage() {
                           goodsLineItems.map((item, index) => (
                             <tr key={item.id} className="hover:bg-[#f8faff]">
                               <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <td className="px-2 py-2 border-b border-[#edf0f5] relative">
                                 <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[90px] focus:outline-none focus:border-[#3a7bd5]"
                                   value={item.hsCode}
-                                  onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'hsCode', e.target.value)}
-                                  placeholder="Code"
+                                  onChange={(e) => {
+                                    if (!isPaymentMode) {
+                                      const value = e.target.value;
+                                      updateLineItem(item.id, 'hsCode', value);
+                                      setActiveHsCodeRowId(item.id);
+                                      searchHsCodes(value);
+                                    }
+                                  }}
+                                  onFocus={() => {
+                                    if (!isPaymentMode) {
+                                      setActiveHsCodeRowId(item.id);
+                                      if (item.hsCode.length >= 2) searchHsCodes(item.hsCode);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    window.setTimeout(() => {
+                                      setActiveHsCodeRowId(current => (current === item.id ? null : current));
+                                    }, 150);
+                                  }}
+                                  placeholder="Search code…"
+                                  autoComplete="off"
                                   disabled={isPaymentMode}
                                   readOnly={isPaymentMode}
                                 />
+                                {activeHsCodeRowId === item.id && item.hsCode.length >= 2 && (isSearchingHs || hsCodes.length > 0) && (
+                                  <div className="absolute z-[9999] top-full mt-1 w-[300px] max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
+                                    {isSearchingHs ? (
+                                      <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                                    ) : hsCodes.length === 0 ? (
+                                      <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
+                                    ) : (
+                                      hsCodes.map((hs) => (
+                                        <div
+                                          key={hs.id}
+                                          className="px-3 py-2 text-[13px] hover:bg-[#edf2ff] cursor-pointer"
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => !isPaymentMode && handleInlineHsCodeSelect(item.id, hs)}
+                                        >
+                                          <span className="font-bold text-[#1a4a8a]">{hs.cetCode}</span>
+                                          <span className="text-[#374151] ml-1 capitalize">{hs.description}</span>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
                                 <input
@@ -1945,12 +2163,11 @@ export default function EditResubmissionPage() {
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
                                 <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px]"
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px] bg-[#f3f4f6] text-[#6a7a9a] cursor-not-allowed"
                                   value={item.nomenclature}
-                                  onChange={(e) => !isPaymentMode && updateLineItem(item.id, 'nomenclature', e.target.value)}
-                                  placeholder="Nomenclature"
-                                  disabled={isPaymentMode}
-                                  readOnly={isPaymentMode}
+                                  readOnly
+                                  title="Auto-filled from HS Code"
+                                  placeholder="Auto-filled"
                                 />
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
@@ -1992,10 +2209,10 @@ export default function EditResubmissionPage() {
                   </div>
                 </div>
 
-                {/* Section 6: Supporting Documents */}
+                {/* Section 5: Supporting Documents */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">5</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
                     <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
                   </div>

@@ -51,6 +51,7 @@ interface HSCode {
   id: string;
   cetCode: string;
   description: string;
+  unit?: string;
 }
 
 interface Country {
@@ -152,6 +153,10 @@ function NewApplicationContent() {
   const [hsCodes, setHsCodes] = useState<HSCode[]>([]);
   const [hsSearchQuery, setHsSearchQuery] = useState('');
   const [isSearchingHs, setIsSearchingHs] = useState(false);
+  // Tracks which Goods Line Item row currently has its HS Code suggestion
+  // dropdown open (see Section 4 below). Only one row's suggestions are
+  // shown at a time.
+  const [activeHsCodeRowId, setActiveHsCodeRowId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [validationError, setValidationError] = useState<string | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
@@ -911,7 +916,7 @@ function NewApplicationContent() {
               <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${destinationDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {destinationDropdownOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg">
+              <div className="absolute z-10 w-full bottom-full mb-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg">
                 <div className="p-2 border-b border-[#d1d5db]">
                   <input
                     type="text"
@@ -974,7 +979,7 @@ function NewApplicationContent() {
               <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${manufacturingDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {manufacturingDropdownOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg">
+              <div className="absolute z-10 w-full bottom-full mb-1 bg-white border border-[#d1d5db] rounded-[5px] shadow-lg">
                 <div className="p-2 border-b border-[#d1d5db]">
                   <input
                     type="text"
@@ -1891,16 +1896,9 @@ function NewApplicationContent() {
   };
 
   /**
-   * HS Code selection (Section 4) should populate the goods line item the
-   * user is currently working on (Section 5) rather than always appending a
-   * brand-new row. If the user has already clicked "+ Add Line Item" and
-   * left it empty (no HS code chosen yet), that row gets filled in-place.
-   * Only when there is no such "open" row do we create a new one.
-   *
-   * HS Code and Nomenclature are sourced entirely from this lookup and are
-   * rendered read-only in the table (see the render section below).
-   * Description is intentionally left blank here so the user can type their
-   * own description rather than have it forced to match the HS nomenclature.
+   * HS Code selection from the (now disabled) standalone HS Code Lookup
+   * section. Kept around unused in case that section is ever re-enabled;
+   * the active path is `handleInlineHsCodeSelect` below.
    */
   const handleHsCodeSelect = (hs: HSCode) => {
     setGoodsLineItems(current => {
@@ -1932,6 +1930,24 @@ function NewApplicationContent() {
     });
 
     setHsSearchQuery('');
+    setHsCodes([]);
+  };
+
+  /**
+   * Inline HS Code suggestion select for the Goods Line Items table
+   * (Section 4). Fills in the HS Code + Nomenclature for the specific row
+   * the user is typing in, without touching any other row. Description is
+   * intentionally left alone so the user can type their own description
+   * rather than have it forced to match the HS nomenclature — same
+   * behaviour the old standalone HS Code Lookup had.
+   */
+  const handleInlineHsCodeSelect = (rowId: string, hs: HSCode) => {
+    setGoodsLineItems(current => current.map(item =>
+      item.id === rowId
+        ? { ...item, hsCode: hs.cetCode, nomenclature: hs.description, unit: hs.unit || '' }
+        : item
+    ));
+    setActiveHsCodeRowId(null);
     setHsCodes([]);
   };
 
@@ -2171,7 +2187,9 @@ function NewApplicationContent() {
                   )}
                 </div>
 
-                {/* Section 4: HS Code Lookup */}
+                {/* Section 4: HS Code Lookup — disabled. HS Code search now
+                    happens inline on the HS Code column of the Goods Line
+                    Items table below (still labelled Section 4).
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                     <div className="flex items-center gap-2 mb-4">
                       <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
@@ -2204,14 +2222,16 @@ function NewApplicationContent() {
                       )}
                     </div>
                   </div>
+                */}
 
-                {/* Section 5: Goods Line Items */}
+                {/* Section 4: Goods Line Items */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">5</div>
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Goods Line Items</div>
+                    <span className="text-[10px] text-[#9ca3af]">Type in the HS Code column for suggestions</span>
                   </div>
-                  <div className="overflow-x-auto mb-3">
+                  <div className={activeHsCodeRowId ? "overflow-visible mb-3" : "overflow-x-auto mb-3"}>
                     <table className="w-full border-collapse text-[11px]">
                       <thead>
                         <tr className="bg-[#f1f4f9] text-[#4a5a7a] font-semibold">
@@ -2241,14 +2261,49 @@ function NewApplicationContent() {
                           goodsLineItems.map((item, index) => (
                             <tr key={item.id} className="hover:bg-[#f8faff]">
                               <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                              <td className="px-2 py-2 border-b border-[#edf0f5] relative">
                                 <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px] bg-[#f3f4f6] text-[#6a7a9a] cursor-not-allowed"
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[90px] focus:outline-none focus:border-[#3a7bd5]"
                                   value={item.hsCode}
-                                  readOnly
-                                  title="Select an HS code via the HS Code Lookup above"
-                                  placeholder="From lookup"
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    updateLineItem(item.id, 'hsCode', value);
+                                    setActiveHsCodeRowId(item.id);
+                                    searchHsCodes(value);
+                                  }}
+                                  onFocus={() => {
+                                    setActiveHsCodeRowId(item.id);
+                                    if (item.hsCode.length >= 2) searchHsCodes(item.hsCode);
+                                  }}
+                                  onBlur={() => {
+                                    window.setTimeout(() => {
+                                      setActiveHsCodeRowId(current => (current === item.id ? null : current));
+                                    }, 150);
+                                  }}
+                                  placeholder="Search code…"
+                                  autoComplete="off"
                                 />
+                                {activeHsCodeRowId === item.id && item.hsCode.length >= 2 && (isSearchingHs || hsCodes.length > 0) && (
+                                  <div className="absolute z-[9999] top-full mt-1 w-[300px] max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
+                                    {isSearchingHs ? (
+                                      <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                                    ) : hsCodes.length === 0 ? (
+                                      <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
+                                    ) : (
+                                      hsCodes.map((hs) => (
+                                        <div
+                                          key={hs.id}
+                                          className="px-3 py-2 text-[13px] hover:bg-[#edf2ff] cursor-pointer"
+                                          onMouseDown={(e) => e.preventDefault()}
+                                          onClick={() => handleInlineHsCodeSelect(item.id, hs)}
+                                        >
+                                          <span className="font-bold text-[#1a4a8a]">{hs.cetCode}</span>
+                                          <span className="text-[#374151] ml-1 capitalize">{hs.description}</span>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
                                 <input
@@ -2334,10 +2389,10 @@ function NewApplicationContent() {
                   </div>
                 </div>
 
-                {/* Section 6: Supporting Documents */}
+                {/* Section 5: Supporting Documents */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
-                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
+                    <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">5</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
                     <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
                   </div>
@@ -2564,7 +2619,7 @@ function NewApplicationContent() {
                             <>
                               <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(exchangeRate.rate, 'NGN')}</span></div>
                               <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>{new Date(exchangeRate.retrievedAt).toLocaleDateString()} (Source: {exchangeRate.source})</span></div>
-                              <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 mt-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate), 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 bottom-full mb-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate), 'NGN')}</span></div>
                             </>
                           ) : (
                             <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="text-[#e53e3e]">Failed to load</span></div>
@@ -2577,7 +2632,7 @@ function NewApplicationContent() {
                               <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee (0.11% × {formatCurrency(Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate, 'NGN')})</span><span className="font-semibold text-[#1a2236]">{formatCurrency((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011, 'NGN')}</span></div>
                               <div className="flex justify-between text-[11px] mb-1"><span>Processing Fee</span><span className="font-semibold text-[#1a2236]">{formatCurrency(2500, 'NGN')}</span></div>
                               <div className="flex justify-between text-[11px] mb-1"><span>VAT (7.5%)</span><span className="font-semibold text-[#1a2236]">{formatCurrency((((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011) + 2500) * 0.075, 'NGN')}</span></div>
-                              <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 mt-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">{formatCurrency((((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011) + 2500) * 1.075, 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 bottom-full mb-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">{formatCurrency((((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011) + 2500) * 1.075, 'NGN')}</span></div>
                             </>
                           ) : (
                             <div className="text-[11px] text-[#e53e3e]">Exchange rate not loaded</div>
@@ -2648,58 +2703,18 @@ function NewApplicationContent() {
                         <div className="flex items-center justify-between mb-5">
                           <div>
                             <div className="text-[14px] font-bold text-[#1a2236]">Checkout</div>
-                            <div className="text-[11px] text-[#6a7a9a] mt-1">Choose a payment option to continue securely.</div>
+                            
                           </div>
                           <div className="text-[10px] font-semibold text-[#065f46] bg-[#d1fae5] px-2 py-1 rounded-full">
                             🔒 Secure
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 mb-5">
-                          {[
-                            { key: 'CARD' as const, label: 'Card', icon: '💳' },
-                            { key: 'BANK_TRANSFER' as const, label: 'Bank Transfer', icon: '🏦' },
-                            { key: 'USSD' as const, label: 'USSD', icon: '📱' },
-                          ].map((method) => (
-                            <button
-                              key={method.key}
-                              type="button"
-                              onClick={() => setSelectedPaymentMethod(method.key)}
-                              className={`px-3 py-3 rounded-[8px] border text-[11px] font-semibold transition-all ${
-                                selectedPaymentMethod === method.key
-                                  ? 'border-[#3a7bd5] bg-[#e8f0fe] text-[#1a4a8a]'
-                                  : 'border-[#dde3ee] bg-white text-[#4a5a7a] hover:border-[#3a7bd5]'
-                              }`}
-                            >
-                              <div className="text-[18px] mb-1">{method.icon}</div>
-                              {method.label}
-                            </button>
-                          ))}
-                        </div>
-
                         <div className="rounded-[8px] bg-[#f8fafd] border border-[#dde3ee] p-4 mb-5">
-                          {selectedPaymentMethod === 'CARD' ? (
-                            <>
-                              <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Card</div>
-                              <div className="text-[10.5px] text-[#6a7a9a]">
-                                Your card details will be entered securely on the Payfonte checkout page. They are not stored or sent through this application.
-                              </div>
-                            </>
-                          ) : selectedPaymentMethod === 'BANK_TRANSFER' ? (
-                            <>
-                              <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with Bank Transfer</div>
-                              <div className="text-[10.5px] text-[#6a7a9a]">
-                                Payfonte will provide the secure bank-transfer instructions after you continue.
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay with USSD</div>
-                              <div className="text-[10.5px] text-[#6a7a9a]">
-                                Payfonte will show the available USSD options for your payment.
-                              </div>
-                            </>
-                          )}
+                          <div className="text-[12px] font-bold text-[#1a2236] mb-1">Pay Securely with Payfonte</div>
+                          <div className="text-[10.5px] text-[#6a7a9a]">
+                            You will be redirected to the secure Payfonte checkout page to complete your payment.
+                          </div>
                         </div>
 
                         <button
