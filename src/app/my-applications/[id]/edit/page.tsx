@@ -1673,14 +1673,14 @@ export default function EditResubmissionPage() {
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
                     <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Certificate Type</div>
-                    <div className="text-[13.5px] font-bold text-[#1a2236]">{application.certificateType?.name || 'NACCIMA'}</div>
+                    <div className="text-[13.5px] font-bold text-[#1a2236]">{application.certificateType || 'NACCIMA'}</div>
                   </div>
                   <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
                     <div className="text-[10.5px] font-bold text-[#6a7a9a] mb-2">Exporter</div>
                     <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Company</span><span className="text-[#1a2236]">{application.companyName || '—'}</span></div>
+                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Company</span><span className="text-[#1a2236]">{application.shipperName || '—'}</span></div>
                       <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">TIN</span><span className="text-[#1a2236] font-mono">{application.tin || '—'}</span></div>
-                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Membership</span><span className={`text-[10px] font-bold px-2 py-[2px] rounded-[10px] ${application.membershipActive ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fef3c7] text-[#92400e]'}`}>{application.membershipActive ? '★ MEMBER' : 'NON-MEMBER'}</span></div>
+                      <div className="flex justify-between text-[11px]"><span className="text-[#6a7a9a]">Membership</span><span className={`text-[10px] font-bold px-2 py-[2px] rounded-[10px] ${companyProfile?.membershipStatus === "MEMBER" ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fef3c7] text-[#92400e]'}`}>{companyProfile?.membershipStatus === "MEMBER" ? '★ MEMBER' : 'NON-MEMBER'}</span></div>
                     </div>
                   </div>
                 </div>
