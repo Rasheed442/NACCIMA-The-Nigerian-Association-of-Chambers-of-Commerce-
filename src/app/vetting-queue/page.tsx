@@ -1,13 +1,27 @@
-/* eslint-disable react-hooks/static-components */
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { Search as SearchInput, Ship, Plane, Truck, ChevronDown, Filter, FileText, CheckCircle,ArrowRight ,XCircle, BarChart3, Clock, AlertCircle, ChevronsUpDown, X, FileSearch } from 'lucide-react';
+import {
+  Search as SearchInput,
+  Ship,
+  Plane,
+  Truck,
+  Filter,
+  FileText,
+  CheckCircle,
+  ArrowRight,
+  XCircle,
+  Clock,
+  AlertCircle,
+  ChevronsUpDown,
+  X,
+  FileSearch,
+} from 'lucide-react';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 import { format } from 'date-fns';
 
@@ -35,18 +49,127 @@ interface Application {
   status: string;
 }
 
+type DropdownKey = 'certType' | 'status' | 'transport';
+
+type DropdownOption = {
+  value: string;
+  label: string;
+};
+
+const certTypeOptions: DropdownOption[] = [
+  { value: 'all', label: 'All Certificate Types' },
+  { value: 'origin', label: 'Certificate of Origin' },
+  { value: 'gsp', label: 'GSP' },
+  { value: 'ecowas', label: 'ECOWAS' },
+  { value: 'naccima', label: 'NACCIMA' },
+  // { value: 'movement', label: 'Movement' },
+  // { value: 'mineral', label: 'Solid Mineral' },
+];
+
+const statusOptions: DropdownOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'SUBMITTED', label: 'Submitted' },
+  { value: 'PAID', label: 'Paid / Unassigned' },
+  { value: 'UNDER_REVIEW', label: 'Under Review' },
+  { value: 'INFO_REQUESTED', label: 'Info Requested' },
+  { value: 'UNAPPROVED', label: 'Unapproved / Resubmitted' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'REJECTED', label: 'Rejected' },
+];
+
+const transportOptions: DropdownOption[] = [
+  { value: 'all', label: 'All Transport' },
+  { value: 'sea', label: 'Sea' },
+  { value: 'air', label: 'Air' },
+  { value: 'land', label: 'Land' },
+];
+
+const getSelectedLabel = (options: DropdownOption[], value: string) => {
+  return options.find((opt) => opt.value === value)?.label || options[0]?.label || 'Select';
+};
+
+/**
+ * Defined outside the page component so it isn't re-created (and remounted)
+ * on every render of the page.
+ */
+function CustomDropdown({
+  options,
+  value,
+  onChange,
+  width,
+  isOpen,
+  onToggle,
+  onClose,
+}: {
+  options: DropdownOption[];
+  value: string;
+  onChange: (val: string) => void;
+  width: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="relative" style={{ width }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded text-xs bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+      >
+        <span className="truncate">{getSelectedLabel(options, value)}</span>
+        {isOpen ? (
+          <X className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+        ) : (
+          <ChevronsUpDown className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+        )}
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={onClose} />
+          <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+            {options.map((option) => (
+              <button
+                type="button"
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  onClose();
+                }}
+                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 transition-colors ${
+                  value === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function VettingQueuePage() {
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Raw list returned by the API for the current page
   const [applications, setApplications] = useState<Application[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+
   const [filterCertType, setFilterCertType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('PAID');
   const [filterTransport, setFilterTransport] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+
   const [totalElements, setTotalElements] = useState(0);
-  const [openDropdown, setOpenDropdown] = useState<'certType' | 'status' | 'transport' | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const [openDropdown, setOpenDropdown] = useState<DropdownKey | null>(null);
   const [assigningApplicationId, setAssigningApplicationId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -70,7 +193,7 @@ export default function VettingQueuePage() {
     }
   };
 
-  const fetchApplications = async () => {
+  const fetchApplications = useCallback(async () => {
     setLoading(true);
     try {
       const baseUrl = getBaseUrl();
@@ -78,19 +201,24 @@ export default function VettingQueuePage() {
       if (filterStatus !== 'all') {
         params.set('status', filterStatus);
       }
+      params.set('page', currentPage.toString());
+      params.set('size', pageSize.toString());
       const query = params.toString();
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications${query ? `?${query}` : ''}`);
+      const response = await apiFetch(
+        `${baseUrl}/api/v1/admin/certificates/vetting/applications${query ? `?${query}` : ''}`
+      );
       const data = await response.json();
       if (data.success && data.data) {
         setApplications(data.data.content || []);
         setTotalElements(data.data.totalElements || 0);
+        setTotalPages(data.data.totalPages || 0);
       }
     } catch (error) {
       console.error('Failed to fetch applications:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus, currentPage, pageSize]);
 
   useEffect(() => {
     fetchDashboardStats();
@@ -98,7 +226,12 @@ export default function VettingQueuePage() {
 
   useEffect(() => {
     fetchApplications();
-  }, [filterStatus]);
+  }, [fetchApplications]);
+
+  const handleStatusChange = (value: string) => {
+    setFilterStatus(value);
+    setCurrentPage(0); // status is filtered server-side, so restart from the first page
+  };
 
   const handleLogout = () => {
     setShowLogoutModal(false);
@@ -124,15 +257,18 @@ export default function VettingQueuePage() {
           throw new Error('API base URL is not configured');
         }
 
-        const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${app.applicationId}/self-assign`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            comment: 'Taking this application for review.',
-          }),
-        });
+        const response = await apiFetch(
+          `${baseUrl}/api/v1/admin/certificates/vetting/applications/${app.applicationId}/self-assign`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              comment: 'Taking this application for review.',
+            }),
+          }
+        );
 
         const payload = await response.json();
 
@@ -142,10 +278,10 @@ export default function VettingQueuePage() {
         }
 
         setSuccessMessage('Application assigned successfully! Redirecting to review...');
-        
+
         // Refresh the applications list to update the status
         await fetchApplications();
-        
+
         // Navigate to review page after a short delay
         setTimeout(() => {
           router.push(`/vetting-review/${app.applicationId}`);
@@ -174,7 +310,9 @@ export default function VettingQueuePage() {
 
     const s = statusMap[status] || { styles: 'bg-[#f3f4f6] text-[#6b7280]', label: status };
     return (
-      <span className={`inline-block whitespace-nowrap rounded px-2 py-[4px] text-[14px] font-medium ${s.styles}`}>{s.label}</span>
+      <span className={`inline-block whitespace-nowrap rounded px-2 py-[4px] text-[14px] font-medium ${s.styles}`}>
+        {s.label}
+      </span>
     );
   };
 
@@ -187,6 +325,8 @@ export default function VettingQueuePage() {
     return icons[transport] || <FileText className="w-4 h-4" />;
   };
 
+  // Client-side filters applied on top of the current page of results.
+  // (Previously named `applications` too, which caused the duplicate declaration error.)
   const filteredApplications = applications.filter((app) => {
     if (filterCertType !== 'all' && !app.certificateType.toLowerCase().includes(filterCertType.toLowerCase())) {
       return false;
@@ -197,8 +337,16 @@ export default function VettingQueuePage() {
     if (filterTransport !== 'all' && app.modeOfTransport.toLowerCase() !== filterTransport.toLowerCase()) {
       return false;
     }
-    if (searchQuery && !app.tin.includes(searchQuery)) {
-      return false;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.tin.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.applicationId.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query)
+      );
     }
     return true;
   });
@@ -208,98 +356,8 @@ export default function VettingQueuePage() {
   const approvedThisMonth = dashboardStats?.approvedThisMonth || 0;
   const rejectedThisMonth = dashboardStats?.rejectedThisMonth || 0;
 
-  const certTypeOptions = [
-    { value: 'all', label: 'All Certificate Types' },
-    { value: 'origin', label: 'Certificate of Origin' },
-    { value: 'gsp', label: 'GSP' },
-    { value: 'ecowas', label: 'ECOWAS' },
-    { value: 'movement', label: 'Movement' },
-    { value: 'mineral', label: 'Solid Mineral' },
-  ];
-
-  const statusOptions = [
-    { value: 'all', label: 'All Statuses' },
-    { value: 'SUBMITTED', label: 'Submitted' },
-    { value: 'PAID', label: 'Paid / Unassigned' },
-    { value: 'UNDER_REVIEW', label: 'Under Review' },
-    { value: 'INFO_REQUESTED', label: 'Info Requested' },
-    { value: 'UNAPPROVED', label: 'Unapproved / Resubmitted' },
-    { value: 'APPROVED', label: 'Approved' },
-    { value: 'REJECTED', label: 'Rejected' },
-  ];
-
-  const transportOptions = [
-    { value: 'all', label: 'All Transport' },
-    { value: 'sea', label: 'Sea' },
-    { value: 'air', label: 'Air' },
-    { value: 'land', label: 'Land' },
-  ];
-
-  type DropdownOption = {
-    value: string;
-    label: string;
-  };
-
-  const getSelectedLabel = (options: DropdownOption[], value: string) => {
-    return options.find(opt => opt.value === value)?.label || options[0]?.label || 'Select';
-  };
-
-  const CustomDropdown = ({ 
-    options, 
-    value, 
-    onChange, 
-    width,
-    dropdownKey,
-  }: { 
-    options: DropdownOption[]; 
-    value: string; 
-    onChange: (val: string) => void; 
-    width: string;
-    dropdownKey: 'certType' | 'status' | 'transport';
-  }) => {
-    const isOpen = openDropdown === dropdownKey;
-    
-    return (
-      <div className="relative" style={{ width }}>
-        <button
-          onClick={() => setOpenDropdown(isOpen ? null : dropdownKey)}
-          className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded text-xs bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-        >
-          <span className="truncate">{getSelectedLabel(options, value)}</span>
-          {isOpen ? (
-            <X className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
-          ) : (
-            <ChevronsUpDown className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
-          )}
-        </button>
-        
-        {isOpen && (
-          <>
-            <div 
-              className="fixed inset-0 z-10" 
-              onClick={() => setOpenDropdown(null)}
-            />
-            <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
-              {options.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpenDropdown(null);
-                  }}
-                  className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 transition-colors ${
-                    value === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
+  const toggleDropdown = (key: DropdownKey) => setOpenDropdown((prev) => (prev === key ? null : key));
+  const closeDropdown = () => setOpenDropdown(null);
 
   return (
     <div className="h-screen flex flex-col">
@@ -312,7 +370,9 @@ export default function VettingQueuePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[16px] font-bold text-[#1a2236]">Applications Queue</div>
-                  <div className="text-[11.5px] text-[#6a7a9a] mt-1">Applications requiring vetting review — oldest first (FIFO)</div>
+                  <div className="text-[11.5px] text-[#6a7a9a] mt-1">
+                    Applications requiring vetting review — oldest first (FIFO)
+                  </div>
                 </div>
                 <button
                   onClick={() => router.push('/verify-certificate')}
@@ -384,32 +444,38 @@ export default function VettingQueuePage() {
             </div>
 
             <div className="flex items-center gap-3 mb-6 flex-wrap bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <CustomDropdown 
-                options={certTypeOptions} 
-                value={filterCertType} 
-                onChange={setFilterCertType} 
+              <CustomDropdown
+                options={certTypeOptions}
+                value={filterCertType}
+                onChange={setFilterCertType}
                 width="160px"
-                dropdownKey="certType"
+                isOpen={openDropdown === 'certType'}
+                onToggle={() => toggleDropdown('certType')}
+                onClose={closeDropdown}
               />
-              <CustomDropdown 
-                options={statusOptions} 
-                value={filterStatus} 
-                onChange={setFilterStatus} 
+              <CustomDropdown
+                options={statusOptions}
+                value={filterStatus}
+                onChange={handleStatusChange}
                 width="140px"
-                dropdownKey="status"
+                isOpen={openDropdown === 'status'}
+                onToggle={() => toggleDropdown('status')}
+                onClose={closeDropdown}
               />
-              <CustomDropdown 
-                options={transportOptions} 
-                value={filterTransport} 
-                onChange={setFilterTransport} 
+              <CustomDropdown
+                options={transportOptions}
+                value={filterTransport}
+                onChange={setFilterTransport}
                 width="130px"
-                dropdownKey="transport"
+                isOpen={openDropdown === 'transport'}
+                onToggle={() => toggleDropdown('transport')}
+                onClose={closeDropdown}
               />
               <div className="relative flex-1 min-w-[200px]">
                 <SearchInput className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Search by TIN…"
+                  placeholder="Search all fields…"
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -439,13 +505,14 @@ export default function VettingQueuePage() {
               <table className="w-full min-w-[1040px] border-collapse text-[12px]">
                 <thead className="sticky top-0 z-2">
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
-                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">TIN</th>
-                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Certificate Type</th>
-                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Transport</th>
-                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Submitted</th>
-                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">FOB Value</th>
-                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Status</th>
-                    <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Actions</th>
+                    {['TIN', 'Certificate Type', 'Transport', 'Submitted', 'FOB Value', 'Status', 'Actions'].map((h) => (
+                      <th
+                        key={h}
+                        className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -478,14 +545,13 @@ export default function VettingQueuePage() {
                     </tr>
                   ) : (
                     filteredApplications.map((app) => (
-                      <tr
-                        key={app.applicationId}
-                        className="text-[12px] transition-colors hover:bg-[#f8faff]"
-                      >
+                      <tr key={app.applicationId} className="text-[12px] transition-colors hover:bg-[#f8faff]">
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
                           <span>{app.tin}</span>
                         </td>
-                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">{app.certificateType}</td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {app.certificateType}
+                        </td>
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           <div className="flex items-center gap-2">
                             {getTransportIcon(app.modeOfTransport)}
@@ -496,14 +562,17 @@ export default function VettingQueuePage() {
                           {format(new Date(app.submittedAt), 'MMM dd, yyyy')}
                         </td>
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                          {app.fobCurrency === 'USD' ? '$' : '₦'}{app.fobValue.toLocaleString()}
+                          {app.fobCurrency === 'USD' ? '$' : '₦'}
+                          {app.fobValue.toLocaleString()}
                         </td>
-                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">{getStatusBadge(app.status)}</td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {getStatusBadge(app.status)}
+                        </td>
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           <button
                             className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${
-                              app.status === 'APPROVED' 
-                                ? 'inline-flex items-center gap-1 px-[9px] py-[5px] rounded border border-gray-300 text-[12px] font-medium cursor-pointer transition-all bg-white text-[#2a3a56]  hover:bg-[#f1f4f9]' 
+                              app.status === 'APPROVED'
+                                ? 'border border-gray-300 bg-white text-[#2a3a56] hover:bg-[#f1f4f9]'
                                 : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
                             } ${assigningApplicationId === app.applicationId ? 'opacity-70 cursor-not-allowed' : ''}`}
                             onClick={() => handleReviewAction(app)}
@@ -516,7 +585,7 @@ export default function VettingQueuePage() {
                               </>
                             ) : (
                               <>
-                                {app.status === 'APPROVED' ? 'View' : (app.status === 'PAID' ? 'Assign & Review' : 'Review')}
+                                {app.status === 'APPROVED' ? 'View' : app.status === 'PAID' ? 'Assign & Review' : 'Review'}
                                 {app.status !== 'APPROVED' && <ArrowRight className="w-3.5 h-3.5" />}
                               </>
                             )}
@@ -530,18 +599,33 @@ export default function VettingQueuePage() {
             </div>
 
             <div className="flex items-center justify-between mt-4 text-xs text-gray-500">
-              <span>Showing {filteredApplications.length} of {totalElements} applications</span>
+              <span>
+                Showing {filteredApplications.length} of {totalElements} applications (Page {currentPage + 1} of{' '}
+                {Math.max(totalPages, 1)})
+              </span>
               <div className="flex gap-2">
-                <button className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                <button
+                  className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                >
                   ← Prev
                 </button>
-                <button className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                <button
+                  className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                  disabled={currentPage >= totalPages - 1}
+                >
                   Next →
                 </button>
               </div>
             </div>
 
-            <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
+            <LogoutModal
+              isOpen={showLogoutModal}
+              onClose={() => setShowLogoutModal(false)}
+              onConfirm={handleLogout}
+            />
           </div>
         </div>
       </div>
