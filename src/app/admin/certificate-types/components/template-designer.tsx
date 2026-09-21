@@ -36,6 +36,7 @@ import {
   FiImage,
   FiBarChart,
   FiEdit,
+  FiX,
 } from 'react-icons/fi';
 import General, { type GeneralRef } from './General';
 import ApplicableFields, { type ApplicableFieldsRef } from './Applicable-Fields';
@@ -122,6 +123,7 @@ type Align = 'left' | 'center' | 'right';
 type VAlign = 'top' | 'middle' | 'bottom';
 type BorderStyle = 'none' | 'solid' | 'dashed';
 type FieldKind = 'nrs-locked' | 'application' | 'goods' | 'system' | 'component';
+type ResizeHandle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 
 interface Padding {
   t: number;
@@ -198,6 +200,35 @@ function kindPalette(kind: FieldKind) {
 const PAPER_W = 608.16;
 const PAPER_H = 1008.48;
 const GRID_STEP = 8;
+
+/* ------------------------------------------------------------------ */
+/* Sizing                                                              */
+/* ------------------------------------------------------------------ */
+
+// Smallest a component can be resized to (PDF points).
+const MIN_W = 16;
+const MIN_H = 12;
+
+// Text-like fields are dropped at a compact width so they don't look
+// oversized on the template. Users can then drag the handles to fit.
+const DEFAULT_MAX_W = 140;
+
+function defaultWidthFor(item: { kind: FieldKind; w: number }) {
+  if (item.kind === 'goods' || item.w <= 100) return item.w;
+  return Math.min(item.w, DEFAULT_MAX_W);
+}
+
+// The eight resize handles shown around the selected component.
+const RESIZE_HANDLES: Array<{ key: ResizeHandle; left: string; top: string; cursor: string }> = [
+  { key: 'nw', left: '0%', top: '0%', cursor: 'nwse-resize' },
+  { key: 'n', left: '50%', top: '0%', cursor: 'ns-resize' },
+  { key: 'ne', left: '100%', top: '0%', cursor: 'nesw-resize' },
+  { key: 'e', left: '100%', top: '50%', cursor: 'ew-resize' },
+  { key: 'se', left: '100%', top: '100%', cursor: 'nwse-resize' },
+  { key: 's', left: '50%', top: '100%', cursor: 'ns-resize' },
+  { key: 'sw', left: '0%', top: '100%', cursor: 'nesw-resize' },
+  { key: 'w', left: '0%', top: '50%', cursor: 'ew-resize' },
+];
 
 /* ------------------------------------------------------------------ */
 /* Palette catalog                                                     */
@@ -367,9 +398,14 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const [certificateTypeCode, setCertificateTypeCode] = useState<string>('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSavingCertificate, setIsSavingCertificate] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
+
+  // Effective page size (PDF points) used by the canvas and by resizing.
+  const pageW = templatePageSize?.width || PAPER_W;
+  const pageH = templatePageSize?.height || PAPER_H;
 
   // Load enabled fields from localStorage and listen for changes
   useEffect(() => {
@@ -511,6 +547,16 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const canvasScrollRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const resizeRef = useRef<{
+    id: string;
+    handle: ResizeHandle;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    origW: number;
+    origH: number;
+  } | null>(null);
 
   const selected = elements.find((e) => e.id === selectedId) ?? null;
 
@@ -579,7 +625,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         enabled: true,
         x: x ?? 60,
         y: y ?? 60,
-        w: item.w,
+        // Compact default width so new fields don't look oversized;
+        // drag the handles (or edit Width in the panel) to fit.
+        w: defaultWidthFor(item),
         h: item.h,
         fontSize: item.h <= 18 ? 8.5 : 9.5,
         leading: 9.5,
@@ -615,6 +663,26 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     dragRef.current = { id: el.id, startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
   };
 
+  const onResizeMouseDown = (e: React.MouseEvent, el: FieldElement, handle: ResizeHandle) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedId(el.id);
+    // One undo step for the whole resize gesture.
+    setPast((p) => [...p.slice(-49), elements]);
+    setFuture([]);
+    dragRef.current = null;
+    resizeRef.current = {
+      id: el.id,
+      handle,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: el.x,
+      origY: el.y,
+      origW: el.w,
+      origH: el.h,
+    };
+  };
+
   const onDropOnCanvas = (e: React.DragEvent) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('text/plain');
@@ -639,7 +707,51 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   };
 
   useEffect(() => {
+    const snap = (v: number) => (snapOn ? Math.round(v / GRID_STEP) * GRID_STEP : Math.round(v));
+
     function onMove(e: MouseEvent) {
+      // --- Resizing ---
+      const rz = resizeRef.current;
+      if (rz) {
+        const dx = (e.clientX - rz.startX) / zoom;
+        const dy = (e.clientY - rz.startY) / zoom;
+        const origRight = rz.origX + rz.origW;
+        const origBottom = rz.origY + rz.origH;
+
+        let left = rz.origX;
+        let top = rz.origY;
+        let right = origRight;
+        let bottom = origBottom;
+
+        // Only the edges being dragged move (and snap to the grid).
+        if (rz.handle.includes('w')) left = snap(rz.origX + dx);
+        if (rz.handle.includes('e')) right = snap(origRight + dx);
+        if (rz.handle.includes('n')) top = snap(rz.origY + dy);
+        if (rz.handle.includes('s')) bottom = snap(origBottom + dy);
+
+        // Keep a minimum size, anchored to the edge that is not moving.
+        if (rz.handle.includes('w')) left = Math.min(left, origRight - MIN_W);
+        if (rz.handle.includes('e')) right = Math.max(right, rz.origX + MIN_W);
+        if (rz.handle.includes('n')) top = Math.min(top, origBottom - MIN_H);
+        if (rz.handle.includes('s')) bottom = Math.max(bottom, rz.origY + MIN_H);
+
+        // Stay inside the page (without forcing already-overflowing fields to shrink).
+        if (rz.handle.includes('w')) left = Math.max(0, left);
+        if (rz.handle.includes('n')) top = Math.max(0, top);
+        if (rz.handle.includes('e')) right = Math.min(right, Math.max(pageW, origRight));
+        if (rz.handle.includes('s')) bottom = Math.min(bottom, Math.max(pageH, origBottom));
+
+        const next = {
+          x: Math.round(left),
+          y: Math.round(top),
+          w: Math.round(right - left),
+          h: Math.round(bottom - top),
+        };
+        setElements((prev) => prev.map((el) => (el.id === rz.id ? { ...el, ...next } : el)));
+        return;
+      }
+
+      // --- Dragging ---
       const drag = dragRef.current;
       if (!drag) return;
       const dx = e.clientX - drag.startX;
@@ -654,6 +766,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     }
     function onUp() {
       dragRef.current = null;
+      resizeRef.current = null;
     }
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -661,7 +774,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
-  }, [zoom, snapOn]);
+  }, [zoom, snapOn, pageW, pageH]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -824,7 +937,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     const container = canvasScrollRef.current;
     if (!container) return;
     const available = container.clientWidth - 48;
-    const next = Math.min(2, Math.max(0.4, available / PAPER_W));
+    const next = Math.min(2, Math.max(0.4, available / pageW));
     setZoom(Math.round(next * 100) / 100);
   };
 
@@ -943,7 +1056,11 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               {certificateType ? `${certificateType.name} (${certificateType.code})` : 'New certificate type'}
             </div>
           </div>
-          <button className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] font-medium hover:bg-[#f4f5f7] flex items-center gap-1">
+          <button
+            type="button"
+            className="px-3 py-1.5 border border-[#d1d5db] rounded text-[13px] font-medium hover:bg-[#f4f5f7] flex items-center gap-1"
+            onClick={() => setShowPreview(true)}
+          >
             Preview PDF
           </button>
           <button
@@ -1124,7 +1241,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                     <span className="text-[#1a4a8a] text-sm">💡</span>
                     <div className="text-[11.5px] text-[#1a2236] leading-relaxed">
                       <strong className="text-[#1a4a8a]">Tip:</strong> Drag a component onto the template. Click it to
-                      edit properties.
+                      edit properties, then drag its edges or corners to resize.
                     </div>
                   </div>
                 </div>
@@ -1139,8 +1256,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               <div
                 className="bg-white shadow-[0_1px_3px_rgba(20,30,60,0.08),0_12px_32px_rgba(20,30,60,0.10)] relative rounded-md shrink-0"
                 style={{
-                  width: (templatePageSize?.width || PAPER_W) * zoom,
-                  height: (templatePageSize?.height || PAPER_H) * zoom,
+                  width: pageW * zoom,
+                  height: pageH * zoom,
                 }}
               >
                 <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
@@ -1148,8 +1265,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                     ref={gridRef}
                     className="relative"
                     style={{
-                      width: templatePageSize?.width || PAPER_W,
-                      height: templatePageSize?.height || PAPER_H,
+                      width: pageW,
+                      height: pageH,
                       backgroundImage: gridOn
                         ? 'linear-gradient(to right, #eef1f6 1px, transparent 1px), linear-gradient(to bottom, #eef1f6 1px, transparent 1px)'
                         : undefined,
@@ -1168,47 +1285,98 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                       />
                     )}
 
-                    {/* Draggable field elements */}
+                    {/* Draggable + resizable field elements */}
                     {elements.map((el) => {
                       const isSelected = el.id === selectedId;
                       const kindColors = kindPalette(el.kind);
+                      // Handle/badge sizes are divided by zoom so they stay
+                      // the same size on screen at any zoom level.
+                      const handleSize = 9 / zoom;
                       return (
+                        // Outer wrapper: position + size, NOT clipped so handles can sit on the edges.
                         <div
                           key={el.id}
-                          className={`absolute cursor-move overflow-hidden flex select-none ${
-                            isSelected ? 'ring-2 ring-[#1a4a8a] ring-offset-1' : ''
-                          }`}
-                          onMouseDown={(e) => onElMouseDown(e, el)}
+                          className="absolute select-none"
                           style={{
                             left: el.x,
                             top: el.y,
                             width: el.w,
                             height: el.h,
-                            fontSize: el.fontSize,
-                            lineHeight: (el.leading / el.fontSize).toFixed(2),
-                            fontFamily: el.fontFamily,
-                            fontWeight: el.bold ? 700 : 600,
-                            fontStyle: el.italic ? 'italic' : 'normal',
-                            textDecoration: el.underline ? 'underline' : 'none',
-                            justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center',
-                            alignItems: el.valign === 'top' ? 'flex-start' : el.valign === 'bottom' ? 'flex-end' : 'center',
-                            color: el.color,
-                            background: el.bg,
-                            border: `1.4px ${el.border === 'none' ? 'solid' : el.border} ${
-                              el.border === 'none' ? kindColors.border : el.borderColor
-                            }`,
-                            borderRadius: 4,
-                            padding: `${el.pad.t}px ${el.pad.r}px ${el.pad.b}px ${el.pad.l}px`,
-                            whiteSpace: el.wrap ? 'pre-wrap' : 'nowrap',
                             opacity: el.enabled ? 1 : 0.4,
+                            zIndex: isSelected ? 20 : 1,
                           }}
                         >
-                          {el.imageUrl ? (
-                            <img src={el.imageUrl} alt={el.text} className="w-full h-full object-contain" />
-                          ) : el.typeLabel === 'QR Code' ? (
-                            <QrGlyph />
-                          ) : (
-                            el.text
+                          {/* Inner box: the visible field (clipped) */}
+                          <div
+                            className={`w-full h-full cursor-move overflow-hidden flex ${
+                              isSelected ? 'ring-2 ring-[#1a4a8a] ring-offset-1' : ''
+                            }`}
+                            onMouseDown={(e) => onElMouseDown(e, el)}
+                            style={{
+                              fontSize: el.fontSize,
+                              lineHeight: (el.leading / el.fontSize).toFixed(2),
+                              fontFamily: el.fontFamily,
+                              fontWeight: el.bold ? 700 : 600,
+                              fontStyle: el.italic ? 'italic' : 'normal',
+                              textDecoration: el.underline ? 'underline' : 'none',
+                              justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center',
+                              alignItems: el.valign === 'top' ? 'flex-start' : el.valign === 'bottom' ? 'flex-end' : 'center',
+                              color: el.color,
+                              background: el.bg,
+                              border: `1.4px ${el.border === 'none' ? 'solid' : el.border} ${
+                                el.border === 'none' ? kindColors.border : el.borderColor
+                              }`,
+                              borderRadius: 4,
+                              padding: `${el.pad.t}px ${el.pad.r}px ${el.pad.b}px ${el.pad.l}px`,
+                              whiteSpace: el.wrap ? 'pre-wrap' : 'nowrap',
+                            }}
+                          >
+                            {el.imageUrl ? (
+                              <img src={el.imageUrl} alt={el.text} className="w-full h-full object-contain" />
+                            ) : el.typeLabel === 'QR Code' ? (
+                              <QrGlyph />
+                            ) : (
+                              el.text
+                            )}
+                          </div>
+
+                          {/* Resize handles + live size readout (selected only) */}
+                          {isSelected && (
+                            <>
+                              {RESIZE_HANDLES.map((h) => (
+                                <div
+                                  key={h.key}
+                                  onMouseDown={(e) => onResizeMouseDown(e, el, h.key)}
+                                  className="absolute bg-white"
+                                  style={{
+                                    width: handleSize,
+                                    height: handleSize,
+                                    left: h.left,
+                                    top: h.top,
+                                    transform: 'translate(-50%, -50%)',
+                                    cursor: h.cursor,
+                                    border: `${1.5 / zoom}px solid #1a4a8a`,
+                                    borderRadius: 2 / zoom,
+                                    zIndex: 30,
+                                  }}
+                                />
+                              ))}
+                              <div
+                                className="absolute left-0 whitespace-nowrap bg-[#1a4a8a] text-white pointer-events-none"
+                                style={{
+                                  top: '100%',
+                                  marginTop: 8 / zoom,
+                                  fontSize: 10 / zoom,
+                                  lineHeight: 1.2,
+                                  padding: `${2 / zoom}px ${5 / zoom}px`,
+                                  borderRadius: 3 / zoom,
+                                  fontFamily: 'Helvetica, Arial, sans-serif',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {el.w} × {el.h}
+                              </div>
+                            </>
                           )}
                         </div>
                       );
@@ -1263,7 +1431,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               <span>Page 1 of 1</span>
               <span className="text-[#dde3ee]">|</span>
               <span>
-                Paper: {templatePageSize?.width ?? PAPER_W} x {templatePageSize?.height ?? PAPER_H} pt
+                Paper: {pageW} x {pageH} pt
               </span>
               <span className="text-[#dde3ee]">|</span>
               <span>Units: PDF Points (pt)</span>
@@ -1277,7 +1445,11 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               >
                 <FiRefreshCw size={12} /> Reset
               </button>
-              <button className="px-3.5 py-1.5 border border-[#d1d5db] rounded text-[12.5px] font-medium text-[#3a4560] hover:bg-[#f4f5f7] transition-colors">
+              <button
+                type="button"
+                className="px-3.5 py-1.5 border border-[#d1d5db] rounded text-[12.5px] font-medium text-[#3a4560] hover:bg-[#f4f5f7] transition-colors"
+                onClick={() => setShowPreview(true)}
+              >
                 Preview PDF
               </button>
               {/* <button
@@ -1291,6 +1463,16 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           </div>
 
         </>
+      )}
+
+      {showPreview && (
+        <PreviewModal
+          elements={elements}
+          pageW={pageW}
+          pageH={pageH}
+          templateDataUrl={templateDataUrl}
+          onClose={() => setShowPreview(false)}
+        />
       )}
     </div>
   );
@@ -1458,10 +1640,13 @@ function PropertiesForm({
         <NumberField label="X" value={el.x} onChange={(v) => onChange({ x: v })} />
         <NumberField label="Y" value={el.y} onChange={(v) => onChange({ y: v })} />
       </div>
-      <div className="grid grid-cols-2 gap-2 mb-4">
+      <div className="grid grid-cols-2 gap-2 mb-1">
         <NumberField label="Width" value={el.w} onChange={(v) => onChange({ w: v })} />
         <NumberField label="Height" value={el.h} onChange={(v) => onChange({ h: v })} />
       </div>
+      <p className="text-[10.5px] text-[#9aa5bb] mb-4">
+        Tip: you can also drag the handles on the canvas to resize.
+      </p>
 
       {/* Typography */}
       <SectionLabel>Typography</SectionLabel>
@@ -1694,4 +1879,202 @@ function PropertiesForm({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="text-[10.5px] font-bold text-[#1a4a8a] uppercase tracking-wide mb-2">{children}</div>;
+}
+
+/* ------------------------------------------------------------------ */
+/* Template preview                                                    */
+/* ------------------------------------------------------------------ */
+
+// Stand-in values so the preview reads like a filled-in certificate.
+function sampleValueFor(el: FieldElement): string {
+  const key = el.text.toLowerCase();
+  if (key.includes('certificatenumber') || key.includes('certificate_number')) return 'CERT-2026-000123';
+  if (key.includes('verification')) return 'VC-8F2A-91XD';
+  if (key.includes('approval')) return 'APR-2026-004512';
+  switch (el.typeLabel) {
+    case 'Date':
+      return new Date().toLocaleDateString('en-GB');
+    case 'Number':
+      return '1,250.00';
+    case 'Email':
+      return 'importer@example.com';
+    case 'Checkbox':
+      return '✓';
+    case 'Verification Code':
+      return 'VC-8F2A-91XD';
+    default:
+      return el.label || el.text;
+  }
+}
+
+function PreviewModal({
+  elements,
+  pageW,
+  pageH,
+  templateDataUrl,
+  onClose,
+}: {
+  elements: FieldElement[];
+  pageW: number;
+  pageH: number;
+  templateDataUrl: string | null;
+  onClose: () => void;
+}) {
+  const [showBoxes, setShowBoxes] = useState(false);
+  const [scale, setScale] = useState(() =>
+    typeof window === 'undefined'
+      ? 0.9
+      : Math.round(Math.max(0.4, Math.min(1, (Math.min(window.innerWidth, 1100) - 120) / pageW)) * 100) / 100
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Disabled components are left out, as they would be on the generated certificate.
+  const visible = elements.filter((e) => e.enabled);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Template preview"
+        className="flex flex-col w-full max-w-[1100px] max-h-full bg-white rounded-lg shadow-xl overflow-hidden"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-4 px-5 py-3 border-b border-[#dde3ee]">
+          <div>
+            <h2 className="text-[15px] font-semibold text-[#1a2236]">Template preview</h2>
+            <p className="text-[11.5px] text-[#6a7a9a]">
+              Fields are shown with sample values. {visible.length} field{visible.length === 1 ? '' : 's'} placed.
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <SwitchField label="Show field boxes" checked={showBoxes} onChange={setShowBoxes} />
+            <div className="flex items-center border border-[#d1d5db] rounded overflow-hidden">
+              <button
+                type="button"
+                className="px-2 py-1.5 hover:bg-[#e8f0fe] transition-colors"
+                onClick={() => setScale((z) => Math.max(0.4, Math.round((z - 0.1) * 100) / 100))}
+                title="Zoom out"
+              >
+                <FiZoomOut size={15} className="text-[#1a4a8a]" />
+              </button>
+              <span className="px-3 text-[13px] font-medium text-[#1a2236] min-w-[52px] text-center tabular-nums">
+                {Math.round(scale * 100)}%
+              </span>
+              <button
+                type="button"
+                className="px-2 py-1.5 hover:bg-[#e8f0fe] transition-colors"
+                onClick={() => setScale((z) => Math.min(2, Math.round((z + 0.1) * 100) / 100))}
+                title="Zoom in"
+              >
+                <FiZoomIn size={15} className="text-[#1a4a8a]" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 border border-[#d1d5db] rounded hover:bg-[#f4f5f7]"
+              aria-label="Close preview"
+              title="Close (Esc)"
+            >
+              <FiX size={16} className="text-[#3a4560]" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto bg-[#eef0f4] p-6 flex justify-center items-start">
+          <div
+            className="bg-white shadow-[0_1px_3px_rgba(20,30,60,0.08),0_12px_32px_rgba(20,30,60,0.10)] relative shrink-0"
+            style={{ width: pageW * scale, height: pageH * scale }}
+          >
+            <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+              <div className="relative" style={{ width: pageW, height: pageH }}>
+                {templateDataUrl ? (
+                  <iframe
+                    src={`${templateDataUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                    className="absolute inset-0 w-full h-full border-0 pointer-events-none"
+                    title="Template PDF"
+                  />
+                ) : (
+                  <div className="absolute inset-x-0 top-3 text-center text-[11px] text-[#9aa5bb]">
+                    No template PDF uploaded. Upload one in the General tab to see the fields on it.
+                  </div>
+                )}
+
+                {visible.map((el) => {
+                  const colors = kindPalette(el.kind);
+                  return (
+                    <div
+                      key={el.id}
+                      className="absolute overflow-hidden flex"
+                      style={{
+                        left: el.x,
+                        top: el.y,
+                        width: el.w,
+                        height: el.h,
+                        fontSize: el.fontSize,
+                        lineHeight: (el.leading / el.fontSize).toFixed(2),
+                        fontFamily: el.fontFamily,
+                        fontWeight: el.bold ? 700 : 400,
+                        fontStyle: el.italic ? 'italic' : 'normal',
+                        textDecoration: el.underline ? 'underline' : 'none',
+                        justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center',
+                        alignItems: el.valign === 'top' ? 'flex-start' : el.valign === 'bottom' ? 'flex-end' : 'center',
+                        textAlign: el.align,
+                        color: '#111827',
+                        background: showBoxes ? el.bg : 'transparent',
+                        border: showBoxes ? `1px ${el.border === 'dashed' ? 'dashed' : 'solid'} ${colors.border}` : 'none',
+                        padding: `${el.pad.t}px ${el.pad.r}px ${el.pad.b}px ${el.pad.l}px`,
+                        whiteSpace: el.wrap ? 'pre-wrap' : 'nowrap',
+                      }}
+                    >
+                      {el.imageUrl ? (
+                        <img src={el.imageUrl} alt={el.label} className="w-full h-full object-contain" />
+                      ) : el.typeLabel === 'QR Code' ? (
+                        <QrGlyph />
+                      ) : el.typeLabel === 'Table' ? (
+                        <table className="w-full border-collapse" style={{ fontSize: el.fontSize }}>
+                          <thead>
+                            <tr>
+                              {['No.', 'Description', 'HS Code', 'Qty'].map((h) => (
+                                <th key={h} className="border border-[#9ca3af] px-1 text-left font-semibold">
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[1, 2].map((n) => (
+                              <tr key={n}>
+                                <td className="border border-[#9ca3af] px-1">{n}</td>
+                                <td className="border border-[#9ca3af] px-1">Sample goods {n}</td>
+                                <td className="border border-[#9ca3af] px-1">0901.11</td>
+                                <td className="border border-[#9ca3af] px-1">{n * 50}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        sampleValueFor(el)
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
