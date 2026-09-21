@@ -369,6 +369,53 @@ const TABS = [
   { id: 'Fee', label: 'Fees & Charges' },
 ];
 
+/* ------------------------------------------------------------------ */
+/* Backend field-code mapping                                          */
+/* ------------------------------------------------------------------ */
+// The backend's templateConfig.fields object is keyed by the field CODE
+// (e.g. "SHIPPER_NAME", "TIN"), not by the canvas element's internal id
+// (e.g. "el_7"). This is the same map ApplicableFields/RequiredDocuments
+// already use, so we reuse it here to translate the palette's camelCase
+// `type` values into the backend's UPPER_SNAKE_CASE codes.
+const FIELD_ID_MAP: Record<string, string> = {
+  consigneeAddress: 'CONSIGNEE_ADDRESS',
+  shipperName: 'SHIPPER_NAME',
+  shipperAddress: 'SHIPPER_ADDRESS',
+  tin: 'TIN',
+  importerEmail: 'IMPORTER_EMAIL',
+  modeOfTransport: 'MODE_OF_TRANSPORT',
+  consignee: 'CONSIGNEE',
+  carrier: 'CARRIER',
+  destination: 'DESTINATION',
+  countryOfManufacturing: 'COUNTRY_OF_MANUFACTURING',
+  fobValue: 'FOB_VALUE',
+  totalItems: 'TOTAL_ITEMS',
+  date: 'DATE',
+  hsCode: 'HS_CODE',
+  marksNo: 'MARKS_NO',
+  ecowasNumber: 'ECOWAS_NUMBER',
+  criteriaEtls: 'CRITERIA_ETLS',
+  unitOfMeasurement: 'UNIT_OF_MEASUREMENT',
+  numberKindPackages: 'NUMBER_KIND_PACKAGES',
+  descriptionOfGoods: 'DESCRIPTION_OF_GOODS',
+  grossWeight: 'GROSS_WEIGHT',
+  nomenclature: 'NOMENCLATURE',
+  invoiceNumber: 'INVOICE_NUMBER',
+  approvalNumber: 'APPROVAL_NUMBER',
+  certificateNumber: 'CERTIFICATE_NUMBER',
+  verificationCode: 'VERIFICATION_CODE',
+  qrCode: 'QR_CODE',
+};
+
+// Resolve a canvas element's palette `type` (element.text) to the code the
+// backend expects. Dynamic API-driven fields already arrive with their
+// backend code as `type` (see apiFieldToPaletteItem -> type: field.code),
+// so those pass through unchanged; the static fallback palette uses
+// camelCase types that need translating via FIELD_ID_MAP.
+function backendFieldCode(elementText: string): string {
+  return FIELD_ID_MAP[elementText] || elementText;
+}
+
 const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(({ mode = 'create', certificateType }, ref) => {
   // New certificate types need their required details and template uploaded
   // before fields can be placed, so begin the create flow on General.
@@ -876,32 +923,78 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       }
     }
 
-    // Build templateConfig as JSON string with proper structure
-    // Convert template designer elements to fields format
+    // --------------------------------------------------------------
+    // Build templateConfig for the backend.
+    //
+    // FIX: the backend's `fields` map is keyed by the field CODE
+    // (e.g. "SHIPPER_NAME", "TIN") — the same codes used in
+    // `applicableFields` / `FIELD_ID_MAP` — not by the canvas
+    // element's internal `id` (e.g. "el_7"). The internal id is an
+    // in-memory counter that resets on every page load and carries
+    // no meaning outside this component, so the backend/renderer had
+    // no way to resolve it back to an actual field. We now key by
+    // `backendFieldCode(element.text)` instead.
+    //
+    // Font/align are also uppercased to match the backend's enum
+    // style seen in the sample payload ("HELVETICA", "LEFT", ...).
+    // --------------------------------------------------------------
     const fields: any = {};
+    // TODO(backend): the "Goods Table" is currently a single draggable
+    // placeholder (kind === 'goods') on the canvas, but the backend's
+    // templateConfig schema expects a `goods` object with per-column
+    // placement data (goods.columns.VALUE, ITEM_NO, CRITERIA, MARKS_NO,
+    // ...) plus goods.minY / goods.startY. There's no UI yet to place
+    // individual goods columns, so we deliberately do NOT fabricate
+    // this data. If a goods-table element is enabled, we surface a
+    // console warning so it isn't silently dropped without anyone
+    // noticing. This needs a product/design follow-up (either add a
+    // per-column goods UI, or have the backend accept a single table
+    // region and lay out columns itself).
+    let hasUnmappedGoodsTable = false;
+
     elements.forEach((element) => {
-      if (element.kind !== 'component') {
-        fields[element.id] = {
-          x: element.x,
-          y: element.y,
-          width: element.w,
-          height: element.h || 20,
-          fontSize: element.fontSize || 10,
-          font: element.fontFamily || 'HELVETICA',
-          align: element.align || 'LEFT',
-          wrap: element.wrap || false,
-        };
+      if (element.kind === 'component') return;
+
+      if (element.kind === 'goods') {
+        hasUnmappedGoodsTable = true;
+        return;
       }
+
+      const code = backendFieldCode(element.text);
+      fields[code] = {
+        x: element.x,
+        y: element.y,
+        width: element.w,
+        height: element.h || 20,
+        fontSize: element.fontSize || 10,
+        font: (element.fontFamily || 'HELVETICA').toUpperCase(),
+        align: (element.align || 'left').toUpperCase(),
+        wrap: element.wrap || false,
+      };
     });
 
-    const templateConfigObj = {
+    if (hasUnmappedGoodsTable) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[TemplateDesigner] A Goods Table element is on the canvas but is not included in the saved ' +
+        'templateConfig.fields payload — the backend expects per-column goods placement data ' +
+        '(goods.columns.*, goods.minY, goods.startY) that this canvas does not yet collect.'
+      );
+    }
+
+    const templateConfigObj: any = {
       page: {
         index: generalData?.pageIndex || 0,
-        width: generalData?.pageSize?.width || 608.16,
-        height: generalData?.pageSize?.height || 1008.48,
+        width: generalData?.pageSize?.width || pageW,
+        height: generalData?.pageSize?.height || pageH,
       },
       fields,
-      // Retain the complete canvas model so it can be reopened and edited.
+      // Retain the complete canvas model (including UI-only metadata like
+      // color, kind, badges, etc.) so the designer can reopen and re-edit
+      // exactly what was there. NOTE: confirm with backend that this key
+      // is persisted as-is and not stripped by templateConfig validation —
+      // if it's dropped, editing an existing certificate will lose its
+      // saved layout (see elements-reload effect above).
       elements,
     };
 
@@ -944,34 +1037,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const handleReset = () => {
     commit(() => []);
     setSelectedId(null);
-  };
-
-  // Mapping from template-designer field IDs to Applicable-Fields field IDs (uppercase underscore format from API)
-  const FIELD_ID_MAP: Record<string, string> = {
-    consigneeAddress: 'CONSIGNEE_ADDRESS',
-    shipperName: 'SHIPPER_NAME',
-    shipperAddress: 'SHIPPER_ADDRESS',
-    tin: 'TIN',
-    importerEmail: 'IMPORTER_EMAIL',
-    modeOfTransport: 'MODE_OF_TRANSPORT',
-    consignee: 'CONSIGNEE',
-    carrier: 'CARRIER',
-    destination: 'DESTINATION',
-    countryOfManufacturing: 'COUNTRY_OF_MANUFACTURING',
-    fobValue: 'FOB_VALUE',
-    totalItems: 'TOTAL_ITEMS',
-    date: 'DATE',
-    hsCode: 'HS_CODE',
-    marksNo: 'MARKS_NO',
-    ecowasNumber: 'ECOWAS_NUMBER',
-    criteriaEtls: 'CRITERIA_ETLS',
-    unitOfMeasurement: 'UNIT_OF_MEASUREMENT',
-    numberKindPackages: 'NUMBER_KIND_PACKAGES',
-    descriptionOfGoods: 'DESCRIPTION_OF_GOODS',
-    grossWeight: 'GROSS_WEIGHT',
-    nomenclature: 'NOMENCLATURE',
-    invoiceNumber: 'INVOICE_NUMBER',
-    approvalNumber: 'APPROVAL_NUMBER',
   };
 
   const filteredGroups = useMemo(() => {
