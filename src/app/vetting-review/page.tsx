@@ -419,7 +419,7 @@ function VettingReviewContent() {
          if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
-        app.tin.toLowerCase().includes(query) ||
+        app.applicationId.toLowerCase().includes(query) ||
         app.certificateType.toLowerCase().includes(query) ||
         app.modeOfTransport.toLowerCase().includes(query) ||
         app.status.toLowerCase().includes(query) ||
@@ -981,7 +981,7 @@ function VettingReviewContent() {
                 <thead>
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
                     {[
-                      'TIN',
+                      'applicationId',
                       'Approval',
                       'Certificate',
                       'Transport',
@@ -1056,7 +1056,7 @@ function VettingReviewContent() {
                         >
                           {/* TIN */}
                           <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
-                            {app.tin}
+                            {app.applicationId}
                           </td>
 
                           {/* Approval */}

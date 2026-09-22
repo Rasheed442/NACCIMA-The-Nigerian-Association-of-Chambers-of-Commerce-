@@ -16,6 +16,7 @@ interface Application {
   shipperName: string;
   shipperAddress: string;
   consignee: string;
+  approvalNumber: string;
   consigneeAddress: string;
   carrier: string;
   modeOfTransport: string;
@@ -396,6 +397,7 @@ function MyApplicationsContent() {
       const normalizedSearch = normalizeSearchQuery(searchQuery).toLowerCase();
       const matchesSearch = normalizedSearch === '' ||
         app.id.toLowerCase().includes(normalizedSearch) ||
+        app.approvalNumber?.toLowerCase().includes(normalizedSearch) ||
         app.shipperName?.toLowerCase().includes(normalizedSearch) ||
         app.tin?.toLowerCase().includes(normalizedSearch) ||
         app.certificateType?.toLowerCase().includes(normalizedSearch) ||
@@ -604,7 +606,7 @@ function MyApplicationsContent() {
 
               <input 
                 type="text" 
-                placeholder="Search by ID, TIN, Shipper Name, Cert Type, or Status..."
+                placeholder="Search by ID, Approval #, TIN, Shipper Name, Cert Type, or Status..."
                 className="px-3 py-2 border border-[#d1d5db] rounded-[4px] text-[12px] flex-1"
                 value={searchQuery}
                 onChange={(e) => {
@@ -629,7 +631,7 @@ function MyApplicationsContent() {
                   <thead className="sticky top-0 z-2">
                     <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
                       <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Approval #</th>
-                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">TIN</th>
+                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Approval Number</th>
                       <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Cert Type</th>
                       <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Transport</th>
                       <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Created</th>
@@ -643,7 +645,7 @@ function MyApplicationsContent() {
                     {filteredCurrentItems.map((app) => (
                       <tr key={app.id} className="text-[12px] transition-colors hover:bg-[#f8faff]">
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.id}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.tin || '—'}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.approvalNumber || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.certificateType || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getTransportIcon(app.modeOfTransport)} {app.modeOfTransport || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(app.createdAt)}</td>

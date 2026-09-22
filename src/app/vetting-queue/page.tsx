@@ -40,6 +40,7 @@ interface Application {
   applicationId: string;
   companyId: string;
   tin: string;
+  approvalNumber: string;
   certificateTypeId: string;
   certificateType: string;
   modeOfTransport: string;
@@ -340,7 +341,7 @@ export default function VettingQueuePage() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
-        app.tin.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query) ||
         app.certificateType.toLowerCase().includes(query) ||
         app.modeOfTransport.toLowerCase().includes(query) ||
         app.status.toLowerCase().includes(query) ||
@@ -505,7 +506,7 @@ export default function VettingQueuePage() {
               <table className="w-full min-w-[1040px] border-collapse text-[12px]">
                 <thead className="sticky top-0 z-2">
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
-                    {['TIN', 'Certificate Type', 'Transport', 'Submitted', 'FOB Value', 'Status', 'Actions'].map((h) => (
+                    {['approvalNumber', 'Certificate Type', 'Transport', 'Submitted', 'FOB Value', 'Status', 'Actions'].map((h) => (
                       <th
                         key={h}
                         className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]"
@@ -547,7 +548,7 @@ export default function VettingQueuePage() {
                     filteredApplications.map((app) => (
                       <tr key={app.applicationId} className="text-[12px] transition-colors hover:bg-[#f8faff]">
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
-                          <span>{app.tin}</span>
+                          <span>{app.approvalNumber}</span>
                         </td>
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           {app.certificateType}

@@ -117,6 +117,7 @@ export default function VettingReviewPage({
   const [error, setError] = useState('');
   const [decisionError, setDecisionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [decisionSubmitted, setDecisionSubmitted] = useState(false);
 
   // The route is opened with the list item's applicationId. Once details are
   // loaded, use the canonical application.id returned by the API for every
@@ -236,6 +237,7 @@ export default function VettingReviewPage({
       if (response.ok && data.success !== false) {
         setSuccessMessage('Application decision submitted successfully.');
         setComment('');
+        setDecisionSubmitted(true);
       } else {
         setDecisionError(data.message || 'Failed to submit decision');
       }
@@ -552,7 +554,33 @@ export default function VettingReviewPage({
             {/* Sidebar */}
             <div className="space-y-4">
               {/* Review Decision Panel */}
-              {application.status === 'APPROVED' ? (
+              {decisionSubmitted ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">Application Processed</h2>
+                      <p className="text-sm text-gray-600">Your decision has been recorded successfully.</p>
+                    </div>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                    <h3 className="text-sm font-semibold text-blue-900 mb-2">Next Steps</h3>
+                    <ul className="text-sm text-gray-700 space-y-1">
+                      <li>• The application status will be updated based on your decision</li>
+                      <li>• The exporter will be notified of the outcome</li>
+                      <li>• You can return to the queue to review other applications</li>
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => router.push('/vetting-queue')}
+                    className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Return to Queue
+                  </button>
+                </div>
+              ) : application.status === 'APPROVED' ? (
                 <div className="bg-white rounded-lg border border-gray-200 p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <CheckCircle className="w-5 h-5 text-green-600" />

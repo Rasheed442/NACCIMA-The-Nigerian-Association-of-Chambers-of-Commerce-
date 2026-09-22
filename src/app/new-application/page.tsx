@@ -193,10 +193,17 @@ function NewApplicationContent() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [applicationId, setApplicationId] = useState<string | null>(null);
+  // Mirrors `applicationId`, but updates synchronously. Several save/upload
+  // handlers call each other in sequence within the same event handler
+  // (e.g. handleContinueToStep3 -> saveApplicationDetails -> saveGoodsItems
+  // -> uploadDocumentToServer). Because React state updates don't propagate
+  // into already-created closures mid-flight, those handlers read this ref
+  // instead of the `applicationId` state to avoid acting on a stale null
+  // value right after the application has just been created.
+  const applicationIdRef = useRef<string | null>(null);
   const [paymentData, setPaymentData] = useState<Record<string, unknown> | null>(null);
   const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CARD' | 'BANK_TRANSFER' | 'USSD'>('CARD');
-  const [isCreatingApplication, setIsCreatingApplication] = useState(false);
   const [isSavingApplication, setIsSavingApplication] = useState(false);
   const [isSavingGoods, setIsSavingGoods] = useState(false);
   const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
@@ -207,6 +214,14 @@ function NewApplicationContent() {
   const [isPaymentFlow, setIsPaymentFlow] = useState(false);
 
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string | boolean | string[]>>({});
+
+  // Keeps `applicationId` (for rendering) and `applicationIdRef` (for
+  // synchronous reads inside handler chains) in sync. Always use this
+  // instead of calling `setApplicationId` directly.
+  const updateApplicationId = (id: string | null) => {
+    applicationIdRef.current = id;
+    setApplicationId(id);
+  };
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -240,7 +255,7 @@ function NewApplicationContent() {
     // Reset state for fresh new application when no special query parameters
     if (!resubmitApplicationId && !tab && !paymentApplicationId && !status && !reference) {
       setStep(1);
-      setApplicationId(null);
+      updateApplicationId(null);
       setIsPaymentFlow(false);
       setSelectedCert(null);
       setTransportMode(null);
@@ -257,13 +272,13 @@ function NewApplicationContent() {
 
     // Handle resubmit case
     if (resubmitApplicationId) {
-      setApplicationId(resubmitApplicationId);
+      updateApplicationId(resubmitApplicationId);
       setStep(2);
     }
 
     // Handle payment tab: load existing application and go to review step
     if (tab === 'payment' && paymentApplicationId) {
-      setApplicationId(paymentApplicationId);
+      updateApplicationId(paymentApplicationId);
       setStep(3); // Go to review step first
       setIsPaymentFlow(true); // Mark as payment flow
     }
@@ -464,14 +479,14 @@ function NewApplicationContent() {
    * backend actually uses to represent a completed payment.
    */
   const startPaymentStatusPolling = () => {
-    if (!applicationId) return;
+    if (!applicationIdRef.current) return;
     stopPaymentStatusPolling();
 
     paymentPollIntervalRef.current = window.setInterval(async () => {
       try {
         const baseUrl = getBaseUrl();
-        if (baseUrl) {
-          const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+        if (baseUrl && applicationIdRef.current) {
+          const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationIdRef.current}/review`, {
             method: 'GET',
           });
           const result = await response.json();
@@ -1154,15 +1169,67 @@ function NewApplicationContent() {
     }
   };
 
-  const saveTransportModeToApplication = async (code: string) => {
-    if (!applicationId) {
-      console.error('Application ID not found');
-      return false;
+  /**
+   * Lazily creates the application record the first time it's actually
+   * needed (saving shipment details, saving goods items, uploading a
+   * document, or explicitly saving a draft) instead of the moment the user
+   * picks a certificate type. This avoids leaving behind an abandoned
+   * "draft" application every time someone starts step 1 and changes their
+   * mind before entering any real data. Once created, the id is cached in
+   * `applicationIdRef`/`applicationId` and reused for the rest of the flow.
+   */
+  const ensureApplicationId = async (): Promise<string | null> => {
+    if (applicationIdRef.current) {
+      return applicationIdRef.current;
     }
 
+    const selectedCertificateType = certificateTypes.find(c => c.id === selectedCert);
+    if (!selectedCertificateType) {
+      setValidationError('Please select a certificate type before saving.');
+      return null;
+    }
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          certificateType: selectedCertificateType.code,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.data) {
+        updateApplicationId(result.data.id);
+        return result.data.id;
+      }
+
+      setValidationError(result.message || 'Failed to create application');
+      return null;
+    } catch (err) {
+      console.error('Failed to create application:', err);
+      setValidationError('Failed to create application. Please try again.');
+      return null;
+    }
+  };
+
+  const saveTransportModeToApplication = async (code: string) => {
     setIsSavingTransportMode(true);
 
     try {
+      const id = await ensureApplicationId();
+      if (!id) {
+        return false;
+      }
+
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
@@ -1173,7 +1240,7 @@ function NewApplicationContent() {
         fields: {},
       };
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1285,9 +1352,51 @@ function NewApplicationContent() {
     return Object.keys(errors).length === 0;
   };
 
+  /**
+   * Lightweight, side-effect-free version of the required-application-field
+   * checks in `validateStep2`, used purely to decide whether the "Continue"
+   * button on step 2 should be enabled. Unlike `validateStep2`, this never
+   * calls `setFormErrors` — it's evaluated on every render while the user is
+   * still typing, and shouldn't paint error states until they actually try
+   * to submit.
+   */
+  const hasAllRequiredFieldsFilled = () => {
+    if (!certificateFields || !certificateFields.fields) {
+      // Field configuration hasn't loaded yet, so we can't confirm every
+      // required field has been filled in — keep Continue disabled.
+      return false;
+    }
+
+    return certificateFields.fields.every(field => {
+      // HS_CODE is part of goods line items, not shipment details.
+      if (field.code === 'HS_CODE') return true;
+      if (!(field.category === 'APPLICATION' && field.required && field.applicable)) return true;
+
+      const fieldValue = getDynamicFieldValue(field);
+      const isEmpty = Array.isArray(fieldValue)
+        ? fieldValue.every(value => !value.trim())
+        : typeof fieldValue === 'boolean'
+          ? !fieldValue
+          : !fieldValue.trim();
+
+      if (isEmpty) return false;
+
+      if (field.code === 'IMPORTER_EMAIL' && typeof fieldValue === 'string') {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fieldValue)) return false;
+      }
+
+      if (field.code === 'TOTAL_VALUE_FOB' && typeof fieldValue === 'string') {
+        const cleanValue = fieldValue.replace(/,/g, '').trim();
+        if (!cleanValue) return false;
+      }
+
+      return true;
+    });
+  };
+
   const validateGoodsItems = () => {
     const hasEmptyLineItems = goodsLineItems.some(item =>
-      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight
+      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight || !item.value
     );
     if (hasEmptyLineItems) {
       setValidationError('Please fill in all required fields in the Goods/Items section (HS Code, Description, Marks/No., Quantity, Gross Weight)');
@@ -1296,49 +1405,16 @@ function NewApplicationContent() {
     return true;
   };
 
-  const handleContinueToStep2 = async () => {
+  const handleContinueToStep2 = () => {
     if (!selectedCert) {
       setCertError('Please select a certificate type');
       return;
     }
     setCertError('');
-    setIsCreatingApplication(true);
-
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        throw new Error('API base URL is not configured.');
-      }
-
-      const selectedCertificateType = certificateTypes.find(c => c.id === selectedCert);
-      if (!selectedCertificateType) {
-        throw new Error('Selected certificate type not found.');
-      }
-
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          certificateType: selectedCertificateType.code,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.data) {
-        setApplicationId(result.data.id);
-        setStep(2);
-      } else {
-        setCertError(result.message || 'Failed to create application');
-      }
-    } catch (err) {
-      console.error('Failed to create application:', err);
-      setCertError('Failed to create application. Please try again.');
-    } finally {
-      setIsCreatingApplication(false);
-    }
+    // The application itself is created lazily (see `ensureApplicationId`),
+    // the first time the user actually saves something — not just for
+    // moving on to fill in the next step's form.
+    setStep(2);
   };
 
   const formatNumberWithCommas = (value: string): string => {
@@ -1414,11 +1490,6 @@ function NewApplicationContent() {
   };
 
   const saveApplicationDetails = async () => {
-    if (!applicationId) {
-      setValidationError('Application ID not found');
-      return { success: false, errors: ['Application ID not found'] };
-    }
-
     // Validate shipment details before saving
     const isValid = validateStep2();
     if (!isValid) {
@@ -1430,6 +1501,11 @@ function NewApplicationContent() {
     setValidationError(null);
 
     try {
+      const id = await ensureApplicationId();
+      if (!id) {
+        return { success: false, errors: ['Failed to create application. Please try again.'] };
+      }
+
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
@@ -1440,7 +1516,7 @@ function NewApplicationContent() {
         fields: buildApplicationFieldsPayload(),
       };
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1498,11 +1574,6 @@ function NewApplicationContent() {
   };
 
   const saveGoodsItems = async () => {
-    if (!applicationId) {
-      setValidationError('Application ID not found');
-      return { success: false, errors: ['Application ID not found'] };
-    }
-
     // Validate goods items before saving
     const isValid = validateGoodsItems();
     if (!isValid) {
@@ -1514,6 +1585,11 @@ function NewApplicationContent() {
     setValidationError(null);
 
     try {
+      const id = await ensureApplicationId();
+      if (!id) {
+        return { success: false, errors: ['Failed to create application. Please try again.'] };
+      }
+
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
@@ -1532,7 +1608,7 @@ function NewApplicationContent() {
         })),
       };
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/goods`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1563,9 +1639,15 @@ function NewApplicationContent() {
       return false;
     }
 
+    // Validate all required shipment-detail fields (certificate-type
+    // configured fields, e.g. consignee, destination, FOB value, etc.)
+    if (!hasAllRequiredFieldsFilled()) {
+      return false;
+    }
+
     // Validate Goods Line Items
     const hasEmptyLineItems = goodsLineItems.some(item =>
-      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight
+      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight || !item.value
     );
     if (hasEmptyLineItems) {
       return false;
@@ -1592,7 +1674,7 @@ function NewApplicationContent() {
 
     // Validate Goods Line Items
     const hasEmptyLineItems = goodsLineItems.some(item =>
-      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight
+      !item.hsCode || !item.description || !item.marksNo || !item.quantity || !item.grossWeight || !item.value
     );
     if (hasEmptyLineItems) {
       setValidationError('Please fill in all required fields in the Goods/Items section (HS Code, Description, Marks/No., Quantity, Gross Weight)');
@@ -1676,7 +1758,8 @@ function NewApplicationContent() {
   };
 
   const fetchReviewData = async () => {
-    if (!applicationId) {
+    const id = applicationIdRef.current;
+    if (!id) {
       console.error('Application ID not found');
       return;
     }
@@ -1690,7 +1773,7 @@ function NewApplicationContent() {
         throw new Error('API base URL is not configured.');
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/review`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/review`, {
         method: 'GET',
       });
 
@@ -1739,21 +1822,21 @@ function NewApplicationContent() {
   };
 
   const submitApplication = async () => {
-    if (!applicationId) {
-      setValidationError('Application ID not found');
-      return false;
-    }
-
     setIsSubmittingApplication(true);
     setValidationError(null);
 
     try {
+      const id = await ensureApplicationId();
+      if (!id) {
+        return false;
+      }
+
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
         throw new Error('API base URL is not configured.');
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/submit`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1816,7 +1899,8 @@ function NewApplicationContent() {
   };
 
   const uploadDocumentToServer = async (docCode: string, file: File) => {
-    if (!applicationId) {
+    const id = await ensureApplicationId();
+    if (!id) {
       throw new Error('Application ID not found');
     }
 
@@ -1837,7 +1921,7 @@ function NewApplicationContent() {
 
     console.log('Uploading document:', { docCode, fileName: file.name, fileSize: file.size });
 
-    const uploadResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents/upload`, {
+    const uploadResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/documents/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -1850,7 +1934,7 @@ function NewApplicationContent() {
     }
 
     // After successful upload, save the document via PUT endpoint
-    const saveResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
+    const saveResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/documents`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -2060,9 +2144,9 @@ function NewApplicationContent() {
                   <button
                     className="inline-flex items-center justify-center gap-1 px-[14px] py-[10px] rounded text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleContinueToStep2}
-                    disabled={!selectedCert || isCreatingApplication}
+                    disabled={!selectedCert}
                   >
-                    {isCreatingApplication ? 'Creating...' : `Continue with ${selectedCert ? certificateTypes.find(c => c.id === selectedCert)?.name : 'Certificate'}`} {!isCreatingApplication && <FiArrowRight size={16} color="white"/>}
+                    Continue with {selectedCert ? certificateTypes.find(c => c.id === selectedCert)?.name : 'Certificate'} <FiArrowRight size={16} color="white"/>
                   </button>
                 </div>
               </>
@@ -2481,7 +2565,13 @@ function NewApplicationContent() {
 
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => setStep(1)}>← Back</button>
-                  {/* <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]">💾 Save Draft</button> */}
+                  <button
+                    className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={saveAllDetails}
+                    disabled={isSavingAll}
+                  >
+                    💾 {isSavingAll ? 'Saving...' : 'Save Draft'}
+                  </button>
                   <button
                     className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleContinueToStep3}
