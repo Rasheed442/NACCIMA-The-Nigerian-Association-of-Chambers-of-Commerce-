@@ -7,7 +7,7 @@ import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
 import { ClipLoader } from 'react-spinners';
 import { apiFetch, getBaseUrl } from '@/utils/api';
-import { FiPlus } from "react-icons/fi";
+import { FiPlus, FiMoreVertical, FiEdit, FiCheck, FiX } from "react-icons/fi";
 
 interface FeeStructure {
   type: 'FLAT' | 'PERCENTAGE';
@@ -39,12 +39,27 @@ export default function AdminCertificateTypes() {
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
     window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdownId && !(event.target as HTMLElement).closest('.dropdown-menu')) {
+        setOpenDropdownId(null);
+      }
+    };
+
+    if (openDropdownId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [openDropdownId]);
 
   const fetchCertificateTypes = async () => {
     setIsLoading(true);
@@ -101,6 +116,43 @@ export default function AdminCertificateTypes() {
     router.push('/admin/certificate-types/new');
   };
 
+  const handleToggleStatus = async (cert: CertificateType, newStatus: boolean) => {
+    setUpdatingStatus(cert.id);
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        setError('API URL not configured');
+        return;
+      }
+
+      const response = await apiFetch(
+        `${baseUrl}/api/v1/admin/certificate-types/${cert.id}/status?active=${newStatus}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        // Update the local state
+        setCertificateTypes(prev =>
+          prev.map(c => (c.id === cert.id ? { ...c, active: newStatus } : c))
+        );
+        setOpenDropdownId(null);
+      } else {
+        const result = await response.json();
+        setError(result.message || 'Failed to update certificate type status');
+      }
+    } catch (err) {
+      console.error('Failed to update certificate type status:', err);
+      setError('Failed to update certificate type status');
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col">
@@ -147,8 +199,8 @@ export default function AdminCertificateTypes() {
             )}
 
             {/* Full-width Table */}
-            <div className="bg-white border border-[#dde3ee] rounded shadow-[0_1px_4px_rgba(0,0,0,0.05)] overflow-hidden">
-              <table className="w-full">
+            <div className="bg-white border border-[#dde3ee] rounded shadow-[0_1px_4px_rgba(0,0,0,0.05)] overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="bg-[#f8fafd] border-b border-[#dde3ee]">
                     <th className="text-left px-4 py-3 text-[12px] font-semibold text-[#1a2236]">Certificate</th>
@@ -172,13 +224,49 @@ export default function AdminCertificateTypes() {
                           {cert.active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <button 
-                          onClick={() => handleEdit(cert)}
-                          className="px-3 py-1.5 border border-[#d1d5db] rounded-[4px] text-[11px] text-[#1a2236] hover:bg-[#f3f4f9]"
-                        >
-                          ✏️ Edit
-                        </button>
+                      <td className="px-4 py-3 relative">
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenDropdownId(openDropdownId === cert.id ? null : cert.id)}
+                            className="p-1.5 hover:bg-[#f3f4f9] rounded transition-colors"
+                          >
+                            <FiMoreVertical className="w-4 h-4 text-[#6a7a9a]" />
+                          </button>
+
+                          {openDropdownId === cert.id && (
+                            <div className="dropdown-menu absolute right-0 top-full mt-1 w-32 bg-white border border-[#d1d5db] rounded-md shadow-lg z-10 animate-in fade-in slide-in-from-top-1 duration-200">
+                              <button
+                                onClick={() => {
+                                  handleEdit(cert);
+                                  setOpenDropdownId(null);
+                                }}
+                                className="w-full px-3 py-2 text-left text-[12px] text-[#1a2236] hover:bg-[#f3f4f9] flex items-center gap-2 transition-colors"
+                              >
+                                <FiEdit className="w-3.5 h-3.5" />
+                                Edit
+                              </button>
+                              {cert.active ? (
+                                <button
+                                  onClick={() => handleToggleStatus(cert, false)}
+                                  disabled={updatingStatus === cert.id}
+                                  className="w-full px-3 py-2 text-left text-[12px] text-[#92400e] hover:bg-[#fef3c7] flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiX className="w-3.5 h-3.5" />
+                                  {updatingStatus === cert.id ? 'Deactivating...' : 'Deactivate'}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleStatus(cert, true)}
+                                  disabled={updatingStatus === cert.id}
+                                  className="w-full px-3 py-2 text-left text-[12px] text-[#065f46] hover:bg-[#d1fae5] flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <FiCheck className="w-3.5 h-3.5" />
+                                  {updatingStatus === cert.id ? 'Activating...' : 'Activate'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
