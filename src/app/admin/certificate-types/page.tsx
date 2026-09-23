@@ -128,7 +128,7 @@ export default function AdminCertificateTypes() {
       const response = await apiFetch(
         `${baseUrl}/api/v1/admin/certificate-types/${cert.id}/status?active=${newStatus}`,
         {
-          method: 'PATCH',
+          method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
           },
