@@ -195,8 +195,22 @@ interface FieldElement {
   imageUrl?: string;
 }
 
-let idCounter = 1;
-const uid = (prefix: string) => `${prefix}_${idCounter++}`;
+// FIX: ids used to come from a module-level counter that always restarts
+// at 1 on every page load. A certificate loaded for editing carries
+// element ids ("el_3", "el_7", ...) assigned during a previous session
+// with a different counter history, so the very first field added in a
+// new session ("el_1") could collide with an id a saved field already
+// has. Selection/highlighting matches purely by id ("el.id ===
+// selectedId"), so two elements sharing an id get selected and
+// highlighted together — clicking one visually highlights whichever
+// other field happens to share its id. A truly unique id removes the
+// possibility of that collision entirely.
+const uid = (prefix: string) => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}_${crypto.randomUUID()}`;
+  }
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+};
 
 /* ------------------------------------------------------------------ */
 /* Visual language                                                     */
@@ -593,7 +607,21 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       const config = typeof certificateType.templateConfig === 'string'
         ? JSON.parse(certificateType.templateConfig)
         : certificateType.templateConfig;
-      setElements(Array.isArray(config?.elements) ? config.elements : []);
+      const loaded: FieldElement[] = Array.isArray(config?.elements) ? config.elements : [];
+      // Safety net: de-duplicate ids on load. Selection/highlighting is
+      // matched purely by id, so if a previously-saved template somehow
+      // contains two elements with the same (or a missing) id, both would
+      // get selected/highlighted together whenever either one is clicked.
+      const seenIds = new Set<string>();
+      const deduped = loaded.map((el) => {
+        const isDuplicate = !el.id || seenIds.has(el.id);
+        if (isDuplicate) {
+          return { ...el, id: uid('el') };
+        }
+        seenIds.add(el.id);
+        return el;
+      });
+      setElements(deduped);
       setSelectedId(null);
     } catch {
       setElements([]);
