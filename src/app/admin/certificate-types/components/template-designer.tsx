@@ -71,14 +71,44 @@ function SwitchField({ label, checked, onChange }: SwitchFieldProps) {
   );
 }
 
+// NOTE (fix): a palette row is draggable *and* clickable (click = "add at a
+// sensible default spot", drag = "add exactly where dropped"). Some browsers
+// still fire a `click` event on the source element after a drag-and-drop
+// gesture completes, even though the pointer moved. Previously this meant a
+// single drag-onto-canvas action could call `onAdd` twice: once from
+// `onDrop` (correct position) and once from the stray `click` (fixed
+// fallback position), producing a duplicate/overlapping field that appeared
+// to "jump" to the top-left of the page. `draggingRef` suppresses the click
+// handler for the duration of (and immediately after) a drag gesture.
 function PaletteRow({ item, onAdd }: { item: PaletteItem; onAdd: () => void }) {
   const Icon = item.icon;
+  const draggingRef = useRef(false);
+
+  const handleDragStart = (e: React.DragEvent) => {
+    draggingRef.current = true;
+    e.dataTransfer.setData('text/plain', item.type);
+  };
+
+  const handleDragEnd = () => {
+    // Defer clearing the flag so a trailing synthetic click (fired right
+    // after dragend in some browsers) still sees draggingRef as true.
+    setTimeout(() => {
+      draggingRef.current = false;
+    }, 0);
+  };
+
+  const handleClick = () => {
+    if (draggingRef.current) return;
+    onAdd();
+  };
+
   return (
     <div
       className="flex items-center gap-2.5 px-2.5 py-2 border border-[#e5e8f0] rounded-lg cursor-grab hover:border-[#1a4a8a] hover:bg-[#f5f8ff] transition-all group"
       draggable
-      onDragStart={(e) => e.dataTransfer.setData('text/plain', item.type)}
-      onClick={onAdd}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onClick={handleClick}
     >
       <Icon size={13} className="text-[#8a94ac] group-hover:text-[#1a4a8a] transition-colors shrink-0" />
       <span className="text-[12px] font-medium text-[#1a2236] flex-1 truncate">{item.label}</span>
@@ -212,6 +242,17 @@ const MIN_H = 12;
 // Text-like fields are dropped at a compact width so they don't look
 // oversized on the template. Users can then drag the handles to fit.
 const DEFAULT_MAX_W = 140;
+
+// Canvas scroll container has p-8 (32px) padding around the page on every
+// side (see the `p-8` wrapper around `canvasScrollRef`). Used to translate
+// "visible center of the scroll container" into page-local coordinates.
+const CANVAS_PADDING = 32;
+
+// How far (in PDF points) each successive click-added field is nudged
+// diagonally from the last, and how many steps before the cascade wraps
+// back to the canvas-center position and starts again.
+const CASCADE_STEP = 24;
+const CASCADE_MAX = 10;
 
 function defaultWidthFor(item: { kind: FieldKind; w: number }) {
   if (item.kind === 'goods' || item.w <= 100) return item.w;
@@ -593,6 +634,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
   const canvasScrollRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
+  // Counts consecutive fields added by clicking a palette row (as opposed to
+  // dragging one to an explicit spot). Used to cascade their positions so
+  // they don't all land on top of one another — see addComponent below.
+  const clickAddIndexRef = useRef(0);
   const dragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeRef = useRef<{
     id: string;
@@ -662,6 +707,55 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const addComponent = useCallback(
     (item: PaletteItem, x?: number, y?: number) => {
       const p = kindPalette(item.kind);
+      const w = defaultWidthFor(item);
+
+      // FIX: previously, adding a field via click (as opposed to dragging
+      // it onto a specific spot) always fell back to a fixed x/y of 60,60
+      // — right at the top-left corner of the page, and often off-screen
+      // once the user had scrolled/zoomed. When combined with the
+      // duplicate-add bug (see PaletteRow), this made it look like a field
+      // "jumped" to the top edge whenever a palette field was selected.
+      // Now, when no explicit drop coordinates are given, the new field is
+      // centered in whatever part of the canvas is currently visible.
+      let posX = x;
+      let posY = y;
+      if (posX === undefined || posY === undefined) {
+        const container = canvasScrollRef.current;
+        let baseX: number;
+        let baseY: number;
+        if (container) {
+          const visibleCenterX = container.scrollLeft + container.clientWidth / 2 - CANVAS_PADDING;
+          const visibleCenterY = container.scrollTop + container.clientHeight / 2 - CANVAS_PADDING;
+          baseX = visibleCenterX / zoom - w / 2;
+          baseY = visibleCenterY / zoom - item.h / 2;
+        } else {
+          baseX = 60;
+          baseY = 60;
+        }
+
+        // FIX: every click-added field used to land on this exact same
+        // "center of the visible canvas" point, so clicking several
+        // palette rows in a row stacked every field on top of the last
+        // one — earlier fields were still there, just hidden underneath.
+        // Cascade each successive click-added field diagonally (like a
+        // paste-cascade in Figma/PowerPoint) so they land at distinct,
+        // visible spots. The cascade resets to 0 offset once it reaches
+        // CASCADE_MAX steps, and resumes from the (possibly moved) canvas
+        // center again from there.
+        const cascadeIndex = clickAddIndexRef.current % CASCADE_MAX;
+        clickAddIndexRef.current += 1;
+        posX = Math.round(baseX + cascadeIndex * CASCADE_STEP);
+        posY = Math.round(baseY + cascadeIndex * CASCADE_STEP);
+
+        // Keep the field on the page.
+        posX = Math.min(Math.max(0, posX), Math.max(0, pageW - w));
+        posY = Math.min(Math.max(0, posY), Math.max(0, pageH - item.h));
+        if (snapOn) {
+          posX = Math.round(posX / GRID_STEP) * GRID_STEP;
+          posY = Math.round(posY / GRID_STEP) * GRID_STEP;
+        }
+      }
+
       const el: FieldElement = {
         id: uid('el'),
         text: item.type,
@@ -670,11 +764,11 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         source: item.source,
         kind: item.kind,
         enabled: true,
-        x: x ?? 60,
-        y: y ?? 60,
+        x: posX,
+        y: posY,
         // Compact default width so new fields don't look oversized;
         // drag the handles (or edit Width in the panel) to fit.
-        w: defaultWidthFor(item),
+        w,
         h: item.h,
         fontSize: item.h <= 18 ? 8.5 : 9.5,
         leading: 9.5,
@@ -698,7 +792,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       commit((prev) => [...prev, el]);
       setSelectedId(el.id);
     },
-    [commit]
+    [commit, zoom, snapOn, pageW, pageH]
   );
 
   const onElMouseDown = (e: React.MouseEvent, el: FieldElement) => {

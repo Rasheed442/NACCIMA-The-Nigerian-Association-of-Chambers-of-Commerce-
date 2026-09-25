@@ -2215,7 +2215,7 @@ function NewApplicationContent() {
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">{getFieldLabel('MODE_OF_TRANSPORT')} {isFieldRequired('MODE_OF_TRANSPORT') && <span className="text-[#e53e3e]">*</span>}</div>
                     {isSavingTransportMode && <span className="text-[10px] text-[#6a7a9a]">Saving…</span>}
-                    <span className="text-[10px] bg-[#dbeafe] text-[#1e40af] px-2 py-[2px] rounded-[10px] font-semibold">New in v2.2</span>
+                    {/* <span className="text-[10px] bg-[#dbeafe] text-[#1e40af] px-2 py-[2px] rounded-[10px] font-semibold">New in v2.2</span> */}
                   </div>
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     {transportModes.map((t) => {
@@ -2485,6 +2485,7 @@ function NewApplicationContent() {
                     <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
                     <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
                   </div>
+                  <div className="text-[11px] text-[#6a7a9a] mb-3">Size limit: 1MB, PDF only</div>
                   {!transportMode ? (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
                       <span>⚠️</span>

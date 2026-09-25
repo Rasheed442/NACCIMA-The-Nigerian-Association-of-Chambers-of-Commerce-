@@ -2221,6 +2221,7 @@ export default function EditResubmissionPage() {
                     <div className="text-[13px] font-bold text-[#1a2236]">Supporting Documents</div>
                     <span className="text-[10px] text-[#9ca3af]">{getSelectedTransportMode()?.name} transport — {getSelectedTransportMode()?.documents.length} documents required</span>
                   </div>
+                  <div className="text-[11px] text-[#6a7a9a] mb-3">Size limit: 1MB, PDF only</div>
                   {!transportMode ? (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-[#fef3c7] text-[11px] text-[#92400e]">
                       <span>⚠️</span>

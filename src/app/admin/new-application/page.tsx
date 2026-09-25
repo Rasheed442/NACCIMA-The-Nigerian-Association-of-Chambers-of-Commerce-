@@ -144,7 +144,7 @@ export default function AdminNewApplication() {
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Mode of Transport <span className="text-[#e53e3e]">*</span></div>
-                    <span className="text-[10px] bg-[#dbeafe] text-[#1e40af] px-2 py-[2px] rounded-[10px] font-semibold">New in v2.2</span>
+                    {/* <span className="text-[10px] bg-[#dbeafe] text-[#1e40af] px-2 py-[2px] rounded-[10px] font-semibold">New in v2.2</span> */}
                   </div>
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     {[
