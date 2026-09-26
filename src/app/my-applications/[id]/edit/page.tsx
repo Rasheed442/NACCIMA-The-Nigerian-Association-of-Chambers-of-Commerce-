@@ -194,6 +194,7 @@ export default function EditResubmissionPage() {
   const [paymentCheckoutUrl, setPaymentCheckoutUrl] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'CARD' | 'BANK_TRANSFER' | 'USSD'>('CARD');
   const [reviewDocuments, setReviewDocuments] = useState<Array<{ documentType: string; fileName: string; fileUrl: string }>>([]);
+  const [applicationDocuments, setApplicationDocuments] = useState<Array<{ documentType: string; fileName: string; fileUrl: string }>>([]);
   // When true, the page shows the "Secure Payment" step (mirroring the New
   // Application flow's step 4) instead of the editable form/sections.
   const [showPaymentStep, setShowPaymentStep] = useState(false);
@@ -525,6 +526,22 @@ export default function EditResubmissionPage() {
 
         if (isMounted) {
           setComments(extractedComments);
+        }
+
+        // Fetch application documents
+        try {
+          const documentsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          const documentsResult = await documentsResponse.json();
+          if (documentsResponse.ok && documentsResult?.data && Array.isArray(documentsResult.data)) {
+            setApplicationDocuments(documentsResult.data);
+          }
+        } catch (docErr) {
+          console.error('Failed to fetch application documents:', docErr);
+          // Don't fail the entire load if documents fetch fails
         }
       } catch (err) {
         if (!isMounted) return;
@@ -2411,18 +2428,20 @@ export default function EditResubmissionPage() {
                       {getSelectedTransportMode()?.documents.map((doc) => {
                         const isUploaded = uploadedDocuments[doc.code];
                         const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === doc.code);
+                        const isApplicationUploaded = !isPaymentMode && applicationDocuments.some(r => r.documentType === doc.code);
                         const isUploading = uploadingDoc === doc.code;
                         const reviewDoc = isPaymentMode ? reviewDocuments.find(r => r.documentType === doc.code) : null;
+                        const applicationDoc = !isPaymentMode ? applicationDocuments.find(r => r.documentType === doc.code) : null;
 
                         return (
                           <div
                             key={doc.code}
                             className={`border-[1.5px] border-dashed rounded-[6px] px-[14px] py-[10px] text-[11px] text-center min-w-[140px] relative ${
-                              isUploaded || isReviewUploaded
+                              isUploaded || isReviewUploaded || isApplicationUploaded
                                 ? 'border-[#059669] bg-[#d1fae5] text-[#065f46]'
                                 : 'border-[#d1d5db] text-[#6a7a9a]'
                             } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''} ${isPaymentMode ? 'cursor-not-allowed' : 'cursor-pointer hover:border-[#3a7bd5] hover:text-[#3a7bd5]'}`}
-                            onClick={() => !isPaymentMode && !isUploaded && !isUploading && handleFileSelect(doc.code)}
+                            onClick={() => !isPaymentMode && !isUploaded && !isApplicationUploaded && !isUploading && handleFileSelect(doc.code)}
                           >
                             {isUploading ? (
                               <>
@@ -2451,6 +2470,12 @@ export default function EditResubmissionPage() {
                                 <span className="block mb-1">✅</span>
                                 <span className="block font-semibold">{doc.name}</span>
                                 <span className="block text-[10px]">{reviewDoc?.fileName || 'Uploaded'}</span>
+                              </>
+                            ) : isApplicationUploaded ? (
+                              <>
+                                <span className="block mb-1">✅</span>
+                                <span className="block font-semibold">{doc.name}</span>
+                                <span className="block text-[10px]">{applicationDoc?.fileName || 'Uploaded'}</span>
                               </>
                             ) : (
                               <>
@@ -2482,7 +2507,8 @@ export default function EditResubmissionPage() {
                     const missingDocs = transportMode.documents?.filter(d => {
                       const isUploaded = uploadedDocuments[d.code];
                       const isReviewUploaded = isPaymentMode && reviewDocuments.some(r => r.documentType === d.code);
-                      return d.required && !isUploaded && !isReviewUploaded;
+                      const isApplicationUploaded = !isPaymentMode && applicationDocuments.some(r => r.documentType === d.code);
+                      return d.required && !isUploaded && !isReviewUploaded && !isApplicationUploaded;
                     });
                     if (missingDocs.length === 0) return null;
                     return (
