@@ -2176,7 +2176,7 @@ function NewApplicationContent() {
                           <div className="text-[24px] mb-2">{display.icon}</div>
                           <div className="text-[13px] font-bold text-[#1a2236] mb-1">{display.name}</div>
                           <div className="text-[11px] text-[#6a7a9a] mb-2">{display.desc}</div>
-                          <div className="text-[10px] text-[#3a7bd5] font-semibold">{display.tag}</div>
+                          <div className="text-[12px] text-[#3a7bd5] font-semibold">{display.tag}</div>
                         </div>
                       );
                     })}
