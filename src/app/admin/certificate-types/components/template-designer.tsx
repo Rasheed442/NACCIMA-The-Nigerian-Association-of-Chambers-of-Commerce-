@@ -1365,40 +1365,43 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       </div>
 
       {showUnsavedWarning && (
-        <div className="fixed bottom-4 right-4 bg-white border border-[#fbbf24] rounded-lg shadow-lg p-4 z-50 max-w-sm">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
-              <span className="text-[#f59e0b] text-xl">⚠️</span>
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-semibold text-gray-900 mb-1">Unsaved Changes</h4>
-              <p className="text-xs text-gray-600 mb-3">You have unsaved changes to the template. Please save before switching tabs.</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setShowUnsavedWarning(false);
-                    setPendingTab(null);
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
-                >
-                  Continue
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUnsavedWarning(false);
-                    setHasUnsavedChanges(false);
-                    setPendingTab(null);
-                    // Reload elements from certificate type to discard changes
-                    reloadElementsFromCertificateType();
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium text-white bg-[#f59e0b] rounded hover:bg-[#d97706]"
-                >
-                  Discard Changes
-                </button>
+        <>
+          <div className="fixed inset-0 bg-[#0000009e] z-40" />
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border border-[#3a7bd5] rounded shadow-lg p-6 z-50 max-w-sm">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <span className="text-[#3a7bd5] text-xl">⚠️</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-gray-900 mb-1">Unsaved Changes</h4>
+                <p className="text-xs text-gray-600 mb-3">You have unsaved changes to the template. Please save before switching tabs.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowUnsavedWarning(false);
+                      setPendingTab(null);
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUnsavedWarning(false);
+                      setHasUnsavedChanges(false);
+                      setPendingTab(null);
+                      // Reload elements from certificate type to discard changes
+                      reloadElementsFromCertificateType();
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-[#3a7bd5] rounded hover:bg-[#2a5a8a]"
+                  >
+                    Discard Changes
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </>
       )}
 
       <div className="flex-1 overflow-auto bg-[#f9fafb]">
