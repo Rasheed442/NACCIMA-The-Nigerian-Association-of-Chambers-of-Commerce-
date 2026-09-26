@@ -207,6 +207,7 @@ function NewApplicationContent() {
   const [isSavingApplication, setIsSavingApplication] = useState(false);
   const [isSavingGoods, setIsSavingGoods] = useState(false);
   const [isSubmittingApplication, setIsSubmittingApplication] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [selectedTransportModeDetails, setSelectedTransportModeDetails] = useState<TransportMode | null>(null);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
@@ -1836,7 +1837,8 @@ function NewApplicationContent() {
         throw new Error('API base URL is not configured.');
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/submit`, {
+      const endpoint = hasSubmitted ? 'payment' : 'submit';
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${id}/${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1846,6 +1848,7 @@ function NewApplicationContent() {
       const result = await response.json();
 
       if (response.ok && result.data) {
+        setHasSubmitted(true);
         const paymentRecord = result.data as Record<string, unknown>;
         const hostedUrl = getHostedPaymentUrl(paymentRecord);
 

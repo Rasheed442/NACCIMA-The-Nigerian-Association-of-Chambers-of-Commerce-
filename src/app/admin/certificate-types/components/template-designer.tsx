@@ -501,6 +501,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSavingCertificate, setIsSavingCertificate] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
@@ -681,6 +684,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const selected = elements.find((e) => e.id === selectedId) ?? null;
 
   const commit = useCallback((updater: (prev: FieldElement[]) => FieldElement[]) => {
+    setHasUnsavedChanges(true);
     setElements((prev) => {
       setPast((p) => [...p.slice(-49), prev]);
       setFuture([]);
@@ -1009,6 +1013,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         throw new Error(result.message || 'Failed to update certificate type.');
       }
       setSaved(true);
+      setHasUnsavedChanges(false);
       setTimeout(() => setSaved(false), 1200);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to update certificate type.');
@@ -1148,13 +1153,43 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     return result;
   };
 
-  const handleFitWidth = () => {
+  const handleFitWidth = useCallback(() => {
     const container = canvasScrollRef.current;
     if (!container) return;
     const available = container.clientWidth - 48;
     const next = Math.min(2, Math.max(0.4, available / pageW));
     setZoom(Math.round(next * 100) / 100);
-  };
+  }, [pageW]);
+
+  // FIX: the canvas used to always start at a fixed 90% zoom, no matter
+  // how much screen space was actually available. On a wide monitor that
+  // comfortably fits the whole page -- and every already-placed field
+  // with it. On a smaller laptop screen the same fixed zoom made the page
+  // wider than the visible canvas area, so part of the page (and
+  // whichever fields happened to sit in that cut-off region) was pushed
+  // outside the visible area and only reachable by scrolling. The fields
+  // were never actually in different positions -- they're exactly where
+  // they were saved -- but only seeing a portion of the page at a time
+  // looks like everything is scattered. Auto-fitting the zoom to the
+  // available viewport, on load, whenever the page size becomes known,
+  // and whenever the window is resized, keeps the whole template (and
+  // every field on it) framed consistently no matter the screen size.
+  useEffect(() => {
+    handleFitWidth();
+  }, [handleFitWidth]);
+
+  useEffect(() => {
+    let frame: number | null = null;
+    const onResize = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => handleFitWidth());
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [handleFitWidth]);
 
   const handleReset = () => {
     commit(() => []);
@@ -1276,12 +1311,57 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                 ? 'border-t-2 shadow border-t-[#1a4a8a] font-semibold text-[#1a4a8a] bg-white'
                 : 'bg-[#f4f5f7] text-[#4a5a7a] hover:bg-[#e8eef5]'
             }`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              if (activeTab === 'template-designer' && hasUnsavedChanges) {
+                setPendingTab(tab.id);
+                setShowUnsavedWarning(true);
+              } else {
+                setActiveTab(tab.id);
+              }
+            }}
           >
             {tab.label}
           </button>
         ))}
       </div>
+
+      {showUnsavedWarning && (
+        <div className="fixed bottom-4 right-4 bg-white border border-[#fbbf24] rounded-lg shadow-lg p-4 z-50 max-w-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <span className="text-[#f59e0b] text-xl">⚠️</span>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-gray-900 mb-1">Unsaved Changes</h4>
+              <p className="text-xs text-gray-600 mb-3">You have unsaved changes to the template. Please save before switching tabs.</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowUnsavedWarning(false);
+                    setPendingTab(null);
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                >
+                  Stay Here
+                </button>
+                {/* <button
+                  onClick={() => {
+                    setShowUnsavedWarning(false);
+                    setHasUnsavedChanges(false);
+                    if (pendingTab) {
+                      setActiveTab(pendingTab);
+                      setPendingTab(null);
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium text-white bg-[#f59e0b] rounded hover:bg-[#d97706]"
+                >
+                  Discard Changes
+                </button> */}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto bg-[#f9fafb]">
         {saveError && (

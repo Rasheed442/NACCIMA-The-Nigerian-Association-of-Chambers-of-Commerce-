@@ -5,12 +5,12 @@ import { useRouter, useParams } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { 
-  ArrowLeft, 
-  FileText, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
+import {
+  ArrowLeft,
+  FileText,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
   Clock,
   Download,
   Eye,
@@ -106,7 +106,7 @@ export default function VettingReviewPage({
   const router = useRouter();
   const params = useParams();
   const applicationId = params.id as string;
-  
+
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [applicationData, setApplicationData] = useState<ApplicationData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,6 +119,7 @@ export default function VettingReviewPage({
   const [decisionError, setDecisionError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [decisionSubmitted, setDecisionSubmitted] = useState(false);
+  const [processingDecision, setProcessingDecision] = useState<'APPROVE' | 'UNAPPROVED' | 'REJECT' | null>(null);
 
   // The route is opened with the list item's applicationId. Once details are
   // loaded, use the canonical application.id returned by the API for every
@@ -131,37 +132,32 @@ export default function VettingReviewPage({
     return () => window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
   }, []);
 
+  const loadApplication = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const baseUrl = getBaseUrl();
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setApplicationData(data.data);
+      } else {
+        setError('Failed to load application details');
+      }
+    } catch (err) {
+      console.error('Failed to fetch application details:', err);
+      setError('Failed to load application details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    if (applicationId) {
-      const loadApplication = async () => {
-        setLoading(true);
-        setError('');
-
-        try {
-          const baseUrl = getBaseUrl();
-          const response = await apiFetch(`${baseUrl}/api/v1/admin/certificates/vetting/applications/${applicationId}`);
-          const data = await response.json();
-
-          if (!isMounted) return;
-
-          if (data.success) {
-            setApplicationData(data.data);
-          } else {
-            setError('Failed to load application details');
-          }
-        } catch (err) {
-          if (!isMounted) return;
-          console.error('Failed to fetch application details:', err);
-          setError('Failed to load application details');
-        } finally {
-          if (isMounted) {
-            setLoading(false);
-          }
-        }
-      };
-
+    if (applicationId && isMounted) {
       loadApplication();
     }
 
@@ -211,14 +207,13 @@ export default function VettingReviewPage({
     }
   };
 
-  const handleDecision = async (decision: 'APPROVE' | 'REJECT' | 'REQUEST_INFO') => {
-    const approvalComment = comment.trim() || 'All submitted documents have been reviewed and are satisfactory.';
-
-    if (decision !== 'APPROVE' && !comment.trim()) {
-      setDecisionError('Comment is required when rejecting or requesting additional information.');
+  const handleDecision = async (decision: 'APPROVE' | 'UNAPPROVED' | 'REJECT') => {
+    if (!comment.trim()) {
+      setDecisionError('Comment is required for all review decisions.');
       return;
     }
 
+    setProcessingDecision(decision);
     setSubmitting(true);
     setDecisionError('');
     try {
@@ -230,7 +225,7 @@ export default function VettingReviewPage({
         },
         body: JSON.stringify({
           decision,
-          comment: decision === 'APPROVE' ? approvalComment : comment.trim(),
+          comment: comment.trim(),
         }),
       });
 
@@ -239,6 +234,8 @@ export default function VettingReviewPage({
         setSuccessMessage('Application decision submitted successfully.');
         setComment('');
         setDecisionSubmitted(true);
+        // Refresh application data to get updated status
+        await loadApplication();
       } else {
         setDecisionError(data.message || 'Failed to submit decision');
       }
@@ -247,6 +244,7 @@ export default function VettingReviewPage({
       setDecisionError('Failed to submit decision');
     } finally {
       setSubmitting(false);
+      setProcessingDecision(null);
     }
   };
 
@@ -334,9 +332,9 @@ export default function VettingReviewPage({
 
   return (
     <div className="h-screen flex flex-col">
-        <AppHeader role={role} />
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar role={role} />
+      <AppHeader role={role} />
+      <div className="flex-1 flex overflow-hidden">
+        <Sidebar role={role} />
         <div className="flex-1 px-6 py-5 overflow-auto bg-gray-50">
           {/* Header */}
           <div className="mb-6">
@@ -374,31 +372,28 @@ export default function VettingReviewPage({
               <div className="flex border-b border-gray-200 mb-4">
                 <button
                   onClick={() => setActiveTab('details')}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    activeTab === 'details'
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'details'
                       ? 'text-blue-600 border-b-2 border-blue-600'
                       : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                    }`}
                 >
                   Application Details
                 </button>
                 <button
                   onClick={() => setActiveTab('items')}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    activeTab === 'items'
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'items'
                       ? 'text-blue-600 border-b-2 border-blue-600'
                       : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                    }`}
                 >
                   Line Items ({application.goods.length})
                 </button>
                 <button
                   onClick={() => setActiveTab('documents')}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    activeTab === 'documents'
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'documents'
                       ? 'text-blue-600 border-b-2 border-blue-600'
                       : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                    }`}
                 >
                   Documents ({documents.filter(d => d.uploaded).length}/{documents.length})
                 </button>
@@ -501,11 +496,10 @@ export default function VettingReviewPage({
                     {documents.map((doc) => (
                       <div
                         key={doc.id}
-                        className={`flex items-center justify-between p-4 rounded-lg border ${
-                          doc.uploaded
+                        className={`flex items-center justify-between p-4 rounded-lg border ${doc.uploaded
                             ? 'bg-gray-50 border-gray-200'
                             : 'bg-red-50 border-red-200'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-3">
                           {doc.uploaded ? (
@@ -581,6 +575,25 @@ export default function VettingReviewPage({
                     Return to Queue
                   </button>
                 </div>
+              ) : application.status === 'CERTIFICATE_ISSUED' ? (
+                <div className="bg-white rounded-lg border border-gray-200 p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-100">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">Certificate Issued</h2>
+                      <p className="text-sm text-gray-600">The certificate has been successfully issued for this application.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="font-medium">This application has been approved and the certificate has been issued</p>
+                      <p className="text-green-600 mt-1">No further action is required. You can view the application details and review history.</p>
+                    </div>
+                  </div>
+                </div>
               ) : application.status === 'APPROVED' ? (
                 <div className="bg-white rounded-lg border border-gray-200 p-5">
                   <div className="flex items-center gap-2 mb-4">
@@ -615,7 +628,7 @@ export default function VettingReviewPage({
                   <textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    placeholder="Add a review comment (required when rejecting)..."
+                    placeholder="Enter a review comment before selecting an action..."
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                     rows={4}
                   />
@@ -634,27 +647,56 @@ export default function VettingReviewPage({
                   <div className="space-y-2 mt-4">
                     <button
                       onClick={() => handleDecision('APPROVE')}
-                      disabled={submitting || selfAssigning}
+                      disabled={!comment.trim() || submitting || selfAssigning}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <CheckCircle className="w-4 h-4" />
-                      Approve Application
+                      {processingDecision === 'APPROVE' ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Approving...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          Approve Application
+                        </>
+                      )}
                     </button>
-                    {/* <button
-                      onClick={() => handleDecision('REQUEST_INFO')}
-                      disabled={submitting || selfAssigning}
+
+                    <button
+                      onClick={() => handleDecision('UNAPPROVED')}
+                      disabled={!comment.trim() || submitting || selfAssigning}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <ClipboardList className="w-4 h-4" />
-                      Request More Information
-                    </button> */}
+                      {processingDecision === 'UNAPPROVED' ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Requesting...
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardList className="w-4 h-4" />
+                          Request More Information
+                        </>
+                      )}
+                    </button>
+
                     <button
                       onClick={() => handleDecision('REJECT')}
-                      disabled={submitting || selfAssigning}
+                      disabled={!comment.trim() || submitting || selfAssigning}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <XCircle className="w-4 h-4" />
-                      Reject Application
+                      {processingDecision === 'REJECT' ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Rejecting...
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-4 h-4" />
+                          Reject Application
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

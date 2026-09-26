@@ -915,7 +915,7 @@ export default function EditResubmissionPage() {
                   setDestinationSearchQuery('');
                 }
               }}
-              className="w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between border-[#d1d5db]"
+              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] flex items-center justify-between border-[#d1d5db] ${isPaymentMode ? 'bg-[#f3f4f6] cursor-not-allowed' : 'bg-white focus:outline-none focus:border-[#3a7bd5]'}`}
               disabled={isLoadingCountries || isPaymentMode}
             >
               <span>{String(getDynamicFieldValue(field)) || '-- Select Country --'}</span>
@@ -974,11 +974,13 @@ export default function EditResubmissionPage() {
             <button
               type="button"
               onClick={() => {
-                setManufacturingDropdownOpen(!manufacturingDropdownOpen);
-                setManufacturingSearchQuery('');
+                if (!isPaymentMode) {
+                  setManufacturingDropdownOpen(!manufacturingDropdownOpen);
+                  setManufacturingSearchQuery('');
+                }
               }}
-              className="w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] flex items-center justify-between border-[#d1d5db]"
-              disabled={isLoadingCountries}
+              className={`w-full px-[10px] py-[7px] pr-8 border rounded-[5px] text-[12px] text-[#1a2236] flex items-center justify-between border-[#d1d5db] ${isPaymentMode ? 'bg-[#f3f4f6] cursor-not-allowed' : 'bg-white focus:outline-none focus:border-[#3a7bd5]'}`}
+              disabled={isLoadingCountries || isPaymentMode}
             >
               <span>{String(getDynamicFieldValue(field)) || '-- Select Country --'}</span>
               <ChevronDown className={`w-4 h-4 text-[#6a7a9a] transition-transform ${manufacturingDropdownOpen ? 'rotate-180' : ''}`} />
@@ -1034,12 +1036,15 @@ export default function EditResubmissionPage() {
             <span className="text-[13px] font-bold text-[#92400e]">$</span>
             <input
               ref={totalValueFOBRef}
-              className="flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] border-[#d1d5db]"
+              className={`flex-1 px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] border-[#d1d5db] ${isPaymentMode ? 'bg-[#f3f4f6]' : 'bg-white focus:outline-none focus:border-[#3a7bd5]'}`}
               placeholder="0.00"
               value={String(getDynamicFieldValue(field))}
+              readOnly={isPaymentMode}
               onChange={(e) => {
-                const formatted = formatNumberWithCommas(e.target.value);
-                setDynamicFieldValue(field, formatted);
+                if (!isPaymentMode) {
+                  const formatted = formatNumberWithCommas(e.target.value);
+                  setDynamicFieldValue(field, formatted);
+                }
               }}
             />
           </div>
@@ -1053,13 +1058,13 @@ export default function EditResubmissionPage() {
     const inputClassName = `px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] focus:outline-none focus:border-[#3a7bd5] ${field.readOnly || isPaymentMode ? 'border-[#d1d5db] bg-[#f3f4f6]' : 'border-[#d1d5db] bg-white'}`;
     const renderInput = (inputValue: string | boolean, onChange: (value: string | boolean) => void, key?: string) => {
       if (field.templateComponent === 'MULTI_LINE_TEXT') {
-        return <textarea key={key} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)} />;
+        return <textarea key={key} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly || isPaymentMode} required={field.required} onChange={(e) => !isPaymentMode && onChange(e.target.value)} />;
       }
 
       if (field.templateComponent === 'CHECKBOX') {
         return (
           <label key={key} className="flex items-center gap-2 text-[12px] text-[#1a2236]">
-            <input type="checkbox" checked={inputValue === true || inputValue === 'true'} disabled={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.checked)} />
+            <input type="checkbox" checked={inputValue === true || inputValue === 'true'} disabled={field.readOnly || isPaymentMode} required={field.required} onChange={(e) => !isPaymentMode && onChange(e.target.checked)} />
             {field.name}
           </label>
         );
@@ -1067,7 +1072,7 @@ export default function EditResubmissionPage() {
 
       if (field.templateComponent === 'DROPDOWN' && field.options?.length) {
         return (
-          <select key={key} className={inputClassName} value={String(inputValue)} disabled={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)}>
+          <select key={key} className={inputClassName} value={String(inputValue)} disabled={field.readOnly || isPaymentMode} required={field.required} onChange={(e) => !isPaymentMode && onChange(e.target.value)}>
             <option value="">-- Select {field.name} --</option>
             {field.options.map((option, index) => {
               const optionValue = typeof option === 'string' ? option : option.value || option.code || option.name || option.label || '';
@@ -1085,7 +1090,7 @@ export default function EditResubmissionPage() {
           : field.templateComponent === 'EMAIL'
             ? 'email'
             : 'text';
-      return <input key={key} type={inputType} step={inputType === 'number' ? 'any' : undefined} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)} />;
+      return <input key={key} type={inputType} step={inputType === 'number' ? 'any' : undefined} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly || isPaymentMode} required={field.required} onChange={(e) => !isPaymentMode && onChange(e.target.value)} />;
     };
 
     return (
@@ -1750,11 +1755,28 @@ export default function EditResubmissionPage() {
                   <div>
                     <div className="bg-[#fef3c7] border border-[#fbbf24] rounded-[8px] p-4 mb-3">
                       <div className="text-[11px] font-bold text-[#92400e] mb-2">💱 FOB Value Conversion (Certificate of Origin)</div>
-                      <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">{reviewData.application?.totalValueFob || '—'}</span></div>
+                      <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.application?.totalValueFob, 'USD')}</span></div>
+                      {reviewData.exchangeRate ? (
+                        <>
+                          <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.exchangeRate, 'NGN')}</span></div>
+                          <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>{reviewData.exchangeRateDate || 'N/A'}</span></div>
+                          <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 bottom-full mb-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.convertedFobValue, 'NGN')}</span></div>
+                        </>
+                      ) : (
+                        <div className="text-[10px] text-[#9ca3af]">Exchange rate not available</div>
+                      )}
                     </div>
                     <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
                       <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
-                      <div className="text-[11px] text-[#6a7a9a]">Payment will be calculated after submission</div>
+                      {reviewData.certificateFee !== undefined ? (
+                        <>
+                          <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee</span><span className="font-semibold text-[#1a2236]">{formatCurrency(reviewData.certificateFee, 'NGN')}</span></div>
+                          <div className="flex justify-between text-[11px] mb-1"><span>VAT</span><span className="font-semibold text-[#1a2236]">{formatCurrency(reviewData.vatAmount || 0, 'NGN')}</span></div>
+                          <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 bottom-full mb-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.totalPayable, 'NGN')}</span></div>
+                        </>
+                      ) : (
+                        <div className="text-[11px] text-[#6a7a9a]">Payment will be calculated after submission</div>
+                      )}
                     </div>
                   </div>
                 </div>
