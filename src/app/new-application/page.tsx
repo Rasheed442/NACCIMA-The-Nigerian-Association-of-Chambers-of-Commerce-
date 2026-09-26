@@ -16,15 +16,11 @@ interface CertificateType {
   name: string;
   description: string;
   active: boolean;
-}
-
-interface CertificateFee {
-  certificateTypeId: string;
-  certificateTypeCode: string;
-  certificateTypeName: string;
-  feeBasis: string;
-  memberAmount: number;
-  nonMemberAmount: number;
+  feeType?: string;
+  memberRate?: number;
+  nonMemberRate?: number;
+  memberAmount?: number;
+  nonMemberAmount?: number;
 }
 
 interface CertificateField {
@@ -156,8 +152,6 @@ function NewApplicationContent() {
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoadingCerts, setIsLoadingCerts] = useState(true);
   const [certError, setCertError] = useState('');
-  const [certificateFees, setCertificateFees] = useState<CertificateFee[]>([]);
-  const [isLoadingFees, setIsLoadingFees] = useState(false);
   const [certificateFields, setCertificateFields] = useState<CertificateTypeFields | null>(null);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
@@ -605,36 +599,6 @@ function NewApplicationContent() {
     }
   }
 
-  async function fetchCertificateFees() {
-    setIsLoadingFees(true);
-
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        throw new Error('API base URL is not configured.');
-      }
-
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/fees`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch certificate fees.');
-      }
-
-      setCertificateFees(result.data || []);
-    } catch (err) {
-      console.error('Failed to fetch certificate fees:', err);
-    } finally {
-      setIsLoadingFees(false);
-    }
-  }
-
   async function fetchCertificateFields(certificateId: string) {
     setIsLoadingFields(true);
 
@@ -753,7 +717,6 @@ function NewApplicationContent() {
   useEffect(() => {
     const initialFetchTimer = window.setTimeout(() => {
       void fetchCertificateTypes();
-      void fetchCertificateFees();
       void fetchTransportModes();
       void fetchCountries();
       void fetchCompanyProfile();
@@ -812,31 +775,33 @@ function NewApplicationContent() {
   };
 
   const getCertificateDisplay = (cert: CertificateType) => {
-    // Find the fee for this certificate type
-    const fee = certificateFees.find(f => f.certificateTypeId === cert.id || f.certificateTypeCode === cert.code);
-
     // Map certificate codes to display data (icons and special notes)
     const certMap: Record<string, { icon: string; note: string }> = {
-      'NACCIMA': { icon: '📜', note: '0.11% FOB' },
+      'NACCIMA': { icon: '📜', note: '' },
       'GSP': { icon: '🌍', note: '' },
-      'ECOWAS_FRE': { icon: '🤝', note: 'Needs ECOWAS No.' },
-      'ECOWAS': { icon: '🤝', note: 'Needs ECOWAS No.' },
-      'MOVEMENT': { icon: '🚚', note: 'No HS Code' },
-      'SOLID_MINERAL': { icon: '⛏️', note: 'Minerals Only' },
-      'MINERAL': { icon: '⛏️', note: 'Minerals Only' },
+      'ECOWAS_FRE': { icon: '🤝', note: '' },
+      'ECOWAS': { icon: '🤝', note: '.' },
+      'MOVEMENT': { icon: '🚚', note: '' },
+      'SOLID_MINERAL': { icon: '⛏️', note: '' },
+      'MINERAL': { icon: '⛏️', note: '' },
     };
 
     const display = certMap[cert.code] || { icon: '📜', note: '' };
 
-    // Build tag with fee information
+    // Build tag with fee information from certificate type
     let tag = '';
-    if (fee) {
-      const memberRate = fee.feeBasis === 'FLAT' 
-        ? `₦${fee.memberAmount.toLocaleString()}` 
-        : `${fee.memberAmount}% FOB`;
-      const nonMemberRate = fee.feeBasis === 'FLAT' 
-        ? `₦${fee.nonMemberAmount.toLocaleString()}` 
-        : `${fee.nonMemberAmount}% FOB`;
+    
+    // Use memberRate/nonMemberRate if available, otherwise use memberAmount/nonMemberAmount
+    const memberValue = cert.memberRate !== undefined ? cert.memberRate : cert.memberAmount;
+    const nonMemberValue = cert.nonMemberRate !== undefined ? cert.nonMemberRate : cert.nonMemberAmount;
+    
+    if (cert.feeType && memberValue !== undefined && nonMemberValue !== undefined) {
+      const memberRate = cert.feeType === 'FLAT' 
+        ? `₦${memberValue.toLocaleString()}` 
+        : `${(memberValue * 100).toFixed(2)}% FOB`;
+      const nonMemberRate = cert.feeType === 'FLAT' 
+        ? `₦${nonMemberValue.toLocaleString()}` 
+        : `${(nonMemberValue * 100).toFixed(2)}% FOB`;
       
       tag = display.note 
         ? `${display.note} · Member: ${memberRate} · Non-Member: ${nonMemberRate}`
