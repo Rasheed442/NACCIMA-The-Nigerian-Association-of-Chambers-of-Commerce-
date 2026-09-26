@@ -858,6 +858,15 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     setSelectedId(el.id);
     setPast((p) => [...p.slice(-49), elements]);
     setFuture([]);
+    // FIX: dragging an existing field updates its x/y directly in the
+    // mousemove handler below rather than through commit() (that handler
+    // needs to run on every mouse move without pushing a new undo entry
+    // each time). But hasUnsavedChanges was only ever set inside commit(),
+    // so moving a field never flagged the template as changed — switching
+    // tabs afterward silently skipped the "you have unsaved changes"
+    // warning even though the layout had actually changed. Flag it here,
+    // the moment the drag gesture begins.
+    setHasUnsavedChanges(true);
     dragRef.current = { id: el.id, startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
   };
 
@@ -868,6 +877,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     // One undo step for the whole resize gesture.
     setPast((p) => [...p.slice(-49), elements]);
     setFuture([]);
+    // Same reasoning as onElMouseDown above: resizing updates the element
+    // directly in the mousemove handler, bypassing commit(), so it must
+    // flag unsaved changes itself.
+    setHasUnsavedChanges(true);
     dragRef.current = null;
     resizeRef.current = {
       id: el.id,
@@ -1039,6 +1052,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       }
       setSaved(true);
       setHasUnsavedChanges(false);
+      setShowUnsavedWarning(false);
       setTimeout(() => setSaved(false), 1200);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to update certificate type.');
