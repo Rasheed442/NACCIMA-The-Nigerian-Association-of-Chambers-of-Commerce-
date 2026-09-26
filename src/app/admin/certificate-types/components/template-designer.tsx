@@ -630,6 +630,26 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     }
   }, [certificateType]);
 
+  // Warn before leaving page with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Notify sidebar about unsaved changes
+    window.dispatchEvent(new CustomEvent('template-unsaved-changes', { detail: hasUnsavedChanges }));
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
   // The canvas must be populated from the record being edited.  This also
   // prevents fields from a previous certificate type leaking in through the
   // old, shared localStorage key.

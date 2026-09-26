@@ -22,6 +22,31 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const [issuedCertificatesCount, setIssuedCertificatesCount] = useState(0);
   const [vettingQueueCount, setVettingQueueCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Listen for unsaved changes event from template designer
+  useEffect(() => {
+    const handleUnsavedChanges = (e: CustomEvent) => {
+      setHasUnsavedChanges(e.detail);
+    };
+
+    window.addEventListener('template-unsaved-changes', handleUnsavedChanges as EventListener);
+
+    return () => {
+      window.removeEventListener('template-unsaved-changes', handleUnsavedChanges as EventListener);
+    };
+  }, []);
+
+  const handleNavigation = (path: string) => {
+    if (hasUnsavedChanges) {
+      if (confirm('You have unsaved changes. Are you sure you want to leave?')) {
+        setHasUnsavedChanges(false);
+        router.push(path);
+      }
+    } else {
+      router.push(path);
+    }
+  };
 
   const getBaseApiUrl = () => {
     const rawBaseUrl = process.env.NEXT_PUBLIC_API;
@@ -326,29 +351,29 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
 
   const renderAdminSidebar = () => (
     <>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === dashboardPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(dashboardPath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === dashboardPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(dashboardPath)}>
         <span className=" w-[15px]  text-center">🏠</span> Dashboard
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath)}>
         <span className="text-[13px] w-[15px] text-center">📄</span> All Applications {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{allCount}</span>}
       </div>
-      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === issuedCertificatesPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(issuedCertificatesPath)}>
+      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === issuedCertificatesPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(issuedCertificatesPath)}>
         <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certificates {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{issuedCount}</span>}
       </div>
-      
+
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Company Management</div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === companyProfilePath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(companyProfilePath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === companyProfilePath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(companyProfilePath)}>
         <span className="text-[13px] w-[15px] text-center">🏢</span> Company Profiles
       </div>
-      
+
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Configuration</div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === certificateTypesPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(certificateTypesPath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === certificateTypesPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(certificateTypesPath)}>
         <span className="text-[13px] w-[15px] text-center">📋</span> Certificate Types
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === feeManagementPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(feeManagementPath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === feeManagementPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(feeManagementPath)}>
         <span className="text-[13px] w-[15px] text-center">💰</span> Fee Management
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === staffAccountsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(staffAccountsPath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === staffAccountsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(staffAccountsPath)}>
         <span className="text-[13px] w-[15px] text-center">👥</span> Staff Accounts
       </div>
       
@@ -367,16 +392,16 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
 
   const renderVettingSidebar = () => (
     <>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-queue' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/vetting-queue')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-queue' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation('/vetting-queue')}>
         <span className="text-[13px] w-[15px] text-center">📥</span> Applications Queue {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{vettingQueueCount}</span>}
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-review' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/vetting-review')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-review' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation('/vetting-review')}>
         <span className="text-[13px] w-[15px] text-center">🗂️</span> My Reviews
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push('/vetting-review?status=APPROVED')}>
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => handleNavigation('/vetting-review?status=APPROVED')}>
         <span className="text-[13px] w-[15px] text-center">✅</span> Approved Today {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">0</span>}
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push('/vetting-review?status=REJECTED')}>
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => handleNavigation('/vetting-review?status=REJECTED')}>
         <span className="text-[13px] w-[15px] text-center">❌</span> Rejected
       </div>
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
@@ -387,28 +412,28 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
 
   const renderExporterSidebar = () => (
     <>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === dashboardPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(dashboardPath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === dashboardPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(dashboardPath)}>
         <span className=" w-[15px]  text-center">🏠</span> Dashboard
       </div>
-      <div className={`px-[16px] text-[14px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.startsWith(newApplicationPath) ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(newApplicationPath)}>
+      <div className={`px-[16px] text-[14px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.startsWith(newApplicationPath) ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(newApplicationPath)}>
         <span className=" w-[15px] text-center">➕</span> New Application
       </div>
       <div className="px-[16px] text-[12px] pb-1 py-[3px_16px_6px] font-medium text-[#8a9aba] uppercase tracking-[0.8px] mt-2">My Applications</div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath)}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath)}>
         <span className="text-[13px] w-[15px] text-center">📄</span> All Applications {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{allCount}</span>}
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.includes('status=PENDING') ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath + '?status=PENDING')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.includes('status=PENDING') ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath + '?status=PENDING')}>
         <span className="text-[13px] w-[15px] text-center">🕐</span> Pending Payment {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{pendingPaymentCount}</span>}
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.includes('status=UNDER_REVIEW') ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push(myApplicationsPath + '?status=UNDER_REVIEW')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.includes('status=UNDER_REVIEW') ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath + '?status=UNDER_REVIEW')}>
         <span className="text-[13px] w-[15px] text-center">🔍</span> Under Review {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{underReviewCount}</span>}
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
-      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/issued-certs' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/issued-certs')}>
+      <div className={`px-[16px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/issued-certs' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation('/issued-certs')}>
         <span className="text-[13px] w-[15px] text-center">🎖️</span> Issued Certs {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{issuedCertificatesCount}</span>}
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium text-[#8a9aba] uppercase tracking-[0.8px] pt-3">Account</div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => router.push(companyProfilePath)}>
+      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => handleNavigation(companyProfilePath)}>
         <span className="text-[13px] w-[15px] text-center">🏢</span> Company Profile
       </div>
       {/* <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/my-documents' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => router.push('/my-documents')}>
