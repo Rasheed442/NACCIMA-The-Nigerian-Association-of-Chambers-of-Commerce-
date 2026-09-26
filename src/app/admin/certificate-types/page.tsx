@@ -224,50 +224,53 @@ export default function AdminCertificateTypes() {
                           {cert.active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 relative">
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenDropdownId(openDropdownId === cert.id ? null : cert.id)}
-                            className="p-1.5 hover:bg-[#f3f4f9] rounded transition-colors"
-                          >
-                            <FiMoreVertical className="w-4 h-4 text-[#6a7a9a]" />
-                          </button>
+                    <td className="px-4 py-3 relative cursor-pointer">
+  <div className="relative">
+    <button
+      onClick={() => setOpenDropdownId(openDropdownId === cert.id ? null : cert.id)}
+      className="p-2 cursor-pointer rounded-full text-[#8a94a6] hover:bg-[#f1f4f9] hover:text-[#1a2236] transition-colors duration-150"
+    >
+      <FiMoreVertical className="w-4 h-4" />
+    </button>
 
-                          {openDropdownId === cert.id && (
-                            <div className="dropdown-menu absolute right-0 top-full mt-1 w-32 bg-white border border-[#d1d5db] rounded-md shadow-lg z-10 animate-in fade-in slide-in-from-top-1 duration-200">
-                              <button
-                                onClick={() => {
-                                  handleEdit(cert);
-                                  setOpenDropdownId(null);
-                                }}
-                                className="w-full px-3 py-2 text-left text-[12px] text-[#1a2236] hover:bg-[#f3f4f9] flex items-center gap-2 transition-colors"
-                              >
-                                <FiEdit className="w-3.5 h-3.5" />
-                                Edit
-                              </button>
-                              {cert.active ? (
-                                <button
-                                  onClick={() => handleToggleStatus(cert, false)}
-                                  disabled={updatingStatus === cert.id}
-                                  className="w-full px-3 py-2 text-left text-[12px] text-[#92400e] hover:bg-[#fef3c7] flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <FiX className="w-3.5 h-3.5" />
-                                  {updatingStatus === cert.id ? 'Deactivating...' : 'Deactivate'}
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleToggleStatus(cert, true)}
-                                  disabled={updatingStatus === cert.id}
-                                  className="w-full px-3 py-2 text-left text-[12px] text-[#065f46] hover:bg-[#d1fae5] flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  <FiCheck className="w-3.5 h-3.5" />
-                                  {updatingStatus === cert.id ? 'Activating...' : 'Activate'}
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
+    {openDropdownId === cert.id && (
+      <div className="dropdown-menu cursor-pointer absolute right-0 top-full mt-1.5 w-44 bg-white border border-[#e5e9f2] rounded-lg shadow-[0_4px_16px_rgba(20,30,60,0.12)] z-10 origin-top-right animate-in fade-in zoom-in-95 duration-150 overflow-hidden py-1">
+        <button
+          onClick={() => {
+            handleEdit(cert);
+            setOpenDropdownId(null);
+          }}
+          className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#1a2236] hover:bg-[#f8fafd] flex items-center gap-2.5 transition-colors"
+        >
+          <FiEdit className="w-[15px] h-[15px] text-[#6a7a9a]" />
+          Edit
+        </button>
+
+        <div className="h-px bg-[#eef1f6] mx-2 my-1" />
+
+        {cert.active ? (
+          <button
+            onClick={() => handleToggleStatus(cert, false)}
+            disabled={updatingStatus === cert.id}
+            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#b45309] hover:bg-[#fffbeb] flex items-center gap-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FiX className="w-[15px] h-[15px]" />
+            {updatingStatus === cert.id ? 'Deactivating...' : 'Deactivate'}
+          </button>
+        ) : (
+          <button
+            onClick={() => handleToggleStatus(cert, true)}
+            disabled={updatingStatus === cert.id}
+            className="w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#047857] hover:bg-[#ecfdf5] flex items-center gap-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FiCheck className="w-[15px] h-[15px]" />
+            {updatingStatus === cert.id ? 'Activating...' : 'Activate'}
+          </button>
+        )}
+      </div>
+    )}
+  </div>
+</td>
                     </tr>
                   ))}
                 </tbody>

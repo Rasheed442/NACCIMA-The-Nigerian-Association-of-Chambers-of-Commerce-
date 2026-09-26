@@ -18,6 +18,15 @@ interface CertificateType {
   active: boolean;
 }
 
+interface CertificateFee {
+  certificateTypeId: string;
+  certificateTypeCode: string;
+  certificateTypeName: string;
+  feeBasis: string;
+  memberAmount: number;
+  nonMemberAmount: number;
+}
+
 interface CertificateField {
   code: string;
   name: string;
@@ -147,6 +156,8 @@ function NewApplicationContent() {
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoadingCerts, setIsLoadingCerts] = useState(true);
   const [certError, setCertError] = useState('');
+  const [certificateFees, setCertificateFees] = useState<CertificateFee[]>([]);
+  const [isLoadingFees, setIsLoadingFees] = useState(false);
   const [certificateFields, setCertificateFields] = useState<CertificateTypeFields | null>(null);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
@@ -594,6 +605,36 @@ function NewApplicationContent() {
     }
   }
 
+  async function fetchCertificateFees() {
+    setIsLoadingFees(true);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/fees`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to fetch certificate fees.');
+      }
+
+      setCertificateFees(result.data || []);
+    } catch (err) {
+      console.error('Failed to fetch certificate fees:', err);
+    } finally {
+      setIsLoadingFees(false);
+    }
+  }
+
   async function fetchCertificateFields(certificateId: string) {
     setIsLoadingFields(true);
 
@@ -712,6 +753,7 @@ function NewApplicationContent() {
   useEffect(() => {
     const initialFetchTimer = window.setTimeout(() => {
       void fetchCertificateTypes();
+      void fetchCertificateFees();
       void fetchTransportModes();
       void fetchCountries();
       void fetchCompanyProfile();
@@ -770,23 +812,44 @@ function NewApplicationContent() {
   };
 
   const getCertificateDisplay = (cert: CertificateType) => {
-    // Map certificate codes to display data
-    const certMap: Record<string, { icon: string; tag: string }> = {
-      'NACCIMA': { icon: '📜', tag: 'Most Common · Member: 0.11% FOB' },
-      'GSP': { icon: '🌍', tag: 'Member: ₦25,000' },
-      'ECOWAS_FRE': { icon: '🤝', tag: 'Needs ECOWAS No. · Member: ₦40,000' },
-      'ECOWAS': { icon: '🤝', tag: 'Needs ECOWAS No. · Member: ₦40,000' },
-      'MOVEMENT': { icon: '🚚', tag: 'No HS Code · Member: ₦40,000' },
-      'SOLID_MINERAL': { icon: '⛏️', tag: 'Minerals Only · Member: ₦150,000' },
-      'MINERAL': { icon: '⛏️', tag: 'Minerals Only · Member: ₦150,000' },
+    // Find the fee for this certificate type
+    const fee = certificateFees.find(f => f.certificateTypeId === cert.id || f.certificateTypeCode === cert.code);
+
+    // Map certificate codes to display data (icons and special notes)
+    const certMap: Record<string, { icon: string; note: string }> = {
+      'NACCIMA': { icon: '📜', note: '0.11% FOB' },
+      'GSP': { icon: '🌍', note: '' },
+      'ECOWAS_FRE': { icon: '🤝', note: 'Needs ECOWAS No.' },
+      'ECOWAS': { icon: '🤝', note: 'Needs ECOWAS No.' },
+      'MOVEMENT': { icon: '🚚', note: 'No HS Code' },
+      'SOLID_MINERAL': { icon: '⛏️', note: 'Minerals Only' },
+      'MINERAL': { icon: '⛏️', note: 'Minerals Only' },
     };
 
-    const display = certMap[cert.code] || { icon: '📜', tag: 'Standard Certificate' };
+    const display = certMap[cert.code] || { icon: '📜', note: '' };
+
+    // Build tag with fee information
+    let tag = '';
+    if (fee) {
+      const memberRate = fee.feeBasis === 'FLAT' 
+        ? `₦${fee.memberAmount.toLocaleString()}` 
+        : `${fee.memberAmount}% FOB`;
+      const nonMemberRate = fee.feeBasis === 'FLAT' 
+        ? `₦${fee.nonMemberAmount.toLocaleString()}` 
+        : `${fee.nonMemberAmount}% FOB`;
+      
+      tag = display.note 
+        ? `${display.note} · Member: ${memberRate} · Non-Member: ${nonMemberRate}`
+        : `Member: ${memberRate} · Non-Member: ${nonMemberRate}`;
+    } else {
+      tag = display.note || 'Standard Certificate';
+    }
+
     return {
       icon: display.icon,
       name: cert.name,
       desc: cert.description,
-      tag: display.tag,
+      tag,
     };
   };
 
@@ -1559,6 +1622,18 @@ function NewApplicationContent() {
       if (!goodsResult.success) {
         setValidationError(goodsResult.errors.join(', '));
         return false;
+      }
+
+      // Step 3: Upload all documents
+      const docEntries = Object.entries(uploadedDocuments);
+      for (const [docCode, file] of docEntries) {
+        try {
+          await uploadDocumentToServer(docCode, file);
+        } catch (err) {
+          console.error(`Failed to upload document ${docCode}:`, err);
+          setValidationError(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          return false;
+        }
       }
 
       // All successful

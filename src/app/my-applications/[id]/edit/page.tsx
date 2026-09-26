@@ -145,6 +145,7 @@ export default function EditResubmissionPage() {
   const [comments, setComments] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -155,14 +156,16 @@ export default function EditResubmissionPage() {
   const [certificateTypes, setCertificateTypes] = useState<CertificateType[]>([]);
   const [isLoadingCerts, setIsLoadingCerts] = useState(true);
   const [certError, setCertError] = useState('');
-  const [certificateFields, setCertificateFields] = useState<CertificateTypeFields | null>(null);
-  const [isLoadingFields, setIsLoadingFields] = useState(false);
+
+
   const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
   const [hsCodes, setHsCodes] = useState<HSCode[]>([]);
   const [hsSearchQuery, setHsSearchQuery] = useState('');
   const [isSearchingHs, setIsSearchingHs] = useState(false);
   const [activeHsCodeRowId, setActiveHsCodeRowId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [certificateFields, setCertificateFields] = useState<CertificateTypeFields | null>(null);
+  const [isLoadingFields, setIsLoadingFields] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
   const [destinationDropdownOpen, setDestinationDropdownOpen] = useState(false);
@@ -181,7 +184,7 @@ export default function EditResubmissionPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedTransportModeDetails, setSelectedTransportModeDetails] = useState<TransportMode | null>(null);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string | boolean | string[]>>({});
 
   // Payment-related state
@@ -200,6 +203,7 @@ export default function EditResubmissionPage() {
   const prefillDynamicFields = (appData: ApplicationData) => {
     const fieldValues: Record<string, string | boolean | string[]> = {};
 
+    // First, copy all values from appData.fields
     if (appData.fields && typeof appData.fields === 'object') {
       Object.entries(appData.fields).forEach(([key, value]) => {
         if (Array.isArray(value)) {
@@ -212,23 +216,29 @@ export default function EditResubmissionPage() {
       });
     }
 
-    const fallbackValues: Record<string, string> = {
-      IMPORTER_EMAIL: appData.importerEmail || '',
-      CONSIGNEE: appData.consignee || '',
-      CONSIGNEE_ADDRESS: appData.consigneeAddress || '',
-      CARRIER: appData.carrier || '',
-      DESTINATION: appData.destinationCountry || '',
-      DESTINATION_PORT: appData.destinationPort || 'Not Set',
-      COUNTRY_OF_MANUFACTURING: appData.countryOfMfg || '',
-      TOTAL_VALUE_FOB: String(appData.totalValueFob ?? ''),
-      BULK_QUANTITY_MT: String(appData.bulkQtyMt ?? ''),
-      TOTAL_ITEMS: String(appData.totalItems ?? ''),
-      CRITERIA: appData.criteria || '',
+    // Then, only add fallback values for fields that are NOT already in appData.fields
+    // This handles legacy fields that are stored as top-level properties instead of in the fields object
+    const fallbackMapping: Record<string, () => string> = {
+      IMPORTER_EMAIL: () => appData.importerEmail || '',
+      CONSIGNEE: () => appData.consignee || '',
+      CONSIGNEE_ADDRESS: () => appData.consigneeAddress || '',
+      CARRIER: () => appData.carrier || '',
+      DESTINATION: () => appData.destinationCountry || '',
+      DESTINATION_PORT: () => appData.destinationPort || 'Not Set',
+      COUNTRY_OF_MANUFACTURING: () => appData.countryOfMfg || '',
+      TOTAL_VALUE_FOB: () => String(appData.totalValueFob ?? ''),
+      BULK_PRODUCT_QTY_MT: () => String(appData.bulkQtyMt ?? ''),
+      TOTAL_ITEMS: () => String(appData.totalItems ?? ''),
+      CRITERIA: () => appData.criteria || '',
     };
 
-    Object.entries(fallbackValues).forEach(([key, value]) => {
-      if (fieldValues[key] === undefined && value !== '') {
-        fieldValues[key] = value;
+    Object.entries(fallbackMapping).forEach(([key, getValue]) => {
+      // Only set fallback if the field is not already in appData.fields
+      if (fieldValues[key] === undefined) {
+        const value = getValue();
+        if (value !== '') {
+          fieldValues[key] = value;
+        }
       }
     });
 
@@ -511,9 +521,7 @@ export default function EditResubmissionPage() {
 
         const trackingResult = await trackingResponse.json();
         const timeline = (trackingResult?.data as TrackingData | undefined)?.timeline ?? [];
-        const extractedComments = (timeline
-          .map((item) => item.comment)
-          .filter((comment): comment is string => Boolean(comment && comment.trim())));
+        const extractedComments = (timeline?.map((item) => item.comment)?.filter((comment): comment is string => Boolean(comment && comment.trim())));
 
         if (isMounted) {
           setComments(extractedComments);
@@ -574,40 +582,7 @@ export default function EditResubmissionPage() {
     }
   }
 
-  async function fetchCertificateFields(certificateId: string, certificate?: CertificateType) {
-    setIsLoadingFields(true);
 
-    try {
-      const baseUrl = getBaseUrl();
-      if (!baseUrl) {
-        throw new Error('API base URL is not configured.');
-      }
-
-      const selectedCert = certificate || certificateTypes.find(c => c.id === certificateId);
-      if (!selectedCert) {
-        throw new Error('Certificate type not found.');
-      }
-
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/types/${selectedCert.code}/fields`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch certificate fields.');
-      }
-
-      setCertificateFields(result.data);
-    } catch (err) {
-      console.error('Failed to fetch certificate fields:', err);
-    } finally {
-      setIsLoadingFields(false);
-    }
-  }
 
   async function fetchTransportModes() {
     try {
@@ -660,8 +635,42 @@ export default function EditResubmissionPage() {
     }
   }
 
+  async function fetchCertificateFields(certificateId: string, certificate?: CertificateType) {
+    setIsLoadingFields(true);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API base URL is not configured.');
+      }
+
+      const selectedCert = certificate || certificateTypes.find(c => c.id === certificateId);
+      if (!selectedCert) {
+        throw new Error('Certificate type not found.');
+      }
+
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/reference/types/${selectedCert.code}/fields`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to fetch certificate fields.');
+      }
+
+      setCertificateFields(result.data);
+    } catch (err) {
+      console.error('Failed to fetch certificate fields:', err);
+    } finally {
+      setIsLoadingFields(false);
+    }
+  }
+
   async function fetchCompanyProfile() {
-    setIsLoadingProfile(true);
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
@@ -682,8 +691,6 @@ export default function EditResubmissionPage() {
       }
     } catch (err) {
       console.error('Failed to fetch company profile:', err);
-    } finally {
-      setIsLoadingProfile(false);
     }
   }
 
@@ -730,7 +737,7 @@ export default function EditResubmissionPage() {
   };
 
   const isFieldApplicable = (fieldCode: string) => {
-    if (!certificateFields) return true;
+    if (!certificateFields) return false;
     const field = certificateFields?.fields?.find(f => f.code === fieldCode);
     return field ? field.applicable : false;
   };
@@ -760,9 +767,20 @@ export default function EditResubmissionPage() {
   };
 
   const getFieldLabel = (fieldCode: string) => {
-    if (!certificateFields) return fieldCode;
-    const field = certificateFields?.fields?.find(f => f.code === fieldCode);
-    return field ? field.name : fieldCode;
+    const labels: Record<string, string> = {
+      MODE_OF_TRANSPORT: 'Mode of Transport',
+      CONSIGNEE: 'Consignee',
+      CONSIGNEE_ADDRESS: 'Consignee Address',
+      CARRIER: 'Carrier',
+      DESTINATION: 'Destination Country',
+      DESTINATION_PORT: 'Destination Port',
+      COUNTRY_OF_MANUFACTURING: 'Country of Manufacturing',
+      TOTAL_VALUE_FOB: 'Total Value FOB',
+      BULK_PRODUCT_QTY_MT: 'Bulk Product Qty (MT)',
+      TOTAL_ITEMS: 'Total Items',
+      CRITERIA: 'Criteria',
+    };
+    return labels[fieldCode] || fieldCode.charAt(0) + fieldCode.slice(1).toLowerCase().replace(/_/g, ' ');
   };
 
   const getHostedPaymentUrl = (paymentData: Record<string, unknown>) => {
@@ -841,8 +859,7 @@ export default function EditResubmissionPage() {
       'MODE_OF_TRANSPORT',
     ]);
 
-    certificateFields?.fields
-      .filter(field =>
+    certificateFields?.fields?.filter(field =>
         field.category === 'APPLICATION' &&
         field.applicable &&
         !field.readOnly &&
@@ -851,7 +868,7 @@ export default function EditResubmissionPage() {
       .forEach(field => {
         const value = getDynamicFieldValue(field);
         if (field.repeatable) {
-          const values = (value as string[]).map(item => item.trim()).filter(Boolean);
+          const values = (value as string[]).map(item => item.trim())?.filter(Boolean);
           if (values.length) fields[field.code] = values;
           return;
         }
@@ -861,7 +878,7 @@ export default function EditResubmissionPage() {
         }
         if (typeof value !== 'string' || !value.trim()) return;
 
-        if (field.templateComponent === 'NUMBER') {
+        if (field.templateComponent === 'NUMBER' || field.code === 'BULK_PRODUCT_QTY_MT' || field.code === 'TOTAL_VALUE_FOB' || field.code === 'TOTAL_ITEMS') {
           const numericValue = Number(value.replace(/,/g, ''));
           if (!Number.isNaN(numericValue)) {
             fields[field.code] = numericValue;
@@ -891,6 +908,40 @@ export default function EditResubmissionPage() {
     return fields;
   };
 
+  const getStatusBadge = (status: string) => {
+    const badges: Record<string, string> = {
+      DRAFT: 'bg-[#f3f4f6] text-[#6b7280]',
+      SUBMITTED: 'bg-[#dbeafe] text-[#1e40af]',
+      PAID: 'bg-[#e0e7ff] text-[#3730a3]',
+      PENDING_PAYMENT: 'bg-[#dbeafe] text-[#1e40af]',
+      PAYMENT_PENDING: 'bg-[#dbeafe] text-[#1e40af]',
+      UNDER_REVIEW: 'bg-[#fef3c7] text-[#92400e]',
+      APPROVED: 'bg-[#d1fae5] text-[#065f46]',
+      REJECTED: 'bg-[#fee2e2] text-[#9b1c1c]',
+      ISSUED: 'bg-[#e0e7ff] text-[#3730a3]',
+      CERTIFICATE_ISSUED: 'bg-[#e0e7ff] text-[#3730a3]',
+      UNAPPROVED: 'bg-[#fdf2f8] text-[#9d174d]',
+    };
+    const labels: Record<string, string> = {
+      DRAFT: 'Draft',
+      SUBMITTED: 'Submitted',
+      PAID: 'Paid',
+      PENDING_PAYMENT: 'Pending Payment',
+      PAYMENT_PENDING: 'Pending Payment',
+      UNDER_REVIEW: 'Under Review',
+      APPROVED: 'Approved',
+      REJECTED: 'Rejected',
+      ISSUED: 'Issued',
+      CERTIFICATE_ISSUED: 'Issued',
+      UNAPPROVED: 'Unapproved',
+    };
+    return (
+      <span className={`inline-block text-[14px] font-medium px-2 py-[4px] rounded whitespace-nowrap ${badges[status] || 'bg-[#f3f4f6] text-[#6b7280]'}`}>
+        {labels[status] || status}
+      </span>
+    );
+  };
+
   const renderDynamicField = (field: CertificateField) => {
     const formDataKey = field.code;
 
@@ -898,7 +949,7 @@ export default function EditResubmissionPage() {
 
     // Special handling for country dropdowns
     if (field.code === 'DESTINATION') {
-      const filteredCountries = countries.filter(country =>
+      const filteredCountries = countries?.filter(country =>
         country.name.toLowerCase().includes(destinationSearchQuery.toLowerCase())
       );
       return (
@@ -962,7 +1013,7 @@ export default function EditResubmissionPage() {
     }
 
     if (field.code === 'COUNTRY_OF_MANUFACTURING') {
-      const filteredCountries = countries.filter(country =>
+      const filteredCountries = countries?.filter(country =>
         country.name.toLowerCase().includes(manufacturingSearchQuery.toLowerCase())
       );
       return (
@@ -1107,7 +1158,7 @@ export default function EditResubmissionPage() {
                   nextValues[index] = String(nextValue);
                   setDynamicFieldValue(field, nextValues);
                 })}
-                {!field.readOnly && (value as string[]).length > 1 && <button type="button" className="text-[11px] text-[#dc2626]" onClick={() => setDynamicFieldValue(field, (value as string[]).filter((_, itemIndex) => itemIndex !== index))}>Remove</button>}
+                {!field.readOnly && (value as string[]).length > 1 && <button type="button" className="text-[11px] text-[#dc2626]" onClick={() => setDynamicFieldValue(field, (value as string[])?.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>}
               </div>
             ))}
             {!field.readOnly && <button type="button" className="self-start text-[11px] font-semibold text-[#3a7bd5]" onClick={() => setDynamicFieldValue(field, [...(value as string[]), ''])}>+ Add another</button>}
@@ -1225,7 +1276,7 @@ export default function EditResubmissionPage() {
   };
 
   const removeLineItem = (id: string) => {
-    setGoodsLineItems(goodsLineItems.filter(item => item.id !== id));
+    setGoodsLineItems(goodsLineItems?.filter(item => item.id !== id));
   };
 
   const updateLineItem = (id: string, field: keyof GoodsLineItem, value: string) => {
@@ -1259,6 +1310,97 @@ export default function EditResubmissionPage() {
       delete updated[docCode];
       return updated;
     });
+  };
+
+  const handleSaveDraft = async () => {
+    if (!applicationId) {
+      setError('Application ID is missing.');
+      return;
+    }
+
+    setIsSavingDraft(true);
+    setError(null);
+    setValidationError(null);
+
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        throw new Error('API URL not configured');
+      }
+
+      // Save draft without submitting
+      const payload = {
+        modeOfTransport: transportMode,
+        fields: buildApplicationFieldsPayload(),
+      };
+
+      const updateResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const updateResult = await updateResponse.json();
+      if (!updateResponse.ok) {
+        throw new Error(updateResult?.message || 'Failed to save draft');
+      }
+
+      // Update goods items
+      if (goodsLineItems.length > 0) {
+        const itemsPayload = {
+          items: goodsLineItems.map(item => ({
+            hsCode: item.hsCode,
+            marksNo: item.marksNo,
+            description: item.description,
+            unit: item.unit,
+            quantity: parseFloat(item.quantity.replace(/,/g, '')) || 0,
+            grossWeight: parseFloat(item.grossWeight.replace(/,/g, '')) || 0,
+            nomenclature: item.nomenclature,
+            value: parseFloat(item.value.replace(/,/g, '')) || 0,
+          })),
+        };
+
+        const goodsResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/goods`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(itemsPayload),
+        });
+
+        if (!goodsResponse.ok) {
+          const goodsResult = await goodsResponse.json();
+          throw new Error(goodsResult?.message || 'Failed to save goods items');
+        }
+      }
+
+      // Upload documents
+      const docEntries = Object.entries(uploadedDocuments);
+      for (const [docCode, file] of docEntries) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('documentType', docCode);
+
+          const docResponse = await apiFetch(`${baseUrl}/api/v1/certificates/applications/${applicationId}/documents`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!docResponse.ok) {
+            console.error(`Failed to upload document ${docCode}`);
+          }
+        } catch (err) {
+          console.error(`Error uploading document ${docCode}:`, err);
+        }
+      }
+
+      setSuccessMessage('All details saved successfully');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error('Failed to save draft:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save draft');
+    } finally {
+      setIsSavingDraft(false);
+    }
   };
 
   const handleSaveAndResubmit = async () => {
@@ -1602,18 +1744,16 @@ export default function EditResubmissionPage() {
                   ← Back to {isPaymentMode ? 'Dashboard' : (isAdminUser ? 'Admin Applications' : 'Applications')}
                 </button>
                 <div className="text-[20px] font-medium text-[#1a2236]">
-                  {showPaymentStep ? 'Secure Payment' : (showReviewStep ? 'Review Application' : (isPaymentMode ? 'Pay Now' : 'Edit & Resubmit Application'))}
+                  {showPaymentStep ? 'Secure Payment' : (showReviewStep ? 'Review Application' : (isPaymentMode ? 'Pay Now' : 'Edit Application'))}
                 </div>
                 <div className="text-[12px] text-[#6a7a9a]">Application {application.id}</div>
               </div>
-              {!showPaymentStep && (
-                <span className="inline-flex items-center gap-2 rounded-full bg-[#fdf2f8] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[#9d174d]">
-                  Unapproved
-                </span>
+              {!showPaymentStep && application.status && (
+                getStatusBadge(application.status)
               )}
             </div>
 
-            {!showPaymentStep && comments.length > 0 && (
+            {/* {!showPaymentStep && comments.length > 0 && (
               <div className="mb-5 rounded-[10px] border border-[#fed7aa] bg-[#fff7ed] p-[14px] text-[12px] text-[#92400e]">
                 <div className="text-[12px] font-bold uppercase tracking-[0.08em] mb-2">Review feedback to correct</div>
                 <div className="space-y-2">
@@ -1624,7 +1764,7 @@ export default function EditResubmissionPage() {
                   ))}
                 </div>
               </div>
-            )}
+            )} */}
 
             {(validationError || error) && (
               <div ref={errorAlertRef} className="mb-4 rounded-[8px] border border-[#fca5a5] bg-[#fef2f2] p-3 text-[12px] text-[#991b1b] flex items-start gap-2">
@@ -1925,24 +2065,36 @@ export default function EditResubmissionPage() {
                     <div className="text-[13px] font-bold text-[#1a2236]">Shipper / Exporter Details</div>
                     <span className="text-[10px] bg-[#fef3c7] text-[#92400e] px-2 py-[2px] rounded-[10px] font-semibold">NRS-Verified · Read-Only</span>
                   </div>
-                  {isLoadingFields || isLoadingProfile ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="text-[12px] text-[#6a7a9a]">Loading application fields...</div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-semibold text-[#374151]">TIN</label>
+                      <input
+                        className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6] border-[#d1d5db]"
+                        value={application?.tin || ''}
+                        readOnly
+                      />
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                      {certificateFields?.fields
-                        ?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly)
-                        .map(field => renderDynamicField(field))}
-                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && field.readOnly).length === 0 && (
-                        <div className="col-span-2 text-[12px] text-[#6a7a9a]">No applicable fields for this certificate type.</div>
-                      )}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] font-semibold text-[#374151]">Shipper Name</label>
+                      <input
+                        className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6] border-[#d1d5db]"
+                        value={application?.shipperName || ''}
+                        readOnly
+                      />
                     </div>
-                  )}
+                    <div className="flex flex-col gap-1 col-span-2">
+                      <label className="text-[11px] font-semibold text-[#374151]">Shipper Address</label>
+                      <input
+                        className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-[#f3f4f6] border-[#d1d5db]"
+                        value={application?.shipperAddress || ''}
+                        readOnly
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Section 2: Mode of Transport */}
-                <div className={`bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4 ${isFieldApplicable('MODE_OF_TRANSPORT') ? '' : 'hidden'}`}>
+                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">2</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">{getFieldLabel('MODE_OF_TRANSPORT')} {isFieldRequired('MODE_OF_TRANSPORT') && <span className="text-[#e53e3e]">*</span>}</div>
@@ -1979,27 +2131,32 @@ export default function EditResubmissionPage() {
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">3</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Consignee & Shipment Details</div>
                   </div>
-
                   {isLoadingFields ? (
                     <div className="flex items-center justify-center py-8">
                       <div className="text-[12px] text-[#6a7a9a]">Loading form fields...</div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-4">
-                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT')
+                      {certificateFields?.fields
+                        ?.filter(field => 
+                          field.category === 'APPLICATION' && 
+                          field.applicable && 
+                          !field.readOnly && 
+                          field.code !== 'MODE_OF_TRANSPORT' &&
+                          field.code !== 'TIN' &&
+                          field.code !== 'SHIPPER_NAME' &&
+                          field.code !== 'SHIPPER_ADDRESS'
+                        )
                         .map(field => renderDynamicField(field))}
-                      {!certificateFields?.fields?.some(field => field.code === 'DESTINATION_PORT' && field.applicable) && (
-                        <div className="flex flex-col gap-1 hidden">
-                          <label className="text-[11px] font-semibold text-[#374151]">Destination Port</label>
-                          <input
-                            className="px-[10px] py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] border-[#d1d5db]"
-                            placeholder="Enter destination port"
-                            value="Not Set"
-                            onChange={(event) => setDynamicFieldValues(current => ({ ...current, DESTINATION_PORT: "Not Set" }))}
-                          />
-                        </div>
-                      )}
-                      {certificateFields?.fields?.filter(field => field.category === 'APPLICATION' && field.applicable && !field.readOnly && field.code !== 'MODE_OF_TRANSPORT').length === 0 && (
+                      {certificateFields?.fields?.filter(field => 
+                        field.category === 'APPLICATION' && 
+                        field.applicable && 
+                        !field.readOnly && 
+                        field.code !== 'MODE_OF_TRANSPORT' &&
+                        field.code !== 'TIN' &&
+                        field.code !== 'SHIPPER_NAME' &&
+                        field.code !== 'SHIPPER_ADDRESS'
+                      ).length === 0 && (
                         <div className="col-span-2 text-[12px] text-[#6a7a9a]">
                           No applicable fields for this certificate type.
                         </div>
@@ -2339,12 +2496,21 @@ export default function EditResubmissionPage() {
 
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
+                  {application.status === 'DRAFT' && !isPaymentMode && (
+                    <button
+                      className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={handleSaveDraft}
+                      disabled={isSavingDraft}
+                    >
+                      💾 {isSavingDraft ? 'Saving...' : 'Save Draft'}
+                    </button>
+                  )}
                   <button
                     className="inline-flex items-center justify-center gap-1 px-[16px] py-[8px] rounded-[6px] text-[13px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleSaveAndResubmit}
-                    disabled={isSaving}
+                    disabled={isSaving || isSavingDraft}
                   >
-                    {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Proceed to Payment' : (application.status === 'DRAFT' ? 'Save & Submit' : 'Save & Resubmit'))}
+                    {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Proceed to Payment' : (application.status === 'DRAFT' ? 'Continue' : 'Resubmit'))}
                   </button>
                 </div>
               </>
