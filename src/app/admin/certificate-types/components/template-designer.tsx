@@ -596,10 +596,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     }
   }, [certificateType?.id, certificateType?.templateUrl, certificateType?.templateConfig]);
 
-  // The canvas must be populated from the record being edited.  This also
-  // prevents fields from a previous certificate type leaking in through the
-  // old, shared localStorage key.
-  useEffect(() => {
+  // Function to reload elements from certificate type
+  const reloadElementsFromCertificateType = useCallback(() => {
     if (!certificateType) {
       setElements([]);
       setSelectedId(null);
@@ -630,7 +628,14 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       setElements([]);
       setSelectedId(null);
     }
-  }, [certificateType?.id, certificateType?.templateConfig]);
+  }, [certificateType]);
+
+  // The canvas must be populated from the record being edited.  This also
+  // prevents fields from a previous certificate type leaking in through the
+  // old, shared localStorage key.
+  useEffect(() => {
+    reloadElementsFromCertificateType();
+  }, [reloadElementsFromCertificateType]);
 
   // Fetch fields from API
   useEffect(() => {
@@ -1344,19 +1349,18 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                 >
                   Stay Here
                 </button>
-                {/* <button
+                <button
                   onClick={() => {
                     setShowUnsavedWarning(false);
                     setHasUnsavedChanges(false);
-                    if (pendingTab) {
-                      setActiveTab(pendingTab);
-                      setPendingTab(null);
-                    }
+                    setPendingTab(null);
+                    // Reload elements from certificate type to discard changes
+                    reloadElementsFromCertificateType();
                   }}
                   className="px-3 py-1.5 text-xs font-medium text-white bg-[#f59e0b] rounded hover:bg-[#d97706]"
                 >
                   Discard Changes
-                </button> */}
+                </button>
               </div>
             </div>
           </div>
