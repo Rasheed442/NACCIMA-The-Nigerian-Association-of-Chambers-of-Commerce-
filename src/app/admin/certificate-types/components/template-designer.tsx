@@ -1367,7 +1367,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                   }}
                   className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
                 >
-                  Stay Here
+                  Continue
                 </button>
                 <button
                   onClick={() => {
