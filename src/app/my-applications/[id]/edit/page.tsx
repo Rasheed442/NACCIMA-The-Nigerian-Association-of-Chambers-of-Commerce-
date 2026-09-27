@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AppHeader from '@/components/AppHeader';
 import Sidebar from '@/components/Sidebar';
 import LogoutModal from '@/components/LogoutModal';
+import SuccessModal from '@/components/SuccessModal';
 import { FiArrowRight } from "react-icons/fi";
 import { ChevronDown, Check } from "lucide-react";
 import { apiFetch, getBaseUrl } from '@/utils/api';
@@ -129,6 +130,13 @@ interface ApplicationData {
     unit?: string;
     value?: number | string;
   }>;
+  vettingHistory?: Array<{
+    action: string;
+    comment: string;
+    createdAt: string;
+    newStatus: string;
+    reviewerId: string;
+  }>;
 }
 
 export default function EditResubmissionPage() {
@@ -149,6 +157,7 @@ export default function EditResubmissionPage() {
   const [error, setError] = useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // New application page state
   const [transportMode, setTransportMode] = useState<string | null>(null);
@@ -800,6 +809,35 @@ export default function EditResubmissionPage() {
     return labels[fieldCode] || fieldCode.charAt(0) + fieldCode.slice(1).toLowerCase().replace(/_/g, ' ');
   };
 
+  const formatActionLabel = (action: string) => {
+    const actionLabels: Record<string, string> = {
+      'APPLICATION_CREATED': 'Application Submitted',
+      'PAYMENT_CONFIRMED': 'Payment Confirmed',
+      'CERTIFICATE_ISSUED': 'Certificate Issued',
+      'CERTIFICATE_UNAPPROVED': 'Certificate Unapproved by Admin',
+      'APPLICATION_SUBMITTED': 'Application Submitted',
+      'APPLICATION_APPROVED': 'Application Approved',
+      'APPLICATION_REJECTED': 'Application Rejected',
+      'APPLICATION_RESUBMITTED': 'Application Resubmitted',
+    };
+    return actionLabels[action] || action.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
   const getHostedPaymentUrl = (paymentData: Record<string, unknown>) => {
     const checkoutUrl = String(
       paymentData.checkoutUrl ||
@@ -927,7 +965,7 @@ export default function EditResubmissionPage() {
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, string> = {
-      DRAFT: 'bg-[#f3f4f6] text-[#6b7280]',
+      DRAFT: 'bg-[#f3f4f6] font-semibold  text-[#6b7280]',
       SUBMITTED: 'bg-[#dbeafe] text-[#1e40af]',
       PAID: 'bg-[#e0e7ff] text-[#3730a3]',
       PENDING_PAYMENT: 'bg-[#dbeafe] text-[#1e40af]',
@@ -937,7 +975,7 @@ export default function EditResubmissionPage() {
       REJECTED: 'bg-[#fee2e2] text-[#9b1c1c]',
       ISSUED: 'bg-[#e0e7ff] text-[#3730a3]',
       CERTIFICATE_ISSUED: 'bg-[#e0e7ff] text-[#3730a3]',
-      UNAPPROVED: 'bg-[#fdf2f8] text-[#9d174d]',
+      UNAPPROVED: 'bg-[#fdf2f8] font-semibold text-[#9d174d]',
     };
     const labels: Record<string, string> = {
       DRAFT: 'Draft',
@@ -950,7 +988,7 @@ export default function EditResubmissionPage() {
       REJECTED: 'Rejected',
       ISSUED: 'Issued',
       CERTIFICATE_ISSUED: 'Issued',
-      UNAPPROVED: 'Unapproved',
+      UNAPPROVED: '⚠ Unapproved',
     };
     return (
       <span className={`inline-block text-[14px] font-medium px-2 py-[4px] rounded whitespace-nowrap ${badges[status] || 'bg-[#f3f4f6] text-[#6b7280]'}`}>
@@ -1626,24 +1664,33 @@ export default function EditResubmissionPage() {
           setSelectedPaymentMethod('CARD');
           setShowPaymentStep(true);
           setShowReviewStep(false);
-          setSuccessMessage(isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!');
           setIsSaving(false);
           return;
         }
       }
 
       // If no payment URL, redirect based on status
-      setSuccessMessage(isDraft ? 'Application submitted successfully!' : 'Application resubmitted successfully!');
-
-      setTimeout(() => {
-        if (submissionData.status === 'PAID') {
-          // Application is already paid, redirect to applications
-          router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=SUBMITTED');
-        } else {
-          // Application needs payment, handle payment flow
-          router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=PENDING');
-        }
-      }, 2000);
+      if (!isDraft) {
+        setSuccessMessage('Application resubmitted successfully!');
+        setShowSuccessModal(true);
+        
+        // Redirect after modal closes
+        setTimeout(() => {
+          if (submissionData.status === 'PAID') {
+            router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=SUBMITTED');
+          } else {
+            router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=PENDING');
+          }
+        }, 3500); // Wait for modal to auto-close (3000ms + 300ms animation)
+      } else {
+        setTimeout(() => {
+          if (submissionData.status === 'PAID') {
+            router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=SUBMITTED');
+          } else {
+            router.push(isAdminUser ? '/admin/my-applications?status=PAID' : '/my-applications?status=PENDING');
+          }
+        }, 2000);
+      }
     } catch (err) {
       console.error('Failed to submit application:', err);
       setError(err instanceof Error ? err.message : 'Failed to submit application');
@@ -1901,10 +1948,15 @@ export default function EditResubmissionPage() {
                   <div>
                     <div className="text-[12.5px] font-bold text-[#1a2236] mb-2">Supporting Documents</div>
                     <div className="space-y-1 mb-3">
+                      {/* Show locally uploaded documents */}
                       {Object.entries(uploadedDocuments).map(([docCode, file]) => (
                         <div key={docCode} className="flex items-center gap-2 text-[11.5px] text-[#065f46]">✅ {docCode} — {file.name}</div>
                       ))}
-                      {Object.keys(uploadedDocuments).length === 0 && (
+                      {/* Show existing documents from API */}
+                      {(isPaymentMode ? reviewDocuments : applicationDocuments).map((doc, index) => (
+                        <div key={`existing-${index}`} className="flex items-center gap-2 text-[11.5px] text-[#065f46]">✅ {doc.documentType} — {doc.fileName}</div>
+                      ))}
+                      {Object.keys(uploadedDocuments).length === 0 && (isPaymentMode ? reviewDocuments : applicationDocuments).length === 0 && (
                         <div className="text-[11.5px] text-[#6a7a9a]">No documents uploaded</div>
                       )}
                     </div>
@@ -1951,7 +2003,7 @@ export default function EditResubmissionPage() {
                     onClick={handleProceedToPayment}
                     disabled={isSaving}
                   >
-                    {isSaving ? 'Processing...' : 'Submit & Proceed to Payment →'}
+                    {isSaving ? 'Processing...' : (isPaymentMode ? 'Proceed to Payment →' : (application.status === 'DRAFT' ? 'Submit & Proceed to Payment →' : 'Resubmit →'))}
                   </button>
                 </div>
               </>
@@ -2074,6 +2126,32 @@ export default function EditResubmissionPage() {
                         ⚠ Not a NACCIMA Member — non-member rates apply to your application
                       </div>
                 }
+
+                {/* Revocation Status Alert */}
+                {(() => {
+                  const revocationEntries = application?.vettingHistory?.filter(
+                    h => h.action === 'CERTIFICATE_UNAPPROVED' || h.action === 'CERTIFICATE_REVOKED' || h.newStatus === 'REVOKED' || h.newStatus === 'UNAPPROVED'
+                  );
+                  if (!revocationEntries || revocationEntries.length === 0) return null;
+
+                  // Get the most recent revocation entry by sorting by createdAt
+                  const revocationEntry = revocationEntries.sort((a, b) => 
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                  )[0];
+                  
+                  return (
+                    <div className="flex items-start gap-2 mt-4 mb-6 px-[12px] py-[8px] rounded text-[12px] bg-[#fff5f5]  text-[#9b1c1c] border border-[#fca5a5]">
+                      <span className="text-[16px]">🚫</span>
+                      <div className="flex-1">
+                        <div className="font-bold text-[13px] mb-1">Certificate Revoked</div>
+                        <div className="text-[13px] capitalize font-bold">{revocationEntry.comment}</div>
+                        <div className="text-[13px] font-bold mt-1">
+                          Revoked: {formatDate(revocationEntry.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Section 1: Shipper/Exporter Details */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
@@ -2520,6 +2598,46 @@ export default function EditResubmissionPage() {
                   })()}
                 </div>
 
+                {/* Section 6: Vetting History */}
+                {application?.vettingHistory && application.vettingHistory.length > 0 && application.status !== 'DRAFT' && (
+                  <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
+                      <div className="text-[13px] font-bold text-[#1a2236]">Vetting History</div>
+                    </div>
+                    <div className="space-y-3">
+                      {application.vettingHistory.map((history, index) => (
+                        <div key={index} className="flex gap-3 items-start">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-3 h-3 rounded-full ${index === 0 ? 'bg-[#3a7bd5]' : 'bg-[#cbd5e1]'}`} />
+                            {index < application.vettingHistory!.length - 1 && (
+                              <div className="w-0.5 h-full bg-[#cbd5e1] min-h-[40px]" />
+                            )}
+                          </div>
+                          <div className="flex-1 pb-3">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[12px] font-semibold text-[#1a2236]">
+                                {formatActionLabel(history.action)}
+                              </span>
+                              <span className="text-[10px] text-[#6a7a9a]">
+                                {formatDate(history.createdAt)}
+                              </span>
+                            </div>
+                            {history.comment && (
+                              <div className="text-[11px] text-[#475569] mb-1">{history.comment}</div>
+                            )}
+                            {history.newStatus && (
+                              <div className="text-[10px] text-[#6a7a9a]">
+                                Status: <span className="font-medium text-[#1a2236]">{history.newStatus}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2">
                   <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={() => router.push(isPaymentMode ? dashboardPath : (isAdminUser ? '/admin/my-applications' : '/my-applications'))}>Cancel</button>
                   {application.status === 'DRAFT' && !isPaymentMode && (
@@ -2546,6 +2664,14 @@ export default function EditResubmissionPage() {
       </div>
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
+      <SuccessModal 
+        isOpen={showSuccessModal} 
+        onClose={() => {
+          setShowSuccessModal(false);
+          router.push(dashboardPath);
+        }} 
+        message={successMessage || 'Application resubmitted successfully!'} 
+      />
     </div>
   );
 }

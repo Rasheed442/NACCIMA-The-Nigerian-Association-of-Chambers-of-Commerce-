@@ -1,36 +1,47 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface SuccessModalProps {
   isOpen: boolean;
   onClose: () => void;
   message: string;
+  title?: string;
+  autoCloseDelay?: number;
 }
 
-export default function SuccessModal({ isOpen, onClose, message }: SuccessModalProps) {
+export default function SuccessModal({ isOpen, onClose, message, title = 'Success', autoCloseDelay = 3000 }: SuccessModalProps) {
+  const [isClosing, setIsClosing] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsClosing(false);
+      const timer = setTimeout(() => {
+        setIsClosing(true);
+        setTimeout(() => {
+          onClose();
+        }, 300); // Wait for zoom-out animation to complete
+      }, autoCloseDelay);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, onClose, autoCloseDelay]);
+
   if (!isOpen) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
-      <div className="bg-white rounded-[10px] p-6 w-full max-w-[400px] shadow-[0_4px_20px_rgba(0,0,0,0.15)]">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 rounded-full bg-[#d1fae5] flex items-center justify-center">
-            <span className="text-2xl">✅</span>
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] ${isClosing ? 'animate-out fade-out duration-300' : 'animate-in fade-in duration-200'}`}>
+      <div className={`bg-white rounded-md p-8 w-full max-w-[420px] shadow-[0_8px_32px_rgba(0,0,0,0.12)] ${isClosing ? 'animate-out zoom-out-95 duration-300' : 'animate-in zoom-in-95 duration-200'}`}>
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] flex items-center justify-center mb-4 shadow-[0_4px_12px_rgba(34,197,94,0.2)]">
+            <span className="text-3xl">✅</span>
           </div>
-          <div className="text-[16px] font-bold text-[#1a2236]">Success</div>
+          <div className="text-[20px] font-semibold text-[#1a2236] mb-2">{title}</div>
+          <div className="text-[14px] text-[#6a7a9a] leading-relaxed">{message}</div>
         </div>
-        <div className="text-[12px] text-[#6a7a9a] mb-5">{message}</div>
-        <div className="flex justify-end">
-          <button
-            className="inline-flex items-center justify-center gap-1 px-[14px] py-[7px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-[#1a4a8a] text-white hover:bg-[#153c70]"
-            onClick={onClose}
-          >
-            OK
-          </button>
-        </div>
+        
       </div>
     </div>
   );
