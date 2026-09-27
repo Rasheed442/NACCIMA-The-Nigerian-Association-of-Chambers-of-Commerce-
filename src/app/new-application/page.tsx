@@ -102,6 +102,9 @@ interface ExchangeRate {
 }
 
 interface ReviewData {
+  totalPayable: string | number | null | undefined;
+  vatAmount: number;
+  certificateFee: undefined;
   status?: string;
   application?: {
     certificateType?: string;
@@ -144,6 +147,7 @@ function NewApplicationContent() {
   const [transportMode, setTransportMode] = React.useState<string | null>(null);
   const [isSavingTransportMode, setIsSavingTransportMode] = useState(false);
   const [selectedCert, setSelectedCert] = React.useState<string | null>(null);
+  const [selectedCertRate, setSelectedCertRate] = React.useState<{ memberRate: number; nonMemberRate: number; feeType: string } | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -2129,6 +2133,31 @@ function NewApplicationContent() {
                     ⚠ Not a NACCIMA Member — non-member rates apply to your application
                   </div>
                 )}
+                {selectedCert && (() => {
+                  const cert = certificateTypes.find(c => c.id === selectedCert);
+                  if (!cert) return null;
+
+                  const memberValue = cert.memberRate !== undefined ? cert.memberRate : cert.memberAmount;
+                  const nonMemberValue = cert.nonMemberRate !== undefined ? cert.nonMemberRate : cert.nonMemberAmount;
+                  const isMember = companyProfile?.membershipStatus === "MEMBER";
+
+                  let rateText = '';
+                  if (cert.feeType === 'FLAT') {
+                    rateText = isMember
+                      ? `Member Rate: ₦${memberValue?.toLocaleString()}`
+                      : `Non-Member Rate: ₦${nonMemberValue?.toLocaleString()}`;
+                  } else {
+                    rateText = isMember
+                      ? `Member Rate: ${(memberValue! * 100).toFixed(2)}% of FOB`
+                      : `Non-Member Rate: ₦${nonMemberValue?.toLocaleString()}`;
+                  }
+
+                  return (
+                    <div className={`flex items-center my-2 gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[11px] font-semibold border ${isMember ? 'bg-[#d1fae5] text-[#065f46] border-[#86efac]' : 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d]'}`}>
+                      {isMember ? '★' : '⚠'} {rateText}
+                    </div>
+                  );
+                })()}
 
                 {certError && (
                   <div ref={certErrorRef} className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">
@@ -2171,7 +2200,16 @@ function NewApplicationContent() {
                         <div
                           key={cert.id}
                           className={`p-4 rounded-[8px] border cursor-pointer transition-all ${selectedCert === cert.id ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`}
-                          onClick={() => setSelectedCert(cert.id)}
+                          onClick={() => {
+                            setSelectedCert(cert.id);
+                            const memberValue = cert.memberRate !== undefined ? cert.memberRate : cert.memberAmount;
+                            const nonMemberValue = cert.nonMemberRate !== undefined ? cert.nonMemberRate : cert.nonMemberAmount;
+                            setSelectedCertRate({
+                              memberRate: memberValue || 0,
+                              nonMemberRate: nonMemberValue || 0,
+                              feeType: cert.feeType || 'FLAT'
+                            });
+                          }}
                         >
                           <div className="text-[24px] mb-2">{display.icon}</div>
                           <div className="text-[13px] font-bold text-[#1a2236] mb-1">{display.name}</div>
@@ -2765,16 +2803,26 @@ function NewApplicationContent() {
                           )}
                         </div>
                         <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
-                          <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
-                          {exchangeRate ? (
+                          <div className="flex justify-between text-[11px] mb-1">
+                            <span className={`font-semibold ${companyProfile?.membershipStatus === "MEMBER" ? 'text-[#065f46]' : 'text-[#92400e]'}`}>
+                              {companyProfile?.membershipStatus === "MEMBER" ? '★ Member Rate Applied' : 'Non-Member Rate Applied'}
+                            </span>
+                            <span className={`text-[10.5px] font-semibold ${companyProfile?.membershipStatus === "MEMBER" ? 'text-[#065f46]' : 'text-[#92400e]'}`}>
+                              {selectedCertRate ? (
+                                selectedCertRate.feeType === 'FLAT' 
+                                  ? `₦${(companyProfile?.membershipStatus === "MEMBER" ? selectedCertRate.memberRate : selectedCertRate.nonMemberRate).toLocaleString()}`
+                                  : `${(companyProfile?.membershipStatus === "MEMBER" ? selectedCertRate.memberRate : selectedCertRate.nonMemberRate * 100).toFixed(2)}% of FOB`
+                              ) : 'N/A'}
+                            </span>
+                          </div>
+                          {reviewData.certificateFee !== undefined ? (
                             <>
-                              <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee (0.11% × {formatCurrency(Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate, 'NGN')})</span><span className="font-semibold text-[#1a2236]">{formatCurrency((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011, 'NGN')}</span></div>
-                              <div className="flex justify-between text-[11px] mb-1"><span>Processing Fee</span><span className="font-semibold text-[#1a2236]">{formatCurrency(2500, 'NGN')}</span></div>
-                              <div className="flex justify-between text-[11px] mb-1"><span>VAT (7.5%)</span><span className="font-semibold text-[#1a2236]">{formatCurrency((((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011) + 2500) * 0.075, 'NGN')}</span></div>
-                              <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 bottom-full mb-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">{formatCurrency((((Number(String(reviewData.application?.totalValueFob || 0).replace(/,/g, '')) * exchangeRate.rate) * 0.0011) + 2500) * 1.075, 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee</span><span className="font-semibold text-[#1a2236]">{formatCurrency(reviewData.certificateFee, 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] mb-1"><span>VAT</span><span className="font-semibold text-[#1a2236]">{formatCurrency(reviewData.vatAmount || 0, 'NGN')}</span></div>
+                              <div className="flex justify-between text-[11px] font-bold border-t border-[#dde3ee] pt-2 bottom-full mb-1"><span>Total Payable</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.totalPayable, 'NGN')}</span></div>
                             </>
                           ) : (
-                            <div className="text-[11px] text-[#e53e3e]">Exchange rate not loaded</div>
+                            <div className="text-[11px] text-[#6a7a9a]">Payment will be calculated after submission</div>
                           )}
                         </div>
                       </div>
@@ -2834,6 +2882,23 @@ function NewApplicationContent() {
                     <span className="text-[10px] font-semibold text-[#3a7bd5]">Payment</span>
                   </div>
                 </div>
+
+                {companyProfile?.membershipStatus === "MEMBER" ? (
+                  <div className="flex items-center my-4 gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#d1fae5] text-[#065f46] border border-[#86efac]">
+                    ★ NACCIMA Member — member rates apply to your application
+                  </div>
+                ) : (
+                  <div className="flex items-center my-4 gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[12px] font-semibold bg-[#fef3c7] text-[#92400e] border border-[#fcd34d]">
+                    ⚠ Not a NACCIMA Member — non-member rates apply to your application
+                  </div>
+                )}
+                {selectedCertRate && (
+                  <div className={`flex items-center my-2 gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[11px] font-semibold border ${companyProfile?.membershipStatus === "MEMBER" ? 'bg-[#d1fae5] text-[#065f46] border-[#86efac]' : 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d]'}`}>
+                    {companyProfile?.membershipStatus === "MEMBER" ? '★' : '⚠'} {selectedCertRate.feeType === 'FLAT' 
+                      ? `Member Rate: ₦${selectedCertRate.memberRate.toLocaleString()}`
+                      : `Member Rate: ${(selectedCertRate.memberRate * 100).toFixed(2)}% of FOB`}
+                  </div>
+                )}
 
                 {paymentData ? (
                   <>

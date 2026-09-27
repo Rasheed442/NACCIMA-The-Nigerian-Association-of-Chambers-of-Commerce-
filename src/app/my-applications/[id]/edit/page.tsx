@@ -16,6 +16,11 @@ interface CertificateType {
   name: string;
   description: string;
   active: boolean;
+  feeType?: string;
+  memberRate?: number;
+  nonMemberRate?: number;
+  memberAmount?: number;
+  nonMemberAmount?: number;
 }
 
 interface CertificateField {
@@ -116,6 +121,7 @@ interface ApplicationData {
   totalValueFob?: number;
   valueCurrency?: string;
   bulkQtyMt?: number;
+  ecowasNumber?: string;
   status?: string;
   criteria?: string;
   fields?: Record<string, string | number | boolean>;
@@ -175,6 +181,8 @@ export default function EditResubmissionPage() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [certificateFields, setCertificateFields] = useState<CertificateTypeFields | null>(null);
   const [isLoadingFields, setIsLoadingFields] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState<any>(null);
+  const [isLoadingRate, setIsLoadingRate] = useState(false);
   const [countries, setCountries] = useState<Country[]>([]);
   const [isLoadingCountries, setIsLoadingCountries] = useState(false);
   const [destinationDropdownOpen, setDestinationDropdownOpen] = useState(false);
@@ -238,6 +246,7 @@ export default function EditResubmissionPage() {
       COUNTRY_OF_MANUFACTURING: () => appData.countryOfMfg || '',
       TOTAL_VALUE_FOB: () => String(appData.totalValueFob ?? ''),
       BULK_PRODUCT_QTY_MT: () => String(appData.bulkQtyMt ?? ''),
+      ECOWAS_NUMBER: () => String(appData.ecowasNumber ?? ''),
       TOTAL_ITEMS: () => String(appData.totalItems ?? ''),
       CRITERIA: () => appData.criteria || '',
     };
@@ -720,6 +729,41 @@ export default function EditResubmissionPage() {
     }
   }
 
+  const fetchExchangeRate = async () => {
+    setIsLoadingRate(true);
+    console.log('Fetching exchange rate...');
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        console.error('Base URL not configured');
+        return;
+      }
+
+      console.log('Calling FX endpoint with baseUrl:', baseUrl);
+      const response = await apiFetch(`${baseUrl}/api/v1/integration/fx/usd-ngn`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('FX response status:', response.status);
+      const result = await response.json();
+      console.log('FX response data:', result);
+
+      if (response.ok && result.data) {
+        setExchangeRate(result.data);
+        console.log('Exchange rate set:', result.data);
+      } else {
+        console.error('FX response not ok:', result);
+      }
+    } catch (err) {
+      console.error('Failed to fetch exchange rate:', err);
+    } finally {
+      setIsLoadingRate(false);
+    }
+  };
+
   const fetchTransportModeDetails = async (code: string) => {
     setIsSavingTransportMode(true);
     setValidationError(null);
@@ -836,6 +880,31 @@ export default function EditResubmissionPage() {
     } catch {
       return dateString;
     }
+  };
+
+  const getCertificateFeeRate = () => {
+    // Find the selected certificate type based on application's certificate type
+    const selectedCertificate = certificateTypes.find(c => 
+      c.code === application?.certificateType || 
+      c.id === application?.certificateType || 
+      c.name === application?.certificateType
+    );
+    if (!selectedCertificate) return null;
+
+    // Use memberRate/nonMemberRate if available, otherwise use memberAmount/nonMemberAmount
+    const memberValue = selectedCertificate.memberRate !== undefined ? selectedCertificate.memberRate : selectedCertificate.memberAmount;
+    
+    if (selectedCertificate.feeType && memberValue !== undefined) {
+      return {
+        rate: memberValue,
+        feeType: selectedCertificate.feeType,
+        display: selectedCertificate.feeType === 'FLAT' 
+          ? `₦${memberValue.toLocaleString()}` 
+          : `${(memberValue * 100).toFixed(2)}% FOB`
+      };
+    }
+    
+    return null;
   };
 
   const getHostedPaymentUrl = (paymentData: Record<string, unknown>) => {
@@ -1492,6 +1561,7 @@ export default function EditResubmissionPage() {
         // (Don't validate strictly - allow review even if there are warnings)
         setReviewData(reviewData);
         setShowReviewStep(true);
+        fetchExchangeRate();
         setIsSaving(false);
         return;
       }
@@ -1583,6 +1653,7 @@ export default function EditResubmissionPage() {
       // Show review step first before proceeding to payment
       setReviewData(reviewData);
       setShowReviewStep(true);
+      fetchExchangeRate();
       setIsSaving(false);
       return;
     } catch (err) {
@@ -1965,18 +2036,25 @@ export default function EditResubmissionPage() {
                     <div className="bg-[#fef3c7] border border-[#fbbf24] rounded-[8px] p-4 mb-3">
                       <div className="text-[11px] font-bold text-[#92400e] mb-2">💱 FOB Value Conversion (Certificate of Origin)</div>
                       <div className="flex justify-between text-[11px] mb-1"><span>FOB Value (USD)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.application?.totalValueFob, 'USD')}</span></div>
-                      {reviewData.exchangeRate ? (
+                      {(reviewData.exchangeRate || exchangeRate) ? (
                         <>
-                          <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.exchangeRate, 'NGN')}</span></div>
-                          <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>{reviewData.exchangeRateDate || 'N/A'}</span></div>
-                          <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 bottom-full mb-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.convertedFobValue, 'NGN')}</span></div>
+                          <div className="flex justify-between text-[11px] mb-1"><span>Exchange Rate (USD/NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.exchangeRate || exchangeRate?.rate, 'NGN')}</span></div>
+                          <div className="flex justify-between text-[10px] text-[#9ca3af] mb-1"><span>Rate retrieved</span><span>{reviewData.exchangeRateDate || exchangeRate?.rateDate || 'N/A'}</span></div>
+                          <div className="flex justify-between text-[11px] font-bold border-t border-[#fbbf24] pt-2 bottom-full mb-1"><span>FOB Value (NGN)</span><span className="font-bold text-[#1a2236]">{formatCurrency(reviewData.convertedFobValue || (Number(reviewData.application?.totalValueFob || 0) * (reviewData.exchangeRate || exchangeRate?.rate || 0)), 'NGN')}</span></div>
                         </>
                       ) : (
                         <div className="text-[10px] text-[#9ca3af]">Exchange rate not available</div>
                       )}
                     </div>
                     <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
-                      <div className="flex justify-between text-[11px] mb-1"><span className="text-[#065f46] font-semibold">★ Member Rate Applied</span><span className="text-[#065f46] text-[10.5px] font-semibold">0.11% of FOB</span></div>
+                      <div className="flex justify-between text-[11px] mb-1">
+                        <span className={`font-semibold ${reviewData?.membershipStatus === "MEMBER" ? 'text-[#065f46]' : 'text-[#92400e]'}`}>
+                          {reviewData?.membershipStatus === "MEMBER" ? '★ Member Rate Applied' : 'Non-Member Rate Applied'}
+                        </span>
+                        <span className={`text-[10.5px] font-semibold ${reviewData?.membershipStatus === "MEMBER" ? 'text-[#065f46]' : 'text-[#92400e]'}`}>
+                          {getCertificateFeeRate()?.display || reviewData.feeRate ? `${(reviewData.feeRate * 100).toFixed(2)}% of FOB` : 'N/A'}
+                        </span>
+                      </div>
                       {reviewData.certificateFee !== undefined ? (
                         <>
                           <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee</span><span className="font-semibold text-[#1a2236]">{formatCurrency(reviewData.certificateFee, 'NGN')}</span></div>
@@ -2600,7 +2678,7 @@ export default function EditResubmissionPage() {
 
                 {/* Section 6: Vetting History */}
                 {application?.vettingHistory && application.vettingHistory.length > 0 && application.status !== 'DRAFT' && (
-                  <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
+                  <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4 max-h-[400px] overflow-auto">
                     <div className="flex items-center gap-2 mb-4">
                       <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">6</div>
                       <div className="text-[13px] font-bold text-[#1a2236]">Vetting History</div>
@@ -2628,7 +2706,39 @@ export default function EditResubmissionPage() {
                             )}
                             {history.newStatus && (
                               <div className="text-[10px] text-[#6a7a9a]">
-                                Status: <span className="font-medium text-[#1a2236]">{history.newStatus}</span>
+                                Status: {(() => {
+                                  const badges: Record<string, string> = {
+                                    DRAFT: 'bg-[#f3f4f6] text-[#6b7280] border-[#d1d5db]',
+                                    SUBMITTED: 'bg-[#dbeafe] text-[#1e40af] border-[#93c5fd]',
+                                    PAID: 'bg-[#e0e7ff] text-[#3730a3] border-[#a5b4fc]',
+                                    PENDING_PAYMENT: 'bg-[#dbeafe] text-[#1e40af] border-[#93c5fd]',
+                                    PAYMENT_PENDING: 'bg-[#dbeafe] text-[#1e40af] border-[#93c5fd]',
+                                    UNDER_REVIEW: 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d]',
+                                    APPROVED: 'bg-[#d1fae5] text-[#065f46] border-[#86efac]',
+                                    REJECTED: 'bg-[#fee2e2] text-[#9b1c1c] border-[#fca5a5]',
+                                    ISSUED: 'bg-[#e0e7ff] text-[#3730a3] border-[#a5b4fc]',
+                                    CERTIFICATE_ISSUED: 'bg-[#e0e7ff] text-[#3730a3] border-[#a5b4fc]',
+                                    UNAPPROVED: 'bg-[#fdf2f8] text-[#9d174d] border-[#fbcfe8]',
+                                  };
+                                  const labels: Record<string, string> = {
+                                    DRAFT: 'Draft',
+                                    SUBMITTED: 'Submitted',
+                                    PAID: 'Paid',
+                                    PENDING_PAYMENT: 'Pending Payment',
+                                    PAYMENT_PENDING: 'Pending Payment',
+                                    UNDER_REVIEW: 'Under Review',
+                                    APPROVED: 'Approved',
+                                    REJECTED: 'Rejected',
+                                    ISSUED: 'Issued',
+                                    CERTIFICATE_ISSUED: 'Issued',
+                                    UNAPPROVED: 'Unapproved',
+                                  };
+                                  return (
+                                    <span className={`inline-block text-[10px] font-medium px-2.5 py-1 rounded border whitespace-nowrap ${badges[history.newStatus] || 'bg-[#f3f4f6] text-[#6b7280] border-[#d1d5db]'}`}>
+                                      {labels[history.newStatus] || history.newStatus}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>
