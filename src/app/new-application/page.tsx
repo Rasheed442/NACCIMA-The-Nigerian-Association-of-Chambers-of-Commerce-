@@ -2803,7 +2803,7 @@ function NewApplicationContent() {
                           )}
                         </div>
                         <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-4">
-                          <div className="flex justify-between text-[11px] mb-1">
+                         {reviewData?.membershipStatus === "MEMBER" && <div className="flex justify-between text-[11px] mb-1">
                             <span className={`font-semibold ${companyProfile?.membershipStatus === "MEMBER" ? 'text-[#065f46]' : 'text-[#92400e]'}`}>
                               {companyProfile?.membershipStatus === "MEMBER" ? '★ Member Rate Applied' : 'Non-Member Rate Applied'}
                             </span>
@@ -2814,7 +2814,7 @@ function NewApplicationContent() {
                                   : `${(companyProfile?.membershipStatus === "MEMBER" ? selectedCertRate.memberRate : selectedCertRate.nonMemberRate * 100).toFixed(2)}% of FOB`
                               ) : 'N/A'}
                             </span>
-                          </div>
+                          </div>}
                           {reviewData.certificateFee !== undefined ? (
                             <>
                               <div className="flex justify-between text-[11px] mb-1"><span>Certificate Fee</span><span className="font-semibold text-[#1a2236]">{formatCurrency(reviewData.certificateFee, 'NGN')}</span></div>
