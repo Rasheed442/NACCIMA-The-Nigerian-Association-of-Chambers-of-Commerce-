@@ -2143,7 +2143,7 @@ export default function EditResubmissionPage() {
                     <div className="flex items-start gap-2 mt-4 mb-6 px-[12px] py-[8px] rounded text-[12px] bg-[#fff5f5]  text-[#9b1c1c] border border-[#fca5a5]">
                       <span className="text-[16px]">🚫</span>
                       <div className="flex-1">
-                        <div className="font-bold text-[13px] mb-1">Certificate Revoked</div>
+                        <div className="font-bold text-[13px] mb-1">Certificate Request for more information</div>
                         <div className="text-[13px] capitalize font-bold">{revocationEntry.comment}</div>
                         <div className="text-[13px] font-bold mt-1">
                           Revoked: {formatDate(revocationEntry.createdAt)}
