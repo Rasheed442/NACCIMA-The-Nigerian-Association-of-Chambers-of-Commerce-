@@ -2536,7 +2536,7 @@ export default function EditResubmissionPage() {
                     onClick={handleSaveAndResubmit}
                     disabled={isSaving || isSavingDraft}
                   >
-                    {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Proceed to Payment' : (application.status === 'DRAFT' ? 'Continue' : 'Resubmit'))}
+                    {isSaving ? (isPaymentMode ? 'Processing...' : (application.status === 'DRAFT' ? 'Submitting...' : 'Resubmitting...')) : (isPaymentMode ? 'Proceed to Payment' : (application.status === 'DRAFT' ? 'Continue' : 'Resubmit Application'))}
                   </button>
                 </div>
               </>
