@@ -720,7 +720,7 @@ export default function VettingReviewPage({
                           </div>
                         </div>
                         <div className="flex-1">
-                          <p className="text-xs font-medium text-gray-900">{item.newStatus}</p>
+                          <p className="text-xs font-medium text-gray-900">{item?.action === "RESUBMITTED" ? item?.action : item.newStatus}</p>
                           {item.comment && (
                             <p className="text-xs text-gray-500 mt-0.5">{item.comment}</p>
                           )}
