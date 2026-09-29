@@ -245,6 +245,7 @@ export default function AdminCertificateTypes() {
           <FiEdit className="w-[15px] h-[15px] text-[#6a7a9a]" />
           Edit
         </button>
+        {/* test push */}
 
         <div className="h-px bg-[#eef1f6] mx-2 my-1" />
 
