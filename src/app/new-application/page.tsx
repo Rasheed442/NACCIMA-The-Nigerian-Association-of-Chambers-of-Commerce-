@@ -2133,7 +2133,7 @@ function NewApplicationContent() {
                     ⚠ Not a NACCIMA Member — non-member rates apply to your application
                   </div>
                 )}
-                {selectedCert && (() => {
+                {/* {selectedCert && (() => {
                   const cert = certificateTypes.find(c => c.id === selectedCert);
                   if (!cert) return null;
 
@@ -2157,7 +2157,7 @@ function NewApplicationContent() {
                       {isMember ? '★' : '⚠'} {rateText}
                     </div>
                   );
-                })()}
+                })()} */}
 
                 {certError && (
                   <div ref={certErrorRef} className="rounded-[7px] p-[10px_13px] text-[12px] mb-4 flex gap-2 items-start bg-[#fef2f2] border border-[#fca5a5] text-[#991b1b]">

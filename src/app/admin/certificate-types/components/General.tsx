@@ -48,6 +48,7 @@ export interface GeneralData {
   status: Status;
   templateFileName: string;
   templateUrl: string;
+  templateFile: File | null;
   pageIndex: number;
   pageSize: PageSize | null;
 }
@@ -202,27 +203,30 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
       };
       reader.readAsDataURL(file);
 
-      // Upload template to API and store the returned URL
-      const baseUrl = getBaseUrl();
-      const formData = new FormData();
-      formData.append('file', file);
+      // In edit mode, upload template to API and store the returned URL
+      // In create mode, don't upload yet - we'll upload after creating the certificate type
+      if (certificateType?.id) {
+        const baseUrl = getBaseUrl();
+        const formData = new FormData();
+        formData.append('file', file);
 
-      // In edit mode, always upload against the record being edited.  Keep the
-      // existing create-flow placeholder until the API supports uploading a
-      // template before the certificate type record has been created.
-      const certificateTypeId = certificateType?.id || '50000000-0000-0000-0000-000000000002';
-      const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateTypeId}/template`, {
-        method: 'POST',
-        body: formData,
-      });
+        const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateType.id}/template`, {
+          method: 'POST',
+          body: formData,
+        });
 
-      const result = await response.json();
-      console.log('Template upload result:', result);
-      if (response.ok && result.data?.templateUrl) {
-        console.log('Setting templateUrl:', result.data.templateUrl);
-        setForm((prev) => ({ ...prev, templateUrl: result.data.templateUrl }));
+        const result = await response.json();
+        console.log('Template upload result:', result);
+        if (response.ok && result.data?.templateUrl) {
+          console.log('Setting templateUrl:', result.data.templateUrl);
+          setForm((prev) => ({ ...prev, templateUrl: result.data.templateUrl }));
+        } else {
+          console.error('Template upload failed:', result);
+        }
       } else {
-        console.error('Template upload failed:', result);
+        // In create mode, store the file for later upload after certificate type creation
+        console.log('Create mode: storing template file for later upload');
+        setForm((prev) => ({ ...prev, templateFile: file }));
       }
     } catch {
       setErrors((prev) => ({
@@ -247,22 +251,47 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
   const validate = (): FormErrors => {
     const next: FormErrors = {};
 
-    if (!form.displayName.trim()) {
-      next.displayName = "Display name is required.";
-    }
+    // In edit mode, be more lenient - only validate if the field is empty but was previously populated
+    // In create mode, validate all required fields strictly
+    if (!certificateType?.id) {
+      // Create mode - strict validation
+      if (!form.displayName.trim()) {
+        next.displayName = "Display name is required.";
+      }
 
-    if (!form.code.trim()) {
-      next.code = "Code is required.";
-    } else if (!CODE_PATTERN.test(form.code.trim())) {
-      next.code = "Use uppercase letters, numbers, and hyphens only.";
-    }
+      if (!form.code.trim()) {
+        next.code = "Code is required.";
+      } else if (!CODE_PATTERN.test(form.code.trim())) {
+        next.code = "Use uppercase letters, numbers, and hyphens only.";
+      }
 
-    if (!form.certPrefix.trim()) {
-      next.certPrefix = "Certificate number prefix is required.";
-    }
+      if (!form.certPrefix.trim()) {
+        next.certPrefix = "Certificate number prefix is required.";
+      }
 
-    if (!form.templateFile && !form.templateFileName) {
-      next.templateFile = "Upload a PDF template.";
+      if (!form.templateFile && !form.templateFileName) {
+        next.templateFile = "Upload a PDF template.";
+      }
+    } else {
+      // Edit mode - only validate if the field is currently empty but exists in the original data
+      // This allows saving changes to other tabs without forcing all general fields to be filled
+      if (!form.displayName.trim() && certificateType.name) {
+        next.displayName = "Display name is required.";
+      }
+
+      if (!form.code.trim() && certificateType.code) {
+        next.code = "Code is required.";
+      } else if (form.code.trim() && !CODE_PATTERN.test(form.code.trim())) {
+        next.code = "Use uppercase letters, numbers, and hyphens only.";
+      }
+
+      if (!form.certPrefix.trim() && certificateType.certNumberPrefix) {
+        next.certPrefix = "Certificate number prefix is required.";
+      }
+
+      if (!form.templateFile && !form.templateFileName && certificateType.templateUrl) {
+        next.templateFile = "Upload a PDF template.";
+      }
     }
 
     return next;
@@ -278,6 +307,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
       status: form.status,
       templateFileName: form.templateFileName,
       templateUrl: form.templateUrl,
+      templateFile: form.templateFile,
       pageIndex: form.pageIndex,
       pageSize: form.pageSize,
     }),

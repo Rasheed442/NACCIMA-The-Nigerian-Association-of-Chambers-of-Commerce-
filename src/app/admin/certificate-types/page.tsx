@@ -234,7 +234,7 @@ export default function AdminCertificateTypes() {
     </button>
 
     {openDropdownId === cert.id && (
-      <div className="dropdown-menu cursor-pointer absolute right-0 top-full mt-1.5 w-44 bg-white border border-[#e5e9f2] rounded-lg shadow-[0_4px_16px_rgba(20,30,60,0.12)] z-10 origin-top-right animate-in fade-in zoom-in-95 duration-150 overflow-hidden py-1">
+      <div className="dropdown-menu cursor-pointer absolute right-0 top-full mt-1.5 w-44 bg-white border border-[#e5e9f2] rounded-lg shadow-[0_4px_16px_rgba(20,30,60,0.12)] z-50 origin-top-right animate-in fade-in zoom-in-95 duration-150 overflow-hidden py-1">
         <button
           onClick={() => {
             handleEdit(cert);

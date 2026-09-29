@@ -1069,7 +1069,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
         const result = await response.json();
         if (!response.ok || result.success === false) {
-          throw new Error(result.message || 'Failed to create certificate type.');
+          throw new Error(result || 'Failed to create certificate type.');
         }
 
 
