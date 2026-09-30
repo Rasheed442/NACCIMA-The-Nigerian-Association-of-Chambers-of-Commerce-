@@ -431,18 +431,39 @@ export default function VettingReviewPage({
                       <span className="text-gray-500 text-xs">Carrier</span>
                       <p className="text-gray-900 font-medium">{application.carrier}</p>
                     </div>
-                   { exchangeRate && exchangeRate !== 1 && <div>
-                      <span className="text-gray-500 text-xs">FOB ({application.valueCurrency})</span>
-                      <p className="text-gray-900 font-medium">
-                        {application.valueCurrency === 'USD' ? '$' : '₦'}{application?.totalValueFob?.toLocaleString()}
-                      </p>
-                    </div>}
-                    <div>
-                      <span className="text-gray-500 text-xs">FOB (USD)</span>
-                      <p className="text-gray-900 font-medium">
-                        ${(application.totalValueFob / exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                      </p>
-                    </div>
+                    {exchangeRate === 1 ? (
+                      <div>
+                        <span className="text-gray-500 text-xs">FOB (USD)</span>
+                        <p className="text-gray-900 font-medium">
+                          {application.valueCurrency === 'USD' ? `$${application?.totalValueFob?.toLocaleString()}` : `$${(application.totalValueFob / exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <span className="text-gray-500 text-xs">FOB ({application.valueCurrency})</span>
+                          <p className="text-gray-900 font-medium">
+                            {application.valueCurrency === 'USD' ? '$' : '₦'}{application?.totalValueFob?.toLocaleString()}
+                          </p>
+                        </div>
+                        {application.valueCurrency === 'USD' && (
+                          <div>
+                            <span className="text-gray-500 text-xs">FOB (NGN)</span>
+                            <p className="text-gray-900 font-medium">
+                              ₦{(application.totalValueFob * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })} @ ₦{exchangeRate?.toLocaleString()}/$
+                            </p>
+                          </div>
+                        )}
+                        {application.valueCurrency === 'NGN' && (
+                          <div>
+                            <span className="text-gray-500 text-xs">FOB (USD)</span>
+                            <p className="text-gray-900 font-medium">
+                              ${(application.totalValueFob / exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
 
 
                     <div>
