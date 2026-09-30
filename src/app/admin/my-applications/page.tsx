@@ -734,7 +734,7 @@ export default function AdminApplications() {
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">TIN</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Cert Type</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Submitted</th>
-                      <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">FOB</th>
+                      {/* <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">FOB</th> */}
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Status</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Assigned To</th>
                       <th className="px-[11px] py-[8px] text-left border-b-2 border-[#dde3ee] whitespace-nowrap">Actions</th>
@@ -748,7 +748,7 @@ export default function AdminApplications() {
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.tin || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.certificateType || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(app.submittedAt)}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.totalValueFob ? `${app.valueCurrency || 'USD'} ${app.totalValueFob.toLocaleString()}` : '—'}</td>
+                        {/* <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.totalValueFob ? `${app.valueCurrency || 'USD'} ${app.totalValueFob.toLocaleString()}` : '—'}</td> */}
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getStatusBadge(app.status)}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.assignedTo || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
