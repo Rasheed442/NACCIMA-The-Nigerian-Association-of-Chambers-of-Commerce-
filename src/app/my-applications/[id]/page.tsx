@@ -228,9 +228,30 @@ export default function ApplicationDetail() {
   const hasLineItems = lineItems.length > 0;
   const hasDocuments = documentRecords.length > 0;
   const firstLineItem = lineItems[0];
-  const fobValueNgn = trackingData?.shipment.totalValueFob && trackingData.shipment.exchangeRate
-    ? trackingData.shipment.totalValueFob * trackingData.shipment.exchangeRate
-    : undefined;
+
+  // Calculate FOB values in both currencies based on the original currency
+  const originalCurrency = trackingData?.shipment.valueCurrency;
+  const originalValue = trackingData?.shipment.totalValueFob;
+  const exchangeRate = trackingData?.shipment.exchangeRate;
+  
+  let fobValueNgn: number | undefined;
+  let fobValueUsd: number | undefined;
+  
+  if (originalValue && exchangeRate) {
+    if (originalCurrency === 'USD') {
+      // Original is USD, convert to NGN
+      fobValueNgn = originalValue * exchangeRate;
+      fobValueUsd = originalValue;
+    } else if (originalCurrency === 'NGN') {
+      // Original is NGN, convert to USD
+      fobValueNgn = originalValue;
+      fobValueUsd = originalValue / exchangeRate;
+    } else {
+      // Unknown currency, assume USD and convert to NGN
+      fobValueNgn = originalValue * exchangeRate;
+      fobValueUsd = originalValue;
+    }
+  }
 
   const getDocumentUrl = (fileUrl?: string) => {
     if (!fileUrl) return undefined;
@@ -376,8 +397,8 @@ export default function ApplicationDetail() {
                         <dt className="font-medium text-[#6a7a9a]">Destination</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.destinationCountry || '—'}</dd>
                         <dt className="font-medium text-[#6a7a9a]">Mode of Transport</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.modeOfTransport || '—'}</dd>
                         <dt className="font-medium text-[#6a7a9a]">Carrier</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.carrier || '—'}</dd>
-                        <dt className="font-medium text-[#6a7a9a]">FOB Value ({trackingData.shipment.valueCurrency || '--'})</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.valueCurrency} {trackingData.shipment.totalValueFob?.toLocaleString() || '—'}</dd>
-                        {fobValueNgn && <><dt className="font-medium text-[#6a7a9a]">FOB Value {trackingData?.shipment?.valueCurrency === 'NGN' ? '(NGN).' : 'USD'}</dt><dd className="font-medium text-[#1a2236]">₦{fobValueNgn.toLocaleString()} @ ₦{trackingData.shipment.exchangeRate.toLocaleString()}/$</dd></>}
+                        <dt className="font-medium text-[#6a7a9a]">FOB Value (NGN)</dt><dd className="font-medium text-[#1a2236]">₦{fobValueNgn?.toLocaleString() || '—'}</dd>
+                        <dt className="font-medium text-[#6a7a9a]">FOB Value (USD)</dt><dd className="font-medium text-[#1a2236]">USD {fobValueUsd?.toLocaleString() || '—'}</dd>
                         {firstLineItem && <><dt className="font-medium text-[#6a7a9a]">HS Code</dt><dd className="font-mono font-medium text-[#1a4a8a]">{firstLineItem.hsCode || '—'}{firstLineItem.hsDescription ? ` — ${firstLineItem.hsDescription}` : ''}</dd></>}
                       </dl>
                     </section>
