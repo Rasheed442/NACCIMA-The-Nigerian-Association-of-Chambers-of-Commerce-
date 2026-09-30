@@ -437,18 +437,20 @@ export default function VettingReviewPage({
                         {application.valueCurrency === 'USD' ? '$' : '₦'}{application?.totalValueFob?.toLocaleString()}
                       </p>
                     </div>
-                    <div>
+                    {/* <div>
                       <span className="text-gray-500 text-xs">FOB (USD)</span>
                       <p className="text-gray-900 font-medium">
                         ${(application.totalValueFob / exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </p>
-                    </div>
-                    {/* <div>
-                      <span className="text-gray-500 text-xs">FOB (NGN)</span>
-                      <p className="text-gray-900 font-medium">
-                        ₦{(application.totalValueFob * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })} @ ₦{exchangeRate?.toLocaleString()}/$
-                      </p>
                     </div> */}
+                    {exchangeRate && exchangeRate !== 1 && (
+                      <div>
+                        <span className="text-gray-500 text-xs">FOB (NGN)</span>
+                        <p className="text-gray-900 font-medium">
+                          ₦{(application.totalValueFob * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })} @ ₦{exchangeRate?.toLocaleString()}/$
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <span className="text-gray-500 text-xs">Fee Paid</span>
                       <p className="text-gray-900 font-medium">₦{feePaid?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>

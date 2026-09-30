@@ -397,7 +397,11 @@ export default function ApplicationDetail() {
                         <dt className="font-medium text-[#6a7a9a]">Destination</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.destinationCountry || '—'}</dd>
                         <dt className="font-medium text-[#6a7a9a]">Mode of Transport</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.modeOfTransport || '—'}</dd>
                         <dt className="font-medium text-[#6a7a9a]">Carrier</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.carrier || '—'}</dd>
-                        <dt className="font-medium text-[#6a7a9a]">FOB Value (NGN)</dt><dd className="font-medium text-[#1a2236]">₦{fobValueNgn?.toLocaleString() || '—'}</dd>
+                        {trackingData.shipment.exchangeRate && trackingData.shipment.exchangeRate !== 1 && (
+                          <>
+                            <dt className="font-medium text-[#6a7a9a]">FOB Value (NGN)</dt><dd className="font-medium text-[#1a2236]">₦{fobValueNgn?.toLocaleString() || '—'}</dd>
+                          </>
+                        )}
                         <dt className="font-medium text-[#6a7a9a]">FOB Value (USD)</dt><dd className="font-medium text-[#1a2236]">USD {fobValueUsd?.toLocaleString() || '—'}</dd>
                         {firstLineItem && <><dt className="font-medium text-[#6a7a9a]">HS Code</dt><dd className="font-mono font-medium text-[#1a4a8a]">{firstLineItem.hsCode || '—'}{firstLineItem.hsDescription ? ` — ${firstLineItem.hsDescription}` : ''}</dd></>}
                       </dl>
@@ -453,7 +457,7 @@ export default function ApplicationDetail() {
 
               <div>
                 <div className="text-[13px] font-medium text-[#1a2236] mb-[10px]">Application Status</div>
-                <div className="flex flex-col gap-0">
+                <div className="flex flex-col gap-0 max-h-[350px] overflow-auto">
                   {trackingData.timeline.map((item, index) => {
                     const timelineStatus = getTimelineStatus(item.event, index, trackingData.timeline.length);
                     return (
