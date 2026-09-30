@@ -91,17 +91,17 @@ interface ApplicationData {
 }
 
 interface ApplicationReviewPageProps {
-  role?: 'admin' | 'vetting';
+  
   backHref?: string;
   backLabel?: string;
   logoutHref?: string;
 }
 
 export default function VettingReviewPage({
-  role = 'vetting',
-  backHref = '/vetting-review',
-  backLabel = 'Back to Queue',
-  logoutHref = '/login',
+  
+  backHref = '/admin/my-applications',
+  backLabel = 'Back to Applications',
+  logoutHref = '/',
 }: ApplicationReviewPageProps) {
   const router = useRouter();
   const params = useParams();
@@ -291,9 +291,9 @@ export default function VettingReviewPage({
   if (loading) {
     return (
       <div className="h-screen flex flex-col">
-        <AppHeader role={role} />
+        <AppHeader role='admin' />
         <div className="flex-1 flex overflow-hidden">
-          <Sidebar role={role} />
+          <Sidebar role='admin' />
           <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -308,9 +308,9 @@ export default function VettingReviewPage({
   if (error || !applicationData) {
     return (
       <div className="h-screen flex flex-col">
-        <AppHeader role={role} />
+        <AppHeader role='admin' />
         <div className="flex-1 flex overflow-hidden">
-          <Sidebar role={role} />
+          <Sidebar role='admin' />
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
@@ -332,9 +332,9 @@ export default function VettingReviewPage({
 
   return (
     <div className="h-screen flex flex-col">
-      <AppHeader role={role} />
+      <AppHeader role='admin' />
       <div className="flex-1 flex overflow-hidden">
-        <Sidebar role={role} />
+        <Sidebar role='admin' />
         <div className="flex-1 px-6 py-5 overflow-auto bg-gray-50">
           {/* Header */}
           <div className="mb-6">
@@ -431,26 +431,20 @@ export default function VettingReviewPage({
                       <span className="text-gray-500 text-xs">Carrier</span>
                       <p className="text-gray-900 font-medium">{application.carrier}</p>
                     </div>
-                    <div>
+                   { exchangeRate && exchangeRate !== 1 && <div>
                       <span className="text-gray-500 text-xs">FOB ({application.valueCurrency})</span>
                       <p className="text-gray-900 font-medium">
                         {application.valueCurrency === 'USD' ? '$' : '₦'}{application?.totalValueFob?.toLocaleString()}
                       </p>
-                    </div>
-                    {/* <div>
+                    </div>}
+                    <div>
                       <span className="text-gray-500 text-xs">FOB (USD)</span>
                       <p className="text-gray-900 font-medium">
                         ${(application.totalValueFob / exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </p>
-                    </div> */}
-                    {role === 'vetting' && exchangeRate && exchangeRate !== 1 && (
-                      <div>
-                        <span className="text-gray-500 text-xs">FOB (NGN)</span>
-                        <p className="text-gray-900 font-medium">
-                          ₦{(application.totalValueFob * exchangeRate)?.toLocaleString(undefined, { maximumFractionDigits: 0 })} @ ₦{exchangeRate?.toLocaleString()}/$
-                        </p>
-                      </div>
-                    )}
+                    </div>
+
+
                     <div>
                       <span className="text-gray-500 text-xs">Fee Paid</span>
                       <p className="text-gray-900 font-medium">₦{feePaid?.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
