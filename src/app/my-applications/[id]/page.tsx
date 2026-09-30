@@ -376,8 +376,8 @@ export default function ApplicationDetail() {
                         <dt className="font-medium text-[#6a7a9a]">Destination</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.destinationCountry || '—'}</dd>
                         <dt className="font-medium text-[#6a7a9a]">Mode of Transport</dt><dd className="font-medium text-[#1a2236]">{trackingData.application.modeOfTransport || '—'}</dd>
                         <dt className="font-medium text-[#6a7a9a]">Carrier</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.carrier || '—'}</dd>
-                        <dt className="font-medium text-[#6a7a9a]">FOB Value ({trackingData.shipment.valueCurrency || 'USD'})</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.valueCurrency} {trackingData.shipment.totalValueFob?.toLocaleString() || '—'}</dd>
-                        {fobValueNgn && <><dt className="font-medium text-[#6a7a9a]">FOB Value (NGN)</dt><dd className="font-medium text-[#1a2236]">₦{fobValueNgn.toLocaleString()} @ ₦{trackingData.shipment.exchangeRate.toLocaleString()}/$</dd></>}
+                        <dt className="font-medium text-[#6a7a9a]">FOB Value ({trackingData.shipment.valueCurrency || '--'})</dt><dd className="font-medium text-[#1a2236]">{trackingData.shipment.valueCurrency} {trackingData.shipment.totalValueFob?.toLocaleString() || '—'}</dd>
+                        {fobValueNgn && <><dt className="font-medium text-[#6a7a9a]">FOB Value {trackingData?.shipment?.valueCurrency === 'NGN' ? '(NGN).' : 'USD'}</dt><dd className="font-medium text-[#1a2236]">₦{fobValueNgn.toLocaleString()} @ ₦{trackingData.shipment.exchangeRate.toLocaleString()}/$</dd></>}
                         {firstLineItem && <><dt className="font-medium text-[#6a7a9a]">HS Code</dt><dd className="font-mono font-medium text-[#1a4a8a]">{firstLineItem.hsCode || '—'}{firstLineItem.hsDescription ? ` — ${firstLineItem.hsDescription}` : ''}</dd></>}
                       </dl>
                     </section>

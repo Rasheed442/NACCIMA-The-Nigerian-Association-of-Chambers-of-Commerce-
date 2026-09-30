@@ -2528,10 +2528,12 @@ function NewApplicationContent() {
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">
                                 <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[50px]"
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] bg-[#f3f4f6] text-[#6a7a9a] text-[11px] w-[50px]"
                                   value={item.unit}
                                   onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
                                   placeholder="KG"
+                                  readOnly
+
                                 />
                               </td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">

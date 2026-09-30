@@ -423,8 +423,118 @@ function VettingReviewContent() {
         app.certificateType.toLowerCase().includes(query) ||
         app.modeOfTransport.toLowerCase().includes(query) ||
         app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
         app.applicationId.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query)
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
+      );
+    }
+         if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        app.applicationId.toLowerCase().includes(query) ||
+        app.certificateType.toLowerCase().includes(query) ||
+        app.modeOfTransport.toLowerCase().includes(query) ||
+        app.status.toLowerCase().includes(query) ||
+        app.companyId.toLowerCase().includes(query) ||
+        app.approvalNumber.toLowerCase().includes(query)
       );
     }
 
