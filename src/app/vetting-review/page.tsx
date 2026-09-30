@@ -1092,6 +1092,7 @@ function VettingReviewContent() {
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
                     {[
                       'applicationId',
+                      'tin',
                       'Approval',
                       'Certificate',
                       'Transport',
@@ -1170,6 +1171,9 @@ function VettingReviewContent() {
                           </td>
 
                           {/* Approval */}
+                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                            {app.tin}
+                          </td>
                           <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                             {app.approvalNumber}
                           </td>
