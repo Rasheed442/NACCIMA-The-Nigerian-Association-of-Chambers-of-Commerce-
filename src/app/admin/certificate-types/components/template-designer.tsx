@@ -1248,6 +1248,19 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
     // Convert templateConfig to JSON string
     const templateConfigString = JSON.stringify(templateConfigObj);
+    
+    // Log the complete template configuration for debugging
+    console.log('=== TEMPLATE CONFIGURATION DEBUG ===');
+    console.log('Template Config Object:', templateConfigObj);
+    console.log('Template Config JSON:', templateConfigString);
+    console.log('Field Keys:', Object.keys(fields));
+    console.log('Total Fields:', Object.keys(fields).length);
+    console.log('Page Dimensions:', {
+      width: generalData?.pageSize?.width,
+      height: generalData?.pageSize?.height,
+      index: generalData?.pageIndex
+    });
+    console.log('=== END TEMPLATE CONFIGURATION DEBUG ===');
 
     // Convert applicableFields from object to array of enabled field names
     const applicableFieldsArray = applicableFieldsData?.enabledFields

@@ -2894,13 +2894,13 @@ function NewApplicationContent() {
                     ⚠ Not a NACCIMA Member — non-member rates apply to your application
                   </div>
                 )}
-                {selectedCertRate && (
+                {/* {selectedCertRate && (
                   <div className={`flex items-center my-2 gap-[10px] px-[12px] py-[8px] rounded mb-4 text-[11px] font-semibold border ${companyProfile?.membershipStatus === "MEMBER" ? 'bg-[#d1fae5] text-[#065f46] border-[#86efac]' : 'bg-[#fef3c7] text-[#92400e] border-[#fcd34d]'}`}>
                     {companyProfile?.membershipStatus === "MEMBER" ? '★' : '⚠'} {selectedCertRate.feeType === 'FLAT' 
                       ? `Member Rate: ₦${selectedCertRate.memberRate.toLocaleString()}`
                       : `Member Rate: ${(selectedCertRate.memberRate * 100).toFixed(2)}% of FOB`}
                   </div>
-                )}
+                )} */}
 
                 {paymentData ? (
                   <>
