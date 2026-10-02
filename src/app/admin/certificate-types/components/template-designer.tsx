@@ -74,12 +74,9 @@ function SwitchField({ label, checked, onChange }: SwitchFieldProps) {
 // NOTE (fix): a palette row is draggable *and* clickable (click = "add at a
 // sensible default spot", drag = "add exactly where dropped"). Some browsers
 // still fire a `click` event on the source element after a drag-and-drop
-// gesture completes, even though the pointer moved. Previously this meant a
-// single drag-onto-canvas action could call `onAdd` twice: once from
-// `onDrop` (correct position) and once from the stray `click` (fixed
-// fallback position), producing a duplicate/overlapping field that appeared
-// to "jump" to the top-left of the page. `draggingRef` suppresses the click
-// handler for the duration of (and immediately after) a drag gesture.
+// gesture completes. `draggingRef` suppresses the click handler for the
+// duration of (and immediately after) a drag gesture so one drag can't add
+// two fields.
 function PaletteRow({ item, onAdd }: { item: PaletteItem; onAdd: () => void }) {
   const Icon = item.icon;
   const draggingRef = useRef(false);
@@ -90,8 +87,6 @@ function PaletteRow({ item, onAdd }: { item: PaletteItem; onAdd: () => void }) {
   };
 
   const handleDragEnd = () => {
-    // Defer clearing the flag so a trailing synthetic click (fired right
-    // after dragend in some browsers) still sees draggingRef as true.
     setTimeout(() => {
       draggingRef.current = false;
     }, 0);
@@ -195,16 +190,9 @@ interface FieldElement {
   imageUrl?: string;
 }
 
-// FIX: ids used to come from a module-level counter that always restarts
-// at 1 on every page load. A certificate loaded for editing carries
-// element ids ("el_3", "el_7", ...) assigned during a previous session
-// with a different counter history, so the very first field added in a
-// new session ("el_1") could collide with an id a saved field already
-// has. Selection/highlighting matches purely by id ("el.id ===
-// selectedId"), so two elements sharing an id get selected and
-// highlighted together — clicking one visually highlights whichever
-// other field happens to share its id. A truly unique id removes the
-// possibility of that collision entirely.
+// Ids must be globally unique (see earlier fix): selection/highlighting
+// matches purely by id, so a counter that restarts on every page load could
+// collide with ids already saved on a loaded template.
 const uid = (prefix: string) => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}_${crypto.randomUUID()}`;
@@ -238,9 +226,9 @@ function kindPalette(kind: FieldKind) {
 /* Paper geometry (PDF points, shared create/edit fallback)            */
 /* ------------------------------------------------------------------ */
 
-// These match the page dimensions persisted by getFormData when no PDF page
-// metadata is available. Keeping one fallback prevents a new certificate's
-// canvas from appearing larger than the same certificate in edit mode.
+// Fallback only. As soon as the template PDF is loaded, PdfBackdrop reports
+// the PDF page's REAL size and that replaces these values, so the canvas
+// coordinate space is always the PDF's own coordinate space.
 const PAPER_W = 608.16;
 const PAPER_H = 1008.48;
 const GRID_STEP = 8;
@@ -249,22 +237,10 @@ const GRID_STEP = 8;
 /* Sizing                                                              */
 /* ------------------------------------------------------------------ */
 
-// Smallest a component can be resized to (PDF points).
 const MIN_W = 16;
 const MIN_H = 12;
-
-// Text-like fields are dropped at a compact width so they don't look
-// oversized on the template. Users can then drag the handles to fit.
 const DEFAULT_MAX_W = 140;
-
-// Canvas scroll container has p-8 (32px) padding around the page on every
-// side (see the `p-8` wrapper around `canvasScrollRef`). Used to translate
-// "visible center of the scroll container" into page-local coordinates.
 const CANVAS_PADDING = 32;
-
-// How far (in PDF points) each successive click-added field is nudged
-// diagonally from the last, and how many steps before the cascade wraps
-// back to the canvas-center position and starts again.
 const CASCADE_STEP = 24;
 const CASCADE_MAX = 10;
 
@@ -273,7 +249,6 @@ function defaultWidthFor(item: { kind: FieldKind; w: number }) {
   return Math.min(item.w, DEFAULT_MAX_W);
 }
 
-// The eight resize handles shown around the selected component.
 const RESIZE_HANDLES: Array<{ key: ResizeHandle; left: string; top: string; cursor: string }> = [
   { key: 'nw', left: '0%', top: '0%', cursor: 'nwse-resize' },
   { key: 'n', left: '50%', top: '0%', cursor: 'ns-resize' },
@@ -316,7 +291,6 @@ interface ApiField {
 const APPLICATION_FIELDS_VISIBLE = 14;
 const TOTAL_ENABLED_FIELDS = 26;
 
-// Mapping from templateComponent to component properties
 const TEMPLATE_COMPONENT_MAP: Record<string, { icon: IconType; typeLabel: string; w: number; h: number }> = {
   TEXT: { icon: FiFileText, typeLabel: 'Text', w: 180, h: 18 },
   MULTI_LINE_TEXT: { icon: FiAlignLeft, typeLabel: 'Multi-line Text', w: 220, h: 40 },
@@ -332,7 +306,6 @@ const TEMPLATE_COMPONENT_MAP: Record<string, { icon: IconType; typeLabel: string
   SIGNATURE: { icon: FiEdit, typeLabel: 'Signature', w: 172, h: 20 },
 };
 
-// Convert API field to PaletteItem
 function apiFieldToPaletteItem(field: ApiField): PaletteItem {
   const component = TEMPLATE_COMPONENT_MAP[field.templateComponent] || TEMPLATE_COMPONENT_MAP.TEXT;
   let kind: FieldKind = 'application';
@@ -363,7 +336,6 @@ function apiFieldToPaletteItem(field: ApiField): PaletteItem {
   };
 }
 
-// Full palette of all possible fields
 const FULL_PALETTE_GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
   {
     label: 'Application Fields',
@@ -427,34 +399,38 @@ const TABS = [
 /* ------------------------------------------------------------------ */
 /* Backend field-code mapping                                          */
 /* ------------------------------------------------------------------ */
-// The backend's templateConfig.fields object is keyed by the field CODE
-// (e.g. "SHIPPER_NAME", "TIN"), not by the canvas element's internal id
-// (e.g. "el_7"). This is the same map ApplicableFields/RequiredDocuments
-// already use, so we reuse it here to translate the palette's camelCase
-// `type` values into the backend's UPPER_SNAKE_CASE codes.
+
 const FIELD_ID_MAP: Record<string, string> = {
   consigneeAddress: 'CONSIGNEE_ADDRESS',
   shipperName: 'SHIPPER_NAME',
   shipperAddress: 'SHIPPER_ADDRESS',
+  shipper: 'SHIPPER_NAME',
   tin: 'TIN',
   importerEmail: 'IMPORTER_EMAIL',
   modeOfTransport: 'MODE_OF_TRANSPORT',
+  transport: 'MODE_OF_TRANSPORT',
   consignee: 'CONSIGNEE',
   carrier: 'CARRIER',
   destination: 'DESTINATION',
   countryOfManufacturing: 'COUNTRY_OF_MANUFACTURING',
   fobValue: 'FOB_VALUE',
+  totalValueFob: 'TOTAL_VALUE_FOB',
   totalItems: 'TOTAL_ITEMS',
   date: 'DATE',
   hsCode: 'HS_CODE',
   marksNo: 'MARKS_NO',
   ecowasNumber: 'ECOWAS_NUMBER',
+  criteria: 'CRITERIA',
   criteriaEtls: 'CRITERIA_ETLS',
+  unit: 'UNIT',
   unitOfMeasurement: 'UNIT_OF_MEASUREMENT',
+  quantity: 'QUANTITY',
   numberKindPackages: 'NUMBER_KIND_PACKAGES',
+  description: 'DESCRIPTION',
   descriptionOfGoods: 'DESCRIPTION_OF_GOODS',
   grossWeight: 'GROSS_WEIGHT',
   nomenclature: 'NOMENCLATURE',
+  value: 'VALUE',
   invoiceNumber: 'INVOICE_NUMBER',
   approvalNumber: 'APPROVAL_NUMBER',
   certificateNumber: 'CERTIFICATE_NUMBER',
@@ -462,21 +438,182 @@ const FIELD_ID_MAP: Record<string, string> = {
   qrCode: 'QR_CODE',
 };
 
-// Resolve a canvas element's palette `type` (element.text) to the code the
-// backend expects. Dynamic API-driven fields already arrive with their
-// backend code as `type` (see apiFieldToPaletteItem -> type: field.code),
-// so those pass through unchanged; the static fallback palette uses
-// camelCase types that need translating via FIELD_ID_MAP.
 function backendFieldCode(elementText: string): string {
   return FIELD_ID_MAP[elementText] || elementText;
 }
 
+// NEW: elements that are actually written to templateConfig.fields.
+// Disabled fields are hidden in Preview, so they must not be rendered on the
+// generated certificate either; components (checkboxes) and the goods table
+// have no entry in `fields`.
+function isRenderedField(el: FieldElement) {
+  return el.enabled && el.kind !== 'component' && el.kind !== 'goods';
+}
+
+// NEW: `fields` is keyed by backend code, so two canvas elements with the
+// same code (e.g. "destination" placed twice) collapse into one entry and
+// one of them silently disappears from the generated certificate.
+function findDuplicateCodes(elements: FieldElement[]): string[] {
+  const counts = new Map<string, number>();
+  elements.filter(isRenderedField).forEach((el) => {
+    const code = backendFieldCode(el.text);
+    counts.set(code, (counts.get(code) || 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .filter(([, n]) => n > 1)
+    .map(([code]) => code);
+}
+
+/* ------------------------------------------------------------------ */
+/* PDF backdrop                                                        */
+/* ------------------------------------------------------------------ */
+
+// The media server doesn't send CORS headers, so the browser won't let us read
+// template PDF bytes from it directly (an <iframe> can display it, but pdf.js
+// needs the bytes). Route those URLs through a same-origin Next.js rewrite:
+//   /media-proxy/:path*  ->  https://mediaserver.advancedtechnologypark.com/media/:path*
+// Once the media server allows this origin via CORS, this can be removed.
+const MEDIA_HOST = 'mediaserver.advancedtechnologypark.com';
+function toSameOriginPdfUrl(src: string): { url: string; proxied: boolean } {
+  try {
+    const u = new URL(src);
+    if (u.host === MEDIA_HOST) {
+      // Served by app/api/pdf-proxy/route.ts, which fetches the exact URL server-side.
+      return { url: `/api/pdf-proxy?url=${encodeURIComponent(src)}`, proxied: true };
+    }
+  } catch {
+    /* relative or data: URL - leave as is */
+  }
+  return { url: src, proxied: false };
+}
+
+// Resolution multiplier for the rasterised page (CSS size stays pageW x pageH).
+const BACKDROP_QUALITY = 2;
+
+// ROOT-CAUSE FIX. The designer used to show the template in an <iframe>
+// stretched to whatever pageW x pageH the canvas happened to have. The
+// browser's PDF viewer lays the page out by its own rules (fit-width, gaps,
+// margins), so the picture you positioned fields on did not correspond to
+// the PDF's real point coordinates, while the server draws text at those
+// real coordinates. Every field therefore landed a little off, by a
+// different amount depending on where it was.
+//
+// This renders the chosen PDF page to a canvas (pdf.js) and reports the
+// page's real size in points, so the canvas coordinate space IS the PDF's
+// coordinate space. If pdfjs-dist isn't available or fails, it falls back
+// to the old iframe so the designer still works.
+function PdfBackdrop({
+  src,
+  pageIndex = 0,
+  onMeasured,
+}: {
+  src: string;
+  pageIndex?: number;
+  onMeasured?: (size: { width: number; height: number }) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [useFallback, setUseFallback] = useState(false);
+  const onMeasuredRef = useRef(onMeasured);
+  onMeasuredRef.current = onMeasured;
+
+  useEffect(() => {
+    let cancelled = false;
+    let renderTask: { cancel: () => void } | null = null;
+    let loadingTask: { destroy: () => void } | null = null;
+    setUseFallback(false);
+
+    (async () => {
+      try {
+        // @ts-ignore - optional dependency: `npm i pdfjs-dist`
+        const pdfjs: any = await import('pdfjs-dist');
+        if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+          // pdf.js v4+ ships an .mjs worker. On v3 use `pdf.worker.min.js`.
+          pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+        }
+
+        // Load the bytes ourselves (through apiFetch, so auth headers/credentials
+        // match the rest of the app) instead of letting pdf.js fetch the URL.
+        let res: Response;
+        const target = toSameOriginPdfUrl(src);
+        try {
+          res =
+            src.startsWith('data:') || target.proxied
+              ? await fetch(target.url)
+              : await apiFetch(src);
+        } catch (fetchErr) {
+          throw new Error(
+            `Could not fetch template PDF from ${src}. Check the Network tab: this is usually CORS ` +
+            `(the file route must allow this frontend origin), auth, or a wrong URL. (${String(fetchErr)})`
+          );
+        }
+        if (!res.ok) throw new Error(`Template PDF request to ${src} returned HTTP ${res.status}`);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (cancelled) return;
+
+        const task = pdfjs.getDocument({ data: bytes });
+        loadingTask = task;
+        const doc = await task.promise;
+        if (cancelled) return;
+
+        const index = Math.min(Math.max(pageIndex, 0), doc.numPages - 1);
+        const page = await doc.getPage(index + 1);
+        if (cancelled) return;
+
+        const base = page.getViewport({ scale: 1 });
+        onMeasuredRef.current?.({
+          width: Math.round(base.width * 100) / 100,
+          height: Math.round(base.height * 100) / 100,
+        });
+
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!canvas || !ctx) return;
+
+        const viewport = page.getViewport({ scale: BACKDROP_QUALITY });
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+
+        const task2 = page.render({ canvas, canvasContext: ctx, viewport });
+        renderTask = task2;
+        await task2.promise;
+      } catch (err: any) {
+        if (cancelled || err?.name === 'RenderingCancelledException') return;
+        console.warn('[TemplateDesigner] pdf.js backdrop unavailable, falling back to iframe:', err);
+        setUseFallback(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      try {
+        renderTask?.cancel();
+      } catch {
+        /* ignore */
+      }
+      try {
+        loadingTask?.destroy();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [src, pageIndex]);
+
+  if (useFallback) {
+    return (
+      <iframe
+        src={`${src}#toolbar=0&navpanes=0&scrollbar=0`}
+        className="absolute inset-0 w-full h-full border-0 pointer-events-none"
+        title="Template Preview"
+      />
+    );
+  }
+
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+}
+
 const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(({ mode = 'create', certificateType }, ref) => {
-  // New certificate types need their required details and template uploaded
-  // before fields can be placed, so begin the create flow on General.
   const [activeTab, setActiveTab] = useState(mode === 'create' ? 'general' : 'template-designer');
 
-  // Refs for child components
   const generalRef = useRef<GeneralRef>(null);
   const applicableFieldsRef = useRef<ApplicableFieldsRef>(null);
   const requiredDocumentsRef = useRef<RequiredDocumentsRef>(null);
@@ -495,6 +632,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const [enabledFields, setEnabledFields] = useState<Record<string, boolean>>({});
   const [templateDataUrl, setTemplateDataUrl] = useState<string | null>(null);
   const [templatePageSize, setTemplatePageSize] = useState<{ width: number; height: number } | null>(null);
+  const [templatePageIndex, setTemplatePageIndex] = useState(0);
   const [apiFields, setApiFields] = useState<ApiField[]>([]);
   const [loadingFields, setLoadingFields] = useState(true);
   const [certificateTypeCode, setCertificateTypeCode] = useState<string>('');
@@ -508,11 +646,18 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
 
-  // Effective page size (PDF points) used by the canvas and by resizing.
+  // Effective page size (PDF points) used by the canvas, resizing, AND saved
+  // as templateConfig.page. This is the single source of truth.
   const pageW = templatePageSize?.width || PAPER_W;
   const pageH = templatePageSize?.height || PAPER_H;
 
-  // Load enabled fields from localStorage and listen for changes
+  // Called by PdfBackdrop with the PDF page's real size in points.
+  const handlePdfMeasured = useCallback((size: { width: number; height: number }) => {
+    setTemplatePageSize((prev) =>
+      prev && Math.abs(prev.width - size.width) < 0.01 && Math.abs(prev.height - size.height) < 0.01 ? prev : size
+    );
+  }, []);
+
   useEffect(() => {
     const loadEnabledFields = () => {
       const savedValue = localStorage.getItem('applicable-fields-enabled');
@@ -525,10 +670,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       }
     };
 
-    // Initial load
     loadEnabledFields();
 
-    // Listen for storage changes (when localStorage is modified in another tab or window)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'applicable-fields-enabled' && e.newValue) {
         try {
@@ -539,7 +682,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       }
     };
 
-    // Listen for custom event (when localStorage is modified in the same tab)
     const handleCustomEvent = (e: CustomEvent) => {
       setEnabledFields(e.detail);
     };
@@ -553,11 +695,13 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     };
   }, []);
 
-  // Listen for custom event (when template is uploaded in General tab)
+  // Template uploaded in General tab. The size in the event is only a first
+  // guess; PdfBackdrop replaces it with the measured page size.
   useEffect(() => {
     const handleTemplateEvent = (e: CustomEvent) => {
       setTemplateDataUrl(e.detail.dataUrl);
-      setTemplatePageSize(e.detail.pageSize);
+      if (e.detail.pageSize) setTemplatePageSize(e.detail.pageSize);
+      setTemplatePageIndex(Number.isFinite(e.detail.pageIndex) ? e.detail.pageIndex : 0);
     };
 
     window.addEventListener('template-data-uploaded', handleTemplateEvent as EventListener);
@@ -567,8 +711,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     };
   }, []);
 
-  // When editing a certificate type, preload its already-uploaded PDF instead
-  // of waiting for a new upload from the General tab.
+  // When editing, preload the already-uploaded PDF.
   useEffect(() => {
     const templateUrl = certificateType?.templateUrl;
     if (!templateUrl) {
@@ -589,14 +732,18 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         : certificateType.templateConfig;
       const page = config?.page;
       if (Number.isFinite(page?.width) && Number.isFinite(page?.height)) {
-        setTemplatePageSize({ width: page.width, height: page.height });
+        setTemplatePageSize((prev) =>
+          prev && prev.width === page.width && prev.height === page.height
+            ? prev
+            : { width: page.width, height: page.height }
+        );
       }
+      setTemplatePageIndex(Number.isFinite(page?.index) ? page.index : 0);
     } catch {
       // A template preview can still be shown when no saved page metadata exists.
     }
   }, [certificateType?.id, certificateType?.templateUrl, certificateType?.templateConfig]);
 
-  // Function to reload elements from certificate type
   const reloadElementsFromCertificateType = useCallback(() => {
     if (!certificateType) {
       setElements([]);
@@ -609,10 +756,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         ? JSON.parse(certificateType.templateConfig)
         : certificateType.templateConfig;
       const loaded: FieldElement[] = Array.isArray(config?.elements) ? config.elements : [];
-      // Safety net: de-duplicate ids on load. Selection/highlighting is
-      // matched purely by id, so if a previously-saved template somehow
-      // contains two elements with the same (or a missing) id, both would
-      // get selected/highlighted together whenever either one is clicked.
       const seenIds = new Set<string>();
       const deduped = loaded.map((el) => {
         const isDuplicate = !el.id || seenIds.has(el.id);
@@ -630,7 +773,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     }
   }, [certificateType]);
 
-  // Warn before leaving page with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
@@ -641,8 +783,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-
-    // Notify sidebar about unsaved changes
     window.dispatchEvent(new CustomEvent('template-unsaved-changes', { detail: hasUnsavedChanges }));
 
     return () => {
@@ -650,14 +790,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     };
   }, [hasUnsavedChanges]);
 
-  // The canvas must be populated from the record being edited.  This also
-  // prevents fields from a previous certificate type leaking in through the
-  // old, shared localStorage key.
   useEffect(() => {
     reloadElementsFromCertificateType();
   }, [reloadElementsFromCertificateType]);
 
-  // Fetch fields from API
   useEffect(() => {
     const fetchFields = async () => {
       try {
@@ -679,7 +815,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         }
       } catch (error) {
         console.error('Failed to fetch certificate fields:', error);
-        // Keep using fallback fields
       } finally {
         setLoadingFields(false);
       }
@@ -690,9 +825,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
   const canvasScrollRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
-  // Counts consecutive fields added by clicking a palette row (as opposed to
-  // dragging one to an explicit spot). Used to cascade their positions so
-  // they don't all land on top of one another — see addComponent below.
   const clickAddIndexRef = useRef(0);
   const dragRef = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const resizeRef = useRef<{
@@ -766,14 +898,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       const p = kindPalette(item.kind);
       const w = defaultWidthFor(item);
 
-      // FIX: previously, adding a field via click (as opposed to dragging
-      // it onto a specific spot) always fell back to a fixed x/y of 60,60
-      // — right at the top-left corner of the page, and often off-screen
-      // once the user had scrolled/zoomed. When combined with the
-      // duplicate-add bug (see PaletteRow), this made it look like a field
-      // "jumped" to the top edge whenever a palette field was selected.
-      // Now, when no explicit drop coordinates are given, the new field is
-      // centered in whatever part of the canvas is currently visible.
+      // Click-added fields are centred in the visible part of the canvas and
+      // cascaded diagonally so they never stack on top of each other.
       let posX = x;
       let posY = y;
       if (posX === undefined || posY === undefined) {
@@ -790,21 +916,11 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           baseY = 60;
         }
 
-        // FIX: every click-added field used to land on this exact same
-        // "center of the visible canvas" point, so clicking several
-        // palette rows in a row stacked every field on top of the last
-        // one — earlier fields were still there, just hidden underneath.
-        // Cascade each successive click-added field diagonally (like a
-        // paste-cascade in Figma/PowerPoint) so they land at distinct,
-        // visible spots. The cascade resets to 0 offset once it reaches
-        // CASCADE_MAX steps, and resumes from the (possibly moved) canvas
-        // center again from there.
         const cascadeIndex = clickAddIndexRef.current % CASCADE_MAX;
         clickAddIndexRef.current += 1;
         posX = Math.round(baseX + cascadeIndex * CASCADE_STEP);
         posY = Math.round(baseY + cascadeIndex * CASCADE_STEP);
 
-        // Keep the field on the page.
         posX = Math.min(Math.max(0, posX), Math.max(0, pageW - w));
         posY = Math.min(Math.max(0, posY), Math.max(0, pageH - item.h));
         if (snapOn) {
@@ -823,8 +939,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         enabled: true,
         x: posX,
         y: posY,
-        // Compact default width so new fields don't look oversized;
-        // drag the handles (or edit Width in the panel) to fit.
         w,
         h: item.h,
         fontSize: item.h <= 18 ? 8.5 : 9.5,
@@ -858,14 +972,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     setSelectedId(el.id);
     setPast((p) => [...p.slice(-49), elements]);
     setFuture([]);
-    // FIX: dragging an existing field updates its x/y directly in the
-    // mousemove handler below rather than through commit() (that handler
-    // needs to run on every mouse move without pushing a new undo entry
-    // each time). But hasUnsavedChanges was only ever set inside commit(),
-    // so moving a field never flagged the template as changed — switching
-    // tabs afterward silently skipped the "you have unsaved changes"
-    // warning even though the layout had actually changed. Flag it here,
-    // the moment the drag gesture begins.
+    // Drag updates x/y directly (bypassing commit), so flag unsaved here.
     setHasUnsavedChanges(true);
     dragRef.current = { id: el.id, startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y };
   };
@@ -874,12 +981,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     e.preventDefault();
     e.stopPropagation();
     setSelectedId(el.id);
-    // One undo step for the whole resize gesture.
     setPast((p) => [...p.slice(-49), elements]);
     setFuture([]);
-    // Same reasoning as onElMouseDown above: resizing updates the element
-    // directly in the mousemove handler, bypassing commit(), so it must
-    // flag unsaved changes itself.
     setHasUnsavedChanges(true);
     dragRef.current = null;
     resizeRef.current = {
@@ -898,7 +1001,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     e.preventDefault();
     const type = e.dataTransfer.getData('text/plain');
 
-    // Search in both dynamic API fields and fallback palette
     const item = filteredGroups.flatMap((g) => g.items).find((i) => i.type === type);
 
     if (!item || !gridRef.current) return;
@@ -913,7 +1015,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.target !== gridRef.current) return;
+    // The backdrop canvas/iframe is a child of the grid, so accept clicks on
+    // it as "empty canvas" too (previously only the grid div itself counted).
+    const target = e.target as HTMLElement;
+    if (target !== gridRef.current && target.tagName !== 'CANVAS' && target.tagName !== 'IFRAME') return;
     setSelectedId(null);
   };
 
@@ -921,7 +1026,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     const snap = (v: number) => (snapOn ? Math.round(v / GRID_STEP) * GRID_STEP : Math.round(v));
 
     function onMove(e: MouseEvent) {
-      // --- Resizing ---
       const rz = resizeRef.current;
       if (rz) {
         const dx = (e.clientX - rz.startX) / zoom;
@@ -934,19 +1038,16 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         let right = origRight;
         let bottom = origBottom;
 
-        // Only the edges being dragged move (and snap to the grid).
         if (rz.handle.includes('w')) left = snap(rz.origX + dx);
         if (rz.handle.includes('e')) right = snap(origRight + dx);
         if (rz.handle.includes('n')) top = snap(rz.origY + dy);
         if (rz.handle.includes('s')) bottom = snap(origBottom + dy);
 
-        // Keep a minimum size, anchored to the edge that is not moving.
         if (rz.handle.includes('w')) left = Math.min(left, origRight - MIN_W);
         if (rz.handle.includes('e')) right = Math.max(right, rz.origX + MIN_W);
         if (rz.handle.includes('n')) top = Math.min(top, origBottom - MIN_H);
         if (rz.handle.includes('s')) bottom = Math.max(bottom, rz.origY + MIN_H);
 
-        // Stay inside the page (without forcing already-overflowing fields to shrink).
         if (rz.handle.includes('w')) left = Math.max(0, left);
         if (rz.handle.includes('n')) top = Math.max(0, top);
         if (rz.handle.includes('e')) right = Math.min(right, Math.max(pageW, origRight));
@@ -962,7 +1063,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         return;
       }
 
-      // --- Dragging ---
       const drag = dragRef.current;
       if (!drag) return;
       const dx = e.clientX - drag.startX;
@@ -1003,7 +1103,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     return () => document.removeEventListener('keydown', onKey);
   }, [selectedId, deleteElement, undo, redo]);
 
-  // Expose data via ref
   useImperativeHandle(ref, () => ({
     getData: () => ({
       templateConfig: {
@@ -1014,8 +1113,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   }), [elements, templatePageSize]);
 
   const handleSave = async () => {
-    // Only validate General tab if we're in create mode or actively on the General tab
-    // In edit mode, allow saving changes from other tabs without validating General fields
     if (mode === 'create' || activeTab === 'general') {
       const validationErrors = generalRef.current?.validate() ?? {};
       if (Object.keys(validationErrors).length > 0) {
@@ -1025,14 +1122,24 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       }
     }
 
+    // NEW: refuse to save a layout where one field code is placed twice —
+    // the server keys fields by code, so only one placement would survive.
+    const duplicateCodes = findDuplicateCodes(elements);
+    if (duplicateCodes.length > 0) {
+      setActiveTab('template-designer');
+      setSaveError(
+        `These fields are placed more than once and only one placement can be rendered: ${duplicateCodes.join(', ')}. ` +
+        'Delete or disable the extra copies, then save again.'
+      );
+      return;
+    }
+
     setIsSavingCertificate(true);
     setSaveError(null);
     try {
       const formData = getFormData();
 
-      // In create mode, create a new certificate type
       if (mode === 'create' || !certificateType?.id) {
-        // Get fee structure from FeeCharges component
         const feeChargesData = feeChargesRef.current?.getData();
         const feeStructureJson = feeChargesData?.feeStructure 
           ? JSON.stringify(feeChargesData.feeStructure)
@@ -1045,7 +1152,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
         console.log('Fee structure JSON:', feeStructureJson);
 
-        // Build the full payload for certificate type creation
         const payload = {
           code: formData.code,
           name: formData.name,
@@ -1072,8 +1178,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           throw new Error(result.message || 'Failed to create certificate type.');
         }
 
-
-        // After successful creation, upload the template to the newly created certificate type
         const generalData = generalRef.current?.getData();
         if (generalData?.templateFile && result.data?.id) {
           try {
@@ -1105,12 +1209,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         setShowUnsavedWarning(false);
         setTimeout(() => setSaved(false), 1200);
         
-        // Navigate to the certificate types page after successful creation
         setTimeout(() => {
           window.location.href = '/admin/certificate-types';
         }, 1500);
       } else {
-        // In edit mode, update existing certificate type
         const response = await apiFetch(`${getBaseUrl()}/api/v1/admin/certificate-types/${certificateType.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1144,11 +1246,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   };
 
   const handleSubmitCertificateType = () => {
-    // Handle successful certificate type submission
     console.log('Certificate type submitted successfully');
   };
 
-  // Function to collect all form data from child components
+  // Collect all form data from child components
   const getFormData = () => {
     const generalData = generalRef.current?.getData();
     const applicableFieldsData = applicableFieldsRef.current?.getData();
@@ -1159,10 +1260,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     console.log('getFormData - applicableFieldsData:', applicableFieldsData);
     console.log('getFormData - requiredDocumentsData:', requiredDocumentsData);
 
-    // Convert requiredDocuments from object to JSON string of array
     let requiredDocumentsString = "[\"COMMERCIAL_INVOICE\",\"PACKING_LIST\",\"BILL_OF_LADING\"]";
     if (requiredDocumentsData?.requiredDocuments) {
-      // If it's an object with transport modes, flatten all documents into a single array
       if (typeof requiredDocumentsData.requiredDocuments === 'object' && !Array.isArray(requiredDocumentsData.requiredDocuments)) {
         const allDocs = Object.values(requiredDocumentsData.requiredDocuments).flat();
         requiredDocumentsString = JSON.stringify(allDocs);
@@ -1171,42 +1270,23 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       }
     }
 
-    // --------------------------------------------------------------
-    // Build templateConfig for the backend.
+    // templateConfig.fields is keyed by backend field CODE (not canvas id).
     //
-    // FIX: the backend's `fields` map is keyed by the field CODE
-    // (e.g. "SHIPPER_NAME", "TIN") — the same codes used in
-    // `applicableFields` / `FIELD_ID_MAP` — not by the canvas
-    // element's internal `id` (e.g. "el_7"). The internal id is an
-    // in-memory counter that resets on every page load and carries
-    // no meaning outside this component, so the backend/renderer had
-    // no way to resolve it back to an actual field. We now key by
-    // `backendFieldCode(element.text)` instead.
-    //
-    // Font/align are also uppercased to match the backend's enum
-    // style seen in the sample payload ("HELVETICA", "LEFT", ...).
-    // --------------------------------------------------------------
+    // CHANGES vs. the previous version:
+    //  - disabled elements are no longer written (Preview already hides them);
+    //  - valign / leading / bold / italic / maxLines are included so the
+    //    renderer can match what the designer shows (the designer centres text
+    //    vertically inside the box; without valign the renderer can only guess).
+    //    If your backend rejects unknown keys, remove these five lines.
     const fields: any = {};
-    // TODO(backend): the "Goods Table" is currently a single draggable
-    // placeholder (kind === 'goods') on the canvas, but the backend's
-    // templateConfig schema expects a `goods` object with per-column
-    // placement data (goods.columns.VALUE, ITEM_NO, CRITERIA, MARKS_NO,
-    // ...) plus goods.minY / goods.startY. There's no UI yet to place
-    // individual goods columns, so we deliberately do NOT fabricate
-    // this data. If a goods-table element is enabled, we surface a
-    // console warning so it isn't silently dropped without anyone
-    // noticing. This needs a product/design follow-up (either add a
-    // per-column goods UI, or have the backend accept a single table
-    // region and lay out columns itself).
     let hasUnmappedGoodsTable = false;
 
     elements.forEach((element) => {
-      if (element.kind === 'component') return;
-
-      if (element.kind === 'goods') {
+      if (element.kind === 'goods' && element.enabled) {
         hasUnmappedGoodsTable = true;
         return;
       }
+      if (!isRenderedField(element)) return;
 
       const code = backendFieldCode(element.text);
       fields[code] = {
@@ -1218,6 +1298,11 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         font: (element.fontFamily || 'HELVETICA').toUpperCase(),
         align: (element.align || 'left').toUpperCase(),
         wrap: element.wrap || false,
+        valign: (element.valign || 'top').toUpperCase(),
+        leading: element.leading,
+        bold: element.bold,
+        italic: element.italic,
+        maxLines: element.maxLines,
       };
     });
 
@@ -1230,39 +1315,30 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       );
     }
 
+    // FIX: `page` is exactly the coordinate space the fields were authored in
+    // (the PDF's real page size, measured by PdfBackdrop). Previously
+    // generalData.pageSize was preferred, which could differ from the canvas
+    // size the user actually positioned fields on.
     const templateConfigObj: any = {
       page: {
-        index: generalData?.pageIndex || 0,
-        width: generalData?.pageSize?.width || pageW,
-        height: generalData?.pageSize?.height || pageH,
+        index: generalData?.pageIndex ?? templatePageIndex ?? 0,
+        width: pageW,
+        height: pageH,
       },
       fields,
-      // Retain the complete canvas model (including UI-only metadata like
-      // color, kind, badges, etc.) so the designer can reopen and re-edit
-      // exactly what was there. NOTE: confirm with backend that this key
-      // is persisted as-is and not stripped by templateConfig validation —
-      // if it's dropped, editing an existing certificate will lose its
-      // saved layout (see elements-reload effect above).
       elements,
     };
 
-    // Convert templateConfig to JSON string
     const templateConfigString = JSON.stringify(templateConfigObj);
-    
-    // Log the complete template configuration for debugging
+
     console.log('=== TEMPLATE CONFIGURATION DEBUG ===');
     console.log('Template Config Object:', templateConfigObj);
     console.log('Template Config JSON:', templateConfigString);
     console.log('Field Keys:', Object.keys(fields));
     console.log('Total Fields:', Object.keys(fields).length);
-    console.log('Page Dimensions:', {
-      width: generalData?.pageSize?.width,
-      height: generalData?.pageSize?.height,
-      index: generalData?.pageIndex
-    });
+    console.log('Page Dimensions:', { width: pageW, height: pageH, index: templateConfigObj.page.index });
     console.log('=== END TEMPLATE CONFIGURATION DEBUG ===');
 
-    // Convert applicableFields from object to array of enabled field names
     const applicableFieldsArray = applicableFieldsData?.enabledFields
       ? Object.keys(applicableFieldsData.enabledFields).filter(key => applicableFieldsData.enabledFields[key] === true)
       : [];
@@ -1295,19 +1371,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     setZoom(Math.round(next * 100) / 100);
   }, [pageW]);
 
-  // FIX: the canvas used to always start at a fixed 90% zoom, no matter
-  // how much screen space was actually available. On a wide monitor that
-  // comfortably fits the whole page -- and every already-placed field
-  // with it. On a smaller laptop screen the same fixed zoom made the page
-  // wider than the visible canvas area, so part of the page (and
-  // whichever fields happened to sit in that cut-off region) was pushed
-  // outside the visible area and only reachable by scrolling. The fields
-  // were never actually in different positions -- they're exactly where
-  // they were saved -- but only seeing a portion of the page at a time
-  // looks like everything is scattered. Auto-fitting the zoom to the
-  // available viewport, on load, whenever the page size becomes known,
-  // and whenever the window is resized, keeps the whole template (and
-  // every field on it) framed consistently no matter the screen size.
   useEffect(() => {
     handleFitWidth();
   }, [handleFitWidth]);
@@ -1333,11 +1396,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    // If API fields are loaded, use them to build dynamic palette
     if (apiFields.length > 0) {
-      // Group fields by category
       const grouped = apiFields.reduce((acc, field) => {
-        if (!field.applicable) return acc; // Skip non-applicable fields
+        if (!field.applicable) return acc;
 
         const category = field.category || 'Other';
         if (!acc[category]) {
@@ -1347,13 +1408,11 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         return acc;
       }, {} as Record<string, ApiField[]>);
 
-      // Convert to palette groups
       const groups = Object.entries(grouped).map(([category, fields]) => ({
         label: category,
         items: fields.map(apiFieldToPaletteItem),
       }));
 
-      // Filter by enabled fields and search
       return groups
         .map((g) => {
           let filteredItems = g.items.filter((i) => {
@@ -1370,7 +1429,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         .filter((g) => g.items.length > 0);
     }
 
-    // Fallback to hardcoded palette if API fields not loaded
     return FULL_PALETTE_GROUPS.map((g) => {
       let filteredItems = g.items;
 
@@ -1446,7 +1504,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                 : 'bg-[#f4f5f7] text-[#4a5a7a] hover:bg-[#e8eef5]'
             }`}
             onClick={() => {
-              // Skip unsaved changes warning in create mode since we're creating a new document
               if (mode === 'create') {
                 setActiveTab(tab.id);
               } else if (activeTab === 'template-designer' && hasUnsavedChanges) {
@@ -1461,6 +1518,23 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           </button>
         ))}
       </div>
+
+      {saveError && (
+        <div
+          role="alert"
+          className="shrink-0 flex items-start justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-[13px] text-red-700"
+        >
+          <span>{saveError}</span>
+          <button
+            type="button"
+            onClick={() => setSaveError(null)}
+            className="shrink-0 text-red-700 hover:text-red-900"
+            aria-label="Dismiss error"
+          >
+            <FiX size={16} />
+          </button>
+        </div>
+      )}
 
       {showUnsavedWarning && (
         <>
@@ -1479,9 +1553,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                       setShowUnsavedWarning(false);
                       setPendingTab(null);
                     }}
-                    // className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
-                                        className="px-3 py-1.5 text-xs font-medium text-white bg-[#3a7bd5] rounded hover:bg-[#2a5a8a]"
-
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-[#3a7bd5] rounded hover:bg-[#2a5a8a]"
                   >
                     Continue
                   </button>
@@ -1490,12 +1562,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                       setShowUnsavedWarning(false);
                       setHasUnsavedChanges(false);
                       setPendingTab(null);
-                      // Reload elements from certificate type to discard changes
                       reloadElementsFromCertificateType();
                     }}
-                                        className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
-
-                    // className="px-3 py-1.5 text-xs font-medium text-white bg-[#3a7bd5] rounded hover:bg-[#2a5a8a]"
+                    className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
                   >
                     Discard Changes
                   </button>
@@ -1507,11 +1576,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       )}
 
       <div className="flex-1 overflow-auto bg-[#f9fafb]">
-        {saveError && (
-          <div className="mx-6 mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-            {saveError}
-          </div>
-        )}
         <div className={activeTab === 'general' ? '' : 'hidden'}>
           <General ref={generalRef} onTabChange={setActiveTab} certificateType={certificateType} />
         </div>
@@ -1686,12 +1750,12 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                     onDrop={onDropOnCanvas}
                     onMouseDown={onCanvasMouseDown}
                   >
-                    {/* PDF template background, if one was uploaded in the General tab */}
+                    {/* PDF template backdrop: rendered 1:1 in the PDF's own point space */}
                     {templateDataUrl && (
-                      <iframe
-                        src={`${templateDataUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                        className="absolute inset-0 w-full h-full border-0 pointer-events-none"
-                        title="Template Preview"
+                      <PdfBackdrop
+                        src={templateDataUrl}
+                        pageIndex={templatePageIndex}
+                        onMeasured={handlePdfMeasured}
                       />
                     )}
 
@@ -1699,11 +1763,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                     {elements.map((el) => {
                       const isSelected = el.id === selectedId;
                       const kindColors = kindPalette(el.kind);
-                      // Handle/badge sizes are divided by zoom so they stay
-                      // the same size on screen at any zoom level.
                       const handleSize = 9 / zoom;
                       return (
-                        // Outer wrapper: position + size, NOT clipped so handles can sit on the edges.
                         <div
                           key={el.id}
                           className="absolute select-none"
@@ -1716,7 +1777,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                             zIndex: isSelected ? 20 : 1,
                           }}
                         >
-                          {/* Inner box: the visible field (clipped) */}
                           <div
                             className={`w-full h-full cursor-move overflow-hidden flex ${
                               isSelected ? 'ring-2 ring-[#1a4a8a] ring-offset-1' : ''
@@ -1726,7 +1786,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                               fontSize: el.fontSize,
                               lineHeight: (el.leading / el.fontSize).toFixed(2),
                               fontFamily: el.fontFamily,
-                              fontWeight: el.bold ? 700 : 600,
+                              // Matches Preview / the generated PDF (was 600, which drew
+                              // wider glyphs than the real output and skewed box sizing).
+                              fontWeight: el.bold ? 700 : 400,
                               fontStyle: el.italic ? 'italic' : 'normal',
                               textDecoration: el.underline ? 'underline' : 'none',
                               justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center',
@@ -1750,7 +1812,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                             )}
                           </div>
 
-                          {/* Resize handles + live size readout (selected only) */}
                           {isSelected && (
                             <>
                               {RESIZE_HANDLES.map((h) => (
@@ -1838,7 +1899,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           {/* Footer */}
           <div className="flex items-center justify-between px-5 py-2 border-t border-[#dde3ee] bg-white text-[11.5px] text-[#6a7a9a]">
             <div className="flex items-center gap-4">
-              <span>Page 1 of 1</span>
+              <span>Page {templatePageIndex + 1}</span>
               <span className="text-[#dde3ee]">|</span>
               <span>
                 Paper: {pageW} x {pageH} pt
@@ -1862,13 +1923,6 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               >
                 Preview PDF
               </button>
-              {/* <button
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#1a4a8a] text-white rounded text-[12.5px] font-medium hover:bg-[#2a5a9a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleSubmitCertificateType}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Saving...' : 'Save Certificate Type'}
-              </button> */}
             </div>
           </div>
 
@@ -1880,6 +1934,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           elements={elements}
           pageW={pageW}
           pageH={pageH}
+          pageIndex={templatePageIndex}
           templateDataUrl={templateDataUrl}
           onClose={() => setShowPreview(false)}
         />
@@ -2295,7 +2350,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /* Template preview                                                    */
 /* ------------------------------------------------------------------ */
 
-// Stand-in values so the preview reads like a filled-in certificate.
 function sampleValueFor(el: FieldElement): string {
   const key = el.text.toLowerCase();
   if (key.includes('certificatenumber') || key.includes('certificate_number')) return 'CERT-2026-000123';
@@ -2321,12 +2375,14 @@ function PreviewModal({
   elements,
   pageW,
   pageH,
+  pageIndex,
   templateDataUrl,
   onClose,
 }: {
   elements: FieldElement[];
   pageW: number;
   pageH: number;
+  pageIndex: number;
   templateDataUrl: string | null;
   onClose: () => void;
 }) {
@@ -2345,7 +2401,6 @@ function PreviewModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Disabled components are left out, as they would be on the generated certificate.
   const visible = elements.filter((e) => e.enabled);
 
   return (
@@ -2410,11 +2465,7 @@ function PreviewModal({
             <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
               <div className="relative" style={{ width: pageW, height: pageH }}>
                 {templateDataUrl ? (
-                  <iframe
-                    src={`${templateDataUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                    className="absolute inset-0 w-full h-full border-0 pointer-events-none"
-                    title="Template PDF"
-                  />
+                  <PdfBackdrop src={templateDataUrl} pageIndex={pageIndex} />
                 ) : (
                   <div className="absolute inset-x-0 top-3 text-center text-[11px] text-[#9aa5bb]">
                     No template PDF uploaded. Upload one in the General tab to see the fields on it.

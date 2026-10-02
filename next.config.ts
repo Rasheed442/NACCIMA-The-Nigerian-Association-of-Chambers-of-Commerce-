@@ -1,7 +1,19 @@
-import type { NextConfig } from "next";
+// import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+// const nextConfig: NextConfig = {
+//   /* config options here */
+// };
+
+// export default nextConfig;
+
+const nextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: '/media-proxy/:path*',
+        destination: 'https://mediaserver.advancedtechnologypark.com/media/:path*',
+      },
+    ];
+  },
 };
-
-export default nextConfig;
+module.exports = nextConfig;
