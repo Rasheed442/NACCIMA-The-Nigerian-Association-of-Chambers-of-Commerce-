@@ -527,7 +527,7 @@ function PdfBackdrop({
 }: {
   src: string;
   pageIndex?: number;
-  onMeasured?: (size: { width: number; height: number }) => void;
+  onMeasured?: (size: { width: number; height: number; view?: number[]; rotate?: number }) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [useFallback, setUseFallback] = useState(false);
@@ -581,6 +581,8 @@ function PdfBackdrop({
         onMeasuredRef.current?.({
           width: Math.round(base.width * 100) / 100,
           height: Math.round(base.height * 100) / 100,
+          view: Array.isArray(page.view) ? page.view.map((n: number) => Math.round(n * 100) / 100) : undefined,
+          rotate: typeof page.rotate === 'number' ? page.rotate : 0,
         });
 
         const canvas = canvasRef.current;
@@ -661,6 +663,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
   const [bulkFontSize, setBulkFontSize] = useState<number>(DEFAULT_FONT_SIZE);
+  // Stopgap calibration: a fixed shift (PDF points) added to every field's x/y
+  // ONLY in the saved templateConfig.fields (what the renderer reads). The
+  // designer's own positions (elements) are untouched.
+  const [outputOffset, setOutputOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
@@ -671,11 +677,21 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const pageH = templatePageSize?.height || PAPER_H;
 
   // Called by PdfBackdrop with the PDF page's real size in points.
-  const handlePdfMeasured = useCallback((size: { width: number; height: number }) => {
-    setTemplatePageSize((prev) =>
-      prev && Math.abs(prev.width - size.width) < 0.01 && Math.abs(prev.height - size.height) < 0.01 ? prev : size
-    );
-  }, []);
+  const [pdfBox, setPdfBox] = useState<{ view: number[]; rotate: number } | null>(null);
+  const handlePdfMeasured = useCallback(
+    (size: { width: number; height: number; view?: number[]; rotate?: number }) => {
+      const next = { width: size.width, height: size.height };
+      setTemplatePageSize((prev) =>
+        prev && Math.abs(prev.width - next.width) < 0.01 && Math.abs(prev.height - next.height) < 0.01 ? prev : next
+      );
+      if (size.view) {
+        setPdfBox({ view: size.view, rotate: size.rotate ?? 0 });
+        // eslint-disable-next-line no-console
+        console.info('[TemplateDesigner] PDF page box (x0,y0,x1,y1):', size.view, 'rotate:', size.rotate ?? 0);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const loadEnabledFields = () => {
@@ -786,6 +802,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       });
       setElements(deduped);
       setSelectedId(null);
+      setOutputOffset({
+        x: Number(config?.calibration?.x) || 0,
+        y: Number(config?.calibration?.y) || 0,
+      });
     } catch {
       setElements([]);
       setSelectedId(null);
@@ -1315,8 +1335,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
       const code = backendFieldCode(element.text);
       fields[code] = {
-        x: element.x,
-        y: element.y,
+        x: Math.round((element.x + outputOffset.x) * 100) / 100,
+        y: Math.round((element.y + outputOffset.y) * 100) / 100,
         width: element.w,
         height: element.h || 20,
         fontSize: element.fontSize || 10,
@@ -1352,6 +1372,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       },
       fields,
       elements,
+      // Saved so reopening the template keeps the calibration (designer positions stay un-shifted).
+      calibration: { x: outputOffset.x, y: outputOffset.y },
     };
 
     const templateConfigString = JSON.stringify(templateConfigObj);
@@ -1956,6 +1978,17 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               <span>Units: PDF Points (pt)</span>
               <span className="text-[#dde3ee]">|</span>
               <span>Components: {elements.length}</span>
+              {pdfBox && (pdfBox.view[0] !== 0 || pdfBox.view[1] !== 0 || pdfBox.rotate !== 0) && (
+                <>
+                  <span className="text-[#dde3ee]">|</span>
+                  <span
+                    className="text-[#b45309] font-medium"
+                    title="This PDF's visible page area does not start at (0,0) or is rotated. If generated text is offset, the renderer may be using a different page box."
+                  >
+                    ⚠ Page box [{pdfBox.view.join(', ')}] · rotate {pdfBox.rotate}°
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex gap-2">
               <button
@@ -1982,6 +2015,33 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                 >
                   Apply &amp; fit boxes
                 </button>
+              </div>
+              <div
+                className="flex items-center gap-1.5 border border-[#d1d5db] rounded px-2.5 py-1"
+                title="Stopgap: shifts every field in the SAVED output by this many points. Use it when generated text is consistently offset from the designer. +X moves right, +Y moves down."
+              >
+                <span className="text-[12px] text-[#6a7a9a]">Output offset</span>
+                <span className="text-[11px] text-[#9aa5bb]">X</span>
+                <input
+                  type="number"
+                  className="w-12 text-[12px] text-center outline-none"
+                  value={outputOffset.x}
+                  onChange={(e) => {
+                    setOutputOffset((o) => ({ ...o, x: Number(e.target.value) }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+                <span className="text-[11px] text-[#9aa5bb]">Y</span>
+                <input
+                  type="number"
+                  className="w-12 text-[12px] text-center outline-none"
+                  value={outputOffset.y}
+                  onChange={(e) => {
+                    setOutputOffset((o) => ({ ...o, y: Number(e.target.value) }));
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+                <span className="text-[12px] text-[#6a7a9a]">pt</span>
               </div>
               <button
                 type="button"
