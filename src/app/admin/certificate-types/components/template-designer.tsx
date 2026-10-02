@@ -244,6 +244,24 @@ const CANVAS_PADDING = 32;
 const CASCADE_STEP = 24;
 const CASCADE_MAX = 10;
 
+// Readable default for a ~1000 pt wide page (was 8.5 pt, tuned for 608 pt).
+const DEFAULT_FONT_SIZE = 12;
+// A single line of text needs about 1.2x its font size of height. With a box
+// that tight, centred and bottom-anchored text land in nearly the same place,
+// so the designer and the renderer can't disagree much vertically.
+const LINE_RATIO = 1.2;
+// A box taller than this many font sizes is treated as multi-line and left alone.
+const SINGLE_LINE_MAX_RATIO = 2.2;
+const NON_SINGLE_LINE_TYPES = ['QR Code', 'Image', 'Checkbox', 'Table', 'Multi-line Text', 'Barcode'];
+
+function isSingleLineType(typeLabel: string, kind: FieldKind) {
+  return kind !== 'goods' && kind !== 'component' && !NON_SINGLE_LINE_TYPES.includes(typeLabel);
+}
+
+function isSingleLineBox(el: { typeLabel: string; kind: FieldKind; h: number; fontSize: number }) {
+  return isSingleLineType(el.typeLabel, el.kind) && el.h <= el.fontSize * SINGLE_LINE_MAX_RATIO;
+}
+
 function defaultWidthFor(item: { kind: FieldKind; w: number }) {
   if (item.kind === 'goods' || item.w <= 100) return item.w;
   return Math.min(item.w, DEFAULT_MAX_W);
@@ -642,6 +660,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
   const [pendingTab, setPendingTab] = useState<string | null>(null);
+  const [bulkFontSize, setBulkFontSize] = useState<number>(DEFAULT_FONT_SIZE);
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
@@ -897,6 +916,10 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     (item: PaletteItem, x?: number, y?: number) => {
       const p = kindPalette(item.kind);
       const w = defaultWidthFor(item);
+      const singleLine = isSingleLineType(item.typeLabel, item.kind);
+      const newFontSize = DEFAULT_FONT_SIZE;
+      const newLeading = Math.round(newFontSize * LINE_RATIO * 10) / 10;
+      const newHeight = singleLine ? Math.ceil(newFontSize * LINE_RATIO) : item.h;
 
       // Click-added fields are centred in the visible part of the canvas and
       // cascaded diagonally so they never stack on top of each other.
@@ -940,9 +963,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         x: posX,
         y: posY,
         w,
-        h: item.h,
-        fontSize: item.h <= 18 ? 8.5 : 9.5,
-        leading: 9.5,
+        h: newHeight,
+        fontSize: newFontSize,
+        leading: newLeading,
         fontFamily: 'Helvetica',
         bold: false,
         italic: false,
@@ -958,7 +981,9 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         repeated: false,
         border: p.dashed ? 'dashed' : 'solid',
         borderColor: p.border,
-        pad: { t: 2, r: 3, b: 2, l: 3 },
+        // No vertical padding on single-line boxes: the renderer works from the
+        // box edges, so padding would only make the designer disagree with it.
+        pad: singleLine ? { t: 0, r: 3, b: 0, l: 3 } : { t: 2, r: 3, b: 2, l: 3 },
       };
       commit((prev) => [...prev, el]);
       setSelectedId(el.id);
@@ -1391,6 +1416,29 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   const handleReset = () => {
     commit(() => []);
     setSelectedId(null);
+  };
+
+  // Apply one text size to every single-line text field and shrink its box to
+  // one line (about 1.2x the font size), keeping the box centred where the
+  // user put it. Tall multi-line boxes (e.g. descriptions) are left alone.
+  const handleApplySizeAndFit = () => {
+    const fs = bulkFontSize;
+    if (!(fs > 0)) return;
+    commit((prev) =>
+      prev.map((el) => {
+        if (!isSingleLineType(el.typeLabel, el.kind)) return el;
+        if (el.h > Math.max(el.fontSize, fs) * SINGLE_LINE_MAX_RATIO) return el;
+        const newH = Math.ceil(fs * LINE_RATIO);
+        return {
+          ...el,
+          fontSize: fs,
+          leading: Math.round(fs * LINE_RATIO * 10) / 10,
+          h: newH,
+          y: Math.max(0, Math.round(el.y + (el.h - newH) / 2)),
+          pad: { ...el.pad, t: 0, b: 0 },
+        };
+      })
+    );
   };
 
   const filteredGroups = useMemo(() => {
@@ -1916,6 +1964,25 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
               >
                 <FiRefreshCw size={12} /> Reset
               </button>
+              <div className="flex items-center gap-1.5 border border-[#d1d5db] rounded px-2.5 py-1">
+                <span className="text-[12px] text-[#6a7a9a]">Text</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="w-12 text-[12px] text-center outline-none"
+                  value={bulkFontSize}
+                  onChange={(e) => setBulkFontSize(Number(e.target.value))}
+                />
+                <span className="text-[12px] text-[#6a7a9a]">pt</span>
+                <button
+                  type="button"
+                  className="ml-1 text-[12px] font-semibold text-[#1a4a8a] hover:underline"
+                  onClick={handleApplySizeAndFit}
+                  title="Set this text size on all single-line fields and fit their boxes to one line"
+                >
+                  Apply &amp; fit boxes
+                </button>
+              </div>
               <button
                 type="button"
                 className="px-3.5 py-1.5 border border-[#d1d5db] rounded text-[12.5px] font-medium text-[#3a4560] hover:bg-[#f4f5f7] transition-colors"
@@ -2109,6 +2176,22 @@ function PropertiesForm({
         <NumberField label="Width" value={el.w} onChange={(v) => onChange({ w: v })} />
         <NumberField label="Height" value={el.h} onChange={(v) => onChange({ h: v })} />
       </div>
+      {isSingleLineType(el.typeLabel, el.kind) && (
+        <button
+          type="button"
+          className="mb-2 text-[11.5px] font-semibold text-[#1a4a8a] hover:underline"
+          onClick={() => {
+            const newH = Math.ceil(el.fontSize * LINE_RATIO);
+            onChange({
+              h: newH,
+              y: Math.max(0, Math.round(el.y + (el.h - newH) / 2)),
+              pad: { ...el.pad, t: 0, b: 0 },
+            });
+          }}
+        >
+          Fit height to one line ({Math.ceil(el.fontSize * LINE_RATIO)} pt)
+        </button>
+      )}
       <p className="text-[10.5px] text-[#9aa5bb] mb-4">
         Tip: you can also drag the handles on the canvas to resize.
       </p>
@@ -2130,7 +2213,29 @@ function PropertiesForm({
             ))}
           </select>
         </div>
-        <NumberField label="Font Size" value={el.fontSize} onChange={(v) => onChange({ fontSize: v })} suffix="pt" />
+        <NumberField
+          label="Font Size"
+          value={el.fontSize}
+          onChange={(v) => {
+            if (!(v > 0 && el.fontSize > 0 && el.leading > 0)) {
+              onChange({ fontSize: v });
+              return;
+            }
+            // Keep line spacing proportional to the font size...
+            const patch: Partial<FieldElement> = {
+              fontSize: v,
+              leading: Math.round(el.leading * (v / el.fontSize) * 10) / 10,
+            };
+            // ...and keep a single-line box exactly one line tall, centred where it was.
+            if (isSingleLineBox(el)) {
+              const newH = Math.ceil(v * LINE_RATIO);
+              patch.h = newH;
+              patch.y = Math.max(0, Math.round(el.y + (el.h - newH) / 2));
+            }
+            onChange(patch);
+          }}
+          suffix="pt"
+        />
         <NumberField label="Line Spacing" value={el.leading} onChange={(v) => onChange({ leading: v })} suffix="pt" />
       </div>
 
