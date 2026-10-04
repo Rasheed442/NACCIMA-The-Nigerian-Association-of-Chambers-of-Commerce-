@@ -77,7 +77,15 @@ function SwitchField({ label, checked, onChange }: SwitchFieldProps) {
 // gesture completes. `draggingRef` suppresses the click handler for the
 // duration of (and immediately after) a drag gesture so one drag can't add
 // two fields.
-function PaletteRow({ item, onAdd }: { item: PaletteItem; onAdd: () => void }) {
+function PaletteRow({
+  item,
+  onAdd,
+  status,
+}: {
+  item: PaletteItem;
+  onAdd: () => void;
+  status?: 'placed' | 'in-table';
+}) {
   const Icon = item.icon;
   const draggingRef = useRef(false);
 
@@ -120,6 +128,22 @@ function PaletteRow({ item, onAdd }: { item: PaletteItem; onAdd: () => void }) {
           {item.badge}
         </span>
       )}
+      {status && (
+        <span
+          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold border ${
+            status === 'placed'
+              ? 'bg-[#e8f0fe] border-[#bcd2f7] text-[#1a4a8a]'
+              : 'bg-[#fff4e5] border-[#f3cf9a] text-[#9a5b00]'
+          }`}
+          title={
+            status === 'placed'
+              ? 'Already on the template'
+              : 'Already a column in the Goods Table (adding it again would print it twice)'
+          }
+        >
+          {status === 'placed' ? 'Placed' : 'In table'}
+        </span>
+      )}
     </div>
   );
 }
@@ -157,6 +181,18 @@ interface Padding {
   l: number;
 }
 
+// One column of the Goods Table. `code` is the goods-line data key the backend
+// fills; width is a percentage of the table's width so resizing the table
+// scales every column.
+interface GoodsColumn {
+  key: string;
+  code: string;
+  label: string;
+  enabled: boolean;
+  widthPct: number;
+  align: Align;
+}
+
 interface FieldElement {
   id: string;
   text: string; // canvas token, e.g. DESCRIPTION_OF_GOODS
@@ -188,6 +224,12 @@ interface FieldElement {
   borderColor: string;
   pad: Padding;
   imageUrl?: string;
+  // Goods Table only: the columns printed for each goods line.
+  goodsColumns?: GoodsColumn[];
+  // Goods Table only: print a header row (column titles). Default on.
+  showHeader?: boolean;
+  goodsAlignVersion?: number;
+  autoHeight?: boolean;
 }
 
 // Ids must be globally unique (see earlier fix): selection/highlighting
@@ -262,6 +304,182 @@ function isSingleLineBox(el: { typeLabel: string; kind: FieldKind; h: number; fo
   return isSingleLineType(el.typeLabel, el.kind) && el.h <= el.fontSize * SINGLE_LINE_MAX_RATIO;
 }
 
+// How repeated (per goods line) fields should be stacked. Saved in
+// templateConfig.goodsLayout for the renderer; the designer itself never
+// draws the repeated rows.
+interface GoodsLayout {
+  rowGap: number; // empty space between goods lines (pt)
+  autoRowHeight: boolean; // each line grows to fit its tallest wrapped value
+  tableBottomY: number; // lowest Y the rows may reach (designer coordinates); 0 = no limit
+}
+const DEFAULT_GOODS_LAYOUT: GoodsLayout = { rowGap: 6, autoRowHeight: true, tableBottomY: 0 };
+
+// Printed table look (generated PDF + Preview). Change here to restyle.
+const GOODS_BORDER_COLOR = '#000000';
+const GOODS_BORDER_WIDTH = 0.5; // pt
+const GOODS_PAGE_BOTTOM_MARGIN = 24
+
+// Default Goods Table columns, in the order requested. Widths are percentages
+// and must add up to what the printed form has; untick columns the form
+// doesn't print (e.g. HS Code / Nomenclature on forms without those columns).
+const DEFAULT_GOODS_COLUMNS: GoodsColumn[] = [
+  { key: 'itemNo', code: 'ITEM_NO', label: 'Item No.', enabled: true, widthPct: 7, align: 'center' },
+  { key: 'marksNo', code: 'MARKS_NO', label: 'Marks & Numbers', enabled: true, widthPct: 12, align: 'left' },
+  { key: 'hsCode', code: 'HS_CODE', label: 'HS Code', enabled: true, widthPct: 12, align: 'left' },
+  { key: 'description', code: 'DESCRIPTION', label: 'Description', enabled: true, widthPct: 24, align: 'left' },
+  { key: 'nomenclature', code: 'NOMENCLATURE', label: 'Nomenclature', enabled: true, widthPct: 17, align: 'left' },
+  { key: 'grossWeight', code: 'GROSS_WEIGHT', label: 'Gross Weight', enabled: true, widthPct: 9, align: 'left' },
+  { key: 'netWeight', code: 'NET_WEIGHT', label: 'Net Weight', enabled: true, widthPct: 9, align: 'left' },
+  { key: 'fobValue', code: 'VALUE', label: 'FOB Value', enabled: true, widthPct: 10, align: 'left' },
+];
+
+function getGoodsColumns(el: { goodsColumns?: GoodsColumn[] }): GoodsColumn[] {
+  return el.goodsColumns && el.goodsColumns.length > 0 ? el.goodsColumns : DEFAULT_GOODS_COLUMNS;
+}
+
+// Header row height: two lines, so a long title like "Marks & Numbers" can wrap in a narrow column.
+function goodsHeaderHeight(el: { leading: number; fontSize: number }): number {
+  return Math.ceil((el.leading || el.fontSize * LINE_RATIO) * 2);
+}
+
+// Which standalone single fields are the same data as a Goods Table column.
+// (Total FOB Value is deliberately NOT here: it is a certificate total, not a per-line value.)
+const GOODS_COLUMN_FOR_FIELD: Record<string, string> = {
+  itemNo: 'itemNo', ITEM_NO: 'itemNo',
+  marksNo: 'marksNo', MARKS_NO: 'marksNo',
+  hsCode: 'hsCode', HS_CODE: 'hsCode',
+  descriptionOfGoods: 'description', DESCRIPTION_OF_GOODS: 'description',
+  description: 'description', DESCRIPTION: 'description',
+  nomenclature: 'nomenclature', NOMENCLATURE: 'nomenclature',
+  grossWeight: 'grossWeight', GROSS_WEIGHT: 'grossWeight',
+  netWeight: 'netWeight', NET_WEIGHT: 'netWeight',
+  value: 'fobValue', VALUE: 'fobValue',
+};
+
+function sampleGoodsCell(key: string, n: number): string {
+  switch (key) {
+    case 'itemNo':
+      return String(n);
+    case 'marksNo':
+      return `ABC00${n}`;
+    case 'hsCode':
+      return '0101210000';
+    case 'description':
+      return n === 2
+        ? 'Atlantic and Pacific bluefin tunas (Thunnus thynnus, Thunnus orientalis)'
+        : `Sample goods ${n}`;
+    case 'nomenclature':
+      return `Nomenclature ${n}`;
+    case 'grossWeight':
+      return '200.00';
+    case 'netWeight':
+      return '180.00';
+    case 'fobValue':
+      return '230.00';
+    default:
+      return '';
+  }
+}
+
+// Builds templateConfig.goods for the renderer from the Goods Table element.
+//
+// !! ASSUMED SCHEMA - confirm against a template config the backend already
+// !! accepts (one that has `goods.columns`, `goods.startY`, `goods.minY`):
+//   - columns[CODE] = { x, width, fontSize, font, align, wrap }, with x being
+//     the column's left edge in PDF points from the page's left edge.
+//   - startY / minY are written in PDF-native coordinates (origin bottom-left,
+//     y grows upward): startY = top of the first row, minY = lowest y the
+//     rows may reach. The same numbers in the designer's top-left system are
+//     included as designerTopY / designerBottomY in case the renderer expects
+//     those instead. If the real schema differs, only this function changes.
+//   - background / borders describe the table's own white panel and ruled
+//     lines; the renderer must draw the panel BEFORE any table text.
+// The output offset (page-box calibration) is applied here just like for fields.
+function buildGoodsConfig(el: FieldElement, layout: GoodsLayout, offset: { x: number; y: number }, pageH: number) {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const cols = getGoodsColumns(el).filter((c) => c.enabled);
+  const totalPct = cols.reduce((s, c) => s + c.widthPct, 0) || 1;
+
+  let cursor = el.x + offset.x;
+  const columns: Record<string, unknown> = {};
+  const dividerXs: number[] = [];
+  cols.forEach((c) => {
+    if (cursor > el.x + offset.x + 0.01) dividerXs.push(r2(cursor)); // line between columns
+    const width = (el.w * c.widthPct) / totalPct;
+    columns[c.code] = {
+      x: r2(cursor),
+      width: r2(width),
+      fontSize: el.fontSize || 10,
+      font: (el.fontFamily || 'HELVETICA').toUpperCase(),
+      align: c.align.toUpperCase(),
+      wrap: true,
+    };
+    cursor += width;
+  });
+
+  const topY = el.y + offset.y;
+  const bottomY = el.y + el.h + offset.y;
+  const showHeader = el.showHeader !== false;
+  const headerH = showHeader ? goodsHeaderHeight(el) : 0;
+    const autoHeight = el.autoHeight !== false;
+  // Lowest point the table may reach. Auto-expanding tables are limited only by
+  // "Stop growing at Y" (or the page-bottom margin), not by the box you drew.
+  const growBottomDesignerY =
+    layout.tableBottomY > 0 ? layout.tableBottomY + offset.y : pageH - GOODS_PAGE_BOTTOM_MARGIN;
+  const headers: Record<string, string> = {};
+  cols.forEach((c) => {
+    headers[c.code] = c.label;
+  });
+  return {
+    columns,
+    // Header row (column titles), drawn at the top of the table box when showHeader is true.
+    showHeader,
+    headers,
+    headerHeight: headerH,
+    headerAlign: 'LEFT',
+    headerBold: false,
+    headerStartY: r2(pageH - topY),
+    // Data rows begin below the header.
+    startY: r2(pageH - (topY + headerH)),
+    minY: autoHeight ? r2(pageH - growBottomDesignerY) : r2(pageH - bottomY),
+    designerTopY: r2(topY),
+    designerRowsTopY: r2(topY + headerH),
+    designerBottomY: autoHeight ? r2(growBottomDesignerY) : r2(bottomY),
+     autoHeight,
+       minHeight: r2(el.h),
+    overflow: 'CONTINUE_ON_NEXT_PAGE',
+    leading: el.leading,
+    bold: el.bold,
+    italic: el.italic,
+    maxLines: el.maxLines,
+    rowGap: layout.rowGap,
+    autoRowHeight: layout.autoRowHeight,
+    // The table gets its own white panel (drawn first, so it covers any lines
+    // of the form printed underneath) and ruled borders like the designer.
+    background: {
+      enabled: true,
+      color: '#FFFFFF',
+      x: r2(el.x + offset.x),
+      topY: r2(pageH - topY), // anchored at the top; extends downward
+      y: r2(pageH - bottomY), // bottom edge at the minimum height
+      width: r2(el.w),
+      height: r2(el.h), // minimum height
+      autoHeight,
+    },
+    borders: {
+      outer: true,
+      columnDividers: true,
+      headerDivider: showHeader,
+      rowDividers: false,
+      color: GOODS_BORDER_COLOR,
+      width: GOODS_BORDER_WIDTH,
+      autoHeight,
+      columnDividerXs: dividerXs,
+      headerDividerY: r2(pageH - (topY + headerH)),
+    },
+  };
+}
+
 function defaultWidthFor(item: { kind: FieldKind; w: number }) {
   if (item.kind === 'goods' || item.w <= 100) return item.w;
   return Math.min(item.w, DEFAULT_MAX_W);
@@ -293,6 +511,7 @@ interface PaletteItem {
   h: number;
   badge?: 'NRS-locked' | 'System' | 'Component';
   category?: string;
+  repeatable?: boolean;
 }
 
 interface ApiField {
@@ -351,6 +570,7 @@ function apiFieldToPaletteItem(field: ApiField): PaletteItem {
     h: component.h,
     badge,
     category: field.category,
+    repeatable: field.repeatable,
   };
 }
 
@@ -372,15 +592,10 @@ const FULL_PALETTE_GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
       { type: 'fobValue', label: 'FOB Value (USD for CoO)', icon: FiDollarSign, kind: 'application', typeLabel: 'Number', source: 'Manual Entry', w: 180, h: 18 },
       { type: 'totalItems', label: 'Total Items', icon: FiHash, kind: 'application', typeLabel: 'Number', source: 'Manual Entry', w: 120, h: 18 },
       { type: 'date', label: 'Date', icon: FiCalendar, kind: 'application', typeLabel: 'Date', source: 'Manual Entry', w: 140, h: 18 },
-      { type: 'hsCode', label: 'HS Code', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
-      { type: 'marksNo', label: 'Marks / No.', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
       { type: 'ecowasNumber', label: 'ECOWAS Number', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
       { type: 'criteriaEtls', label: 'Criteria (ETLS)', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
       { type: 'unitOfMeasurement', label: 'Unit of Measurement', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
       { type: 'numberKindPackages', label: 'Number and Kind of Packages', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
-      { type: 'descriptionOfGoods', label: 'Description of Goods', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
-      { type: 'grossWeight', label: 'Gross Weight or Quantity', icon: FiHash, kind: 'application', typeLabel: 'Number', source: 'Manual Entry', w: 140, h: 18 },
-      { type: 'nomenclature', label: 'Nomenclature of Goods', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
       { type: 'invoiceNumber', label: 'Invoice Number', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Manual Entry', w: 140, h: 18 },
     ],
   },
@@ -388,6 +603,14 @@ const FULL_PALETTE_GROUPS: Array<{ label: string; items: PaletteItem[] }> = [
     label: 'Goods Fields',
     items: [
       { type: 'goodsTable', label: 'Goods Table', icon: FiGrid, kind: 'goods', typeLabel: 'Table', source: 'Goods Item', w: 400, h: 120 },
+      // The individual goods-line fields stay in the palette too (they are the Goods Table's columns).
+      { type: 'itemNo', label: 'Item No.', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Goods Item', w: 60, h: 18, repeatable: true },
+      { type: 'marksNo', label: 'Marks / No.', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Goods Item', w: 140, h: 18, repeatable: true },
+      { type: 'hsCode', label: 'HS Code', icon: FiHash, kind: 'application', typeLabel: 'Text', source: 'Goods Item', w: 140, h: 18, repeatable: true },
+      { type: 'descriptionOfGoods', label: 'Description of Goods', icon: FiFileText, kind: 'application', typeLabel: 'Text', source: 'Goods Item', w: 220, h: 18, repeatable: true },
+      { type: 'nomenclature', label: 'Nomenclature of Goods', icon: FiFileText, kind: 'application', typeLabel: 'Text', source: 'Goods Item', w: 180, h: 18, repeatable: true },
+      { type: 'grossWeight', label: 'Gross Weight or Quantity', icon: FiHash, kind: 'application', typeLabel: 'Number', source: 'Goods Item', w: 140, h: 18, repeatable: true },
+      { type: 'netWeight', label: 'Net Weight', icon: FiHash, kind: 'application', typeLabel: 'Number', source: 'Goods Item', w: 140, h: 18, repeatable: true },
     ],
   },
   {
@@ -454,13 +677,15 @@ const FIELD_ID_MAP: Record<string, string> = {
   certificateNumber: 'CERTIFICATE_NUMBER',
   verificationCode: 'VERIFICATION_CODE',
   qrCode: 'QR_CODE',
+  itemNo: 'ITEM_NO',
+  netWeight: 'NET_WEIGHT',
 };
 
 function backendFieldCode(elementText: string): string {
   return FIELD_ID_MAP[elementText] || elementText;
 }
 
-// NEW: elements that are actually written to templateConfig.fields.
+// Elements that are actually written to templateConfig.fields.
 // Disabled fields are hidden in Preview, so they must not be rendered on the
 // generated certificate either; components (checkboxes) and the goods table
 // have no entry in `fields`.
@@ -468,7 +693,7 @@ function isRenderedField(el: FieldElement) {
   return el.enabled && el.kind !== 'component' && el.kind !== 'goods';
 }
 
-// NEW: `fields` is keyed by backend code, so two canvas elements with the
+// `fields` is keyed by backend code, so two canvas elements with the
 // same code (e.g. "destination" placed twice) collapse into one entry and
 // one of them silently disappears from the generated certificate.
 function findDuplicateCodes(elements: FieldElement[]): string[] {
@@ -482,21 +707,55 @@ function findDuplicateCodes(elements: FieldElement[]): string[] {
     .map(([code]) => code);
 }
 
+// Height one goods line needs if its tallest repeated field filled all of its
+// allowed lines (wrapped fields: maxLines x leading; others: one line).
+function repeatedRowHeight(elements: FieldElement[]): number {
+  const repeated = elements.filter((e) => isRenderedField(e) && e.repeated);
+  if (repeated.length === 0) return 0;
+  return Math.ceil(
+    Math.max(...repeated.map((e) => (e.wrap ? Math.max(1, e.maxLines) : 1) * (e.leading || e.fontSize * LINE_RATIO)))
+  );
+}
+
+// Standalone fields that are ALSO enabled columns of the Goods Table, i.e. data
+// that would be printed twice.
+function findGoodsConflicts(elements: FieldElement[]): FieldElement[] {
+  const table = elements.find((e) => e.kind === 'goods' && e.enabled);
+  if (!table) return [];
+  const keys = new Set(getGoodsColumns(table).filter((c) => c.enabled).map((c) => c.key));
+  return elements.filter((e) => {
+    if (!isRenderedField(e)) return false;
+    const key = GOODS_COLUMN_FOR_FIELD[e.text];
+    return !!key && keys.has(key);
+  });
+}
+
+// What to show next to a palette row so used fields stay visible but are flagged.
+function paletteStatus(item: PaletteItem, elements: FieldElement[]): 'placed' | 'in-table' | undefined {
+  if (item.kind === 'goods') return elements.some((e) => e.kind === 'goods') ? 'placed' : undefined;
+  if (item.kind === 'component') return undefined;
+  const code = backendFieldCode(item.type);
+  if (elements.some((e) => isRenderedField(e) && backendFieldCode(e.text) === code)) return 'placed';
+  const table = elements.find((e) => e.kind === 'goods' && e.enabled);
+  const key = GOODS_COLUMN_FOR_FIELD[item.type];
+  if (table && key && getGoodsColumns(table).some((c) => c.key === key && c.enabled)) return 'in-table';
+  return undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* PDF backdrop                                                        */
 /* ------------------------------------------------------------------ */
 
 // The media server doesn't send CORS headers, so the browser won't let us read
 // template PDF bytes from it directly (an <iframe> can display it, but pdf.js
-// needs the bytes). Route those URLs through a same-origin Next.js rewrite:
-//   /media-proxy/:path*  ->  https://mediaserver.advancedtechnologypark.com/media/:path*
+// needs the bytes). Route those URLs through a same-origin Next.js route:
+//   /api/pdf-proxy?url=...  (app/api/pdf-proxy/route.ts fetches the exact URL server-side)
 // Once the media server allows this origin via CORS, this can be removed.
 const MEDIA_HOST = 'mediaserver.advancedtechnologypark.com';
 function toSameOriginPdfUrl(src: string): { url: string; proxied: boolean } {
   try {
     const u = new URL(src);
     if (u.host === MEDIA_HOST) {
-      // Served by app/api/pdf-proxy/route.ts, which fetches the exact URL server-side.
       return { url: `/api/pdf-proxy?url=${encodeURIComponent(src)}`, proxied: true };
     }
   } catch {
@@ -667,6 +926,14 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
   // ONLY in the saved templateConfig.fields (what the renderer reads). The
   // designer's own positions (elements) are untouched.
   const [outputOffset, setOutputOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [goodsLayout, setGoodsLayout] = useState<GoodsLayout>(DEFAULT_GOODS_LAYOUT);
+  // Short-lived message shown when something is refused or flagged (e.g. a field that would print twice).
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 7000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const [past, setPast] = useState<FieldElement[][]>([]);
   const [future, setFuture] = useState<FieldElement[][]>([]);
@@ -791,20 +1058,44 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         ? JSON.parse(certificateType.templateConfig)
         : certificateType.templateConfig;
       const loaded: FieldElement[] = Array.isArray(config?.elements) ? config.elements : [];
-      const seenIds = new Set<string>();
+         const seenIds = new Set<string>();
       const deduped = loaded.map((el) => {
-        const isDuplicate = !el.id || seenIds.has(el.id);
-        if (isDuplicate) {
-          return { ...el, id: uid('el') };
+        let next = el;
+        // One-time migration: weight/value columns used to default to right alignment.
+        if (el.kind === 'goods' && Array.isArray(el.goodsColumns) && el.goodsAlignVersion !== 2) {
+          next = {
+            ...el,
+            goodsAlignVersion: 2,
+            goodsColumns: el.goodsColumns.map((c) =>
+              ['grossWeight', 'netWeight', 'fobValue'].includes(c.key) && c.align === 'right'
+                ? { ...c, align: 'left' as Align }
+                : c
+            ),
+          };
         }
-        seenIds.add(el.id);
-        return el;
+        const isDuplicate = !next.id || seenIds.has(next.id);
+        if (isDuplicate) {
+          return { ...next, id: uid('el') };
+        }
+        seenIds.add(next.id);
+        return next;
       });
       setElements(deduped);
       setSelectedId(null);
       setOutputOffset({
         x: Number(config?.calibration?.x) || 0,
         y: Number(config?.calibration?.y) || 0,
+      });
+      const savedGoods = config?.goodsLayout;
+      setGoodsLayout({
+        rowGap: Number.isFinite(Number(savedGoods?.rowGap)) && savedGoods?.rowGap !== undefined
+          ? Number(savedGoods.rowGap)
+          : DEFAULT_GOODS_LAYOUT.rowGap,
+        autoRowHeight: savedGoods?.autoRowHeight !== false,
+        // Saved value includes the output offset; remove it so the designer shows the raw number.
+        tableBottomY: savedGoods?.tableBottomY
+          ? Math.round((Number(savedGoods.tableBottomY) - (Number(config?.calibration?.y) || 0)) * 100) / 100
+          : 0,
       });
     } catch {
       setElements([]);
@@ -934,12 +1225,41 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
   const addComponent = useCallback(
     (item: PaletteItem, x?: number, y?: number) => {
+      // Don't add something that would print twice; tell the user why instead.
+      if (item.kind === 'goods') {
+        if (elements.some((e) => e.kind === 'goods')) {
+          setNotice('A Goods Table is already on the template. Only one can be used; move or edit the existing one.');
+          return;
+        }
+      } else if (item.kind !== 'component') {
+        const table = elements.find((e) => e.kind === 'goods' && e.enabled);
+        const colKey = GOODS_COLUMN_FOR_FIELD[item.type];
+        if (table && colKey && getGoodsColumns(table).some((c) => c.key === colKey && c.enabled)) {
+          setNotice(
+            `"${item.label}" is already a column in the Goods Table, so adding it again would print it twice. ` +
+              'To place it on its own, untick that column in the Goods Table settings first.'
+          );
+          return;
+        }
+        const code = backendFieldCode(item.type);
+        if (elements.some((e) => isRenderedField(e) && backendFieldCode(e.text) === code)) {
+          setNotice(`"${item.label}" is already on the template. Move or delete the existing one instead of adding it again.`);
+          return;
+        }
+      }
+
       const p = kindPalette(item.kind);
-      const w = defaultWidthFor(item);
+      const isGoods = item.kind === 'goods';
+      // The goods table spans most of the page width and a good part of its height.
+      const w = isGoods ? Math.round(pageW * 0.85) : defaultWidthFor(item);
       const singleLine = isSingleLineType(item.typeLabel, item.kind);
-      const newFontSize = DEFAULT_FONT_SIZE;
+      const newFontSize = isGoods ? 10 : DEFAULT_FONT_SIZE;
       const newLeading = Math.round(newFontSize * LINE_RATIO * 10) / 10;
-      const newHeight = singleLine ? Math.ceil(newFontSize * LINE_RATIO) : item.h;
+          const newHeight = isGoods
+        ? Math.round(pageH * 0.12)
+        : singleLine
+        ? Math.ceil(newFontSize * LINE_RATIO)
+        : item.h;
 
       // Click-added fields are centred in the visible part of the canvas and
       // cascaded diagonally so they never stack on top of each other.
@@ -972,6 +1292,11 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         }
       }
 
+      if (isGoods) {
+        posX = Math.min(Math.max(0, posX), Math.max(0, pageW - w));
+        posY = Math.min(Math.max(0, posY), Math.max(0, pageH - newHeight));
+      }
+
       const el: FieldElement = {
         id: uid('el'),
         text: item.type,
@@ -998,17 +1323,19 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         maxLines: 4,
         required: false,
         readOnly: item.kind === 'system',
-        repeated: false,
+        repeated: !!item.repeatable,
         border: p.dashed ? 'dashed' : 'solid',
         borderColor: p.border,
         // No vertical padding on single-line boxes: the renderer works from the
         // box edges, so padding would only make the designer disagree with it.
         pad: singleLine ? { t: 0, r: 3, b: 0, l: 3 } : { t: 2, r: 3, b: 2, l: 3 },
+        goodsColumns: isGoods ? DEFAULT_GOODS_COLUMNS.map((c) => ({ ...c })) : undefined,
+        goodsAlignVersion: isGoods ? 2 : undefined,
       };
       commit((prev) => [...prev, el]);
       setSelectedId(el.id);
     },
-    [commit, zoom, snapOn, pageW, pageH]
+    [commit, zoom, snapOn, pageW, pageH, elements]
   );
 
   const onElMouseDown = (e: React.MouseEvent, el: FieldElement) => {
@@ -1167,7 +1494,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       }
     }
 
-    // NEW: refuse to save a layout where one field code is placed twice —
+    // Refuse to save a layout where one field code is placed twice —
     // the server keys fields by code, so only one placement would survive.
     const duplicateCodes = findDuplicateCodes(elements);
     if (duplicateCodes.length > 0) {
@@ -1175,6 +1502,18 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       setSaveError(
         `These fields are placed more than once and only one placement can be rendered: ${duplicateCodes.join(', ')}. ` +
         'Delete or disable the extra copies, then save again.'
+      );
+      return;
+    }
+
+    // Fields that are also Goods Table columns would be printed twice.
+    const goodsDupes = findGoodsConflicts(elements);
+    if (goodsDupes.length > 0) {
+      setActiveTab('template-designer');
+      setSaveError(
+        `These fields are also columns in the Goods Table and would print twice: ${goodsDupes
+          .map((e) => e.label)
+          .join(', ')}. Delete the field, or untick the column in the Goods Table settings, then save again.`
       );
       return;
     }
@@ -1316,19 +1655,20 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     }
 
     // templateConfig.fields is keyed by backend field CODE (not canvas id).
-    //
-    // CHANGES vs. the previous version:
-    //  - disabled elements are no longer written (Preview already hides them);
+    //  - disabled elements are not written (Preview already hides them);
     //  - valign / leading / bold / italic / maxLines are included so the
     //    renderer can match what the designer shows (the designer centres text
     //    vertically inside the box; without valign the renderer can only guess).
-    //    If your backend rejects unknown keys, remove these five lines.
+    //    If your backend rejects unknown keys, remove those lines.
     const fields: any = {};
+    // The first enabled Goods Table is written as templateConfig.goods below.
+    const goodsElement = elements.find((e) => e.kind === 'goods' && e.enabled) ?? null;
     let hasUnmappedGoodsTable = false;
 
     elements.forEach((element) => {
       if (element.kind === 'goods' && element.enabled) {
-        hasUnmappedGoodsTable = true;
+        // Extra Goods Tables can't be mapped (the backend has one goods region).
+        if (element !== goodsElement) hasUnmappedGoodsTable = true;
         return;
       }
       if (!isRenderedField(element)) return;
@@ -1348,22 +1688,20 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
         bold: element.bold,
         italic: element.italic,
         maxLines: element.maxLines,
+        repeated: element.repeated,
       };
     });
 
     if (hasUnmappedGoodsTable) {
       // eslint-disable-next-line no-console
       console.warn(
-        '[TemplateDesigner] A Goods Table element is on the canvas but is not included in the saved ' +
-        'templateConfig.fields payload — the backend expects per-column goods placement data ' +
-        '(goods.columns.*, goods.minY, goods.startY) that this canvas does not yet collect.'
+        '[TemplateDesigner] More than one Goods Table is on the canvas. Only the first is saved ' +
+        'as templateConfig.goods; delete the extra one(s).'
       );
     }
 
-    // FIX: `page` is exactly the coordinate space the fields were authored in
-    // (the PDF's real page size, measured by PdfBackdrop). Previously
-    // generalData.pageSize was preferred, which could differ from the canvas
-    // size the user actually positioned fields on.
+    // `page` is exactly the coordinate space the fields were authored in
+    // (the PDF's real page size, measured by PdfBackdrop).
     const templateConfigObj: any = {
       page: {
         index: generalData?.pageIndex ?? templatePageIndex ?? 0,
@@ -1372,8 +1710,19 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
       },
       fields,
       elements,
+      // Goods Table -> per-column placement + row region + white panel/borders for the renderer (see buildGoodsConfig).
+      goods: goodsElement ? buildGoodsConfig(goodsElement, goodsLayout, outputOffset, pageH) : undefined,
       // Saved so reopening the template keeps the calibration (designer positions stay un-shifted).
       calibration: { x: outputOffset.x, y: outputOffset.y },
+      // Layout intent for goods lines. Written under its own key so it can't
+      // collide with the backend's own `goods` schema. The renderer must read it.
+      goodsLayout: {
+        rowGap: goodsLayout.rowGap,
+        autoRowHeight: goodsLayout.autoRowHeight,
+        tableBottomY: goodsLayout.tableBottomY ? goodsLayout.tableBottomY + outputOffset.y : null,
+        repeatedFields: elements.filter((e) => isRenderedField(e) && e.repeated).map((e) => backendFieldCode(e.text)),
+        rowCapacity: repeatedRowHeight(elements),
+      },
     };
 
     const templateConfigString = JSON.stringify(templateConfigObj);
@@ -1502,7 +1851,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     return FULL_PALETTE_GROUPS.map((g) => {
       let filteredItems = g.items;
 
-      if (g.label === 'Application Fields') {
+      if (g.label === 'Application Fields' || g.label === 'Goods Fields') {
         filteredItems = g.items.filter((i) => {
           const fieldId = FIELD_ID_MAP[i.type] || i.type;
           const isEnabled = enabledFields[fieldId] !== false;
@@ -1762,7 +2111,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                       </div>
                       <div className="space-y-1.5">
                         {visibleItems.map((item) => (
-                          <PaletteRow key={item.type} item={item} onAdd={() => addComponent(item)} />
+                          <PaletteRow key={item.type} item={item} onAdd={() => addComponent(item)} status={paletteStatus(item, elements)} />
                         ))}
                       </div>
                       {isAppGroup && group.items.length > APPLICATION_FIELDS_VISIBLE && (
@@ -1770,7 +2119,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                           className="mt-2 text-[12px] font-semibold text-[#1a4a8a] hover:underline"
                           onClick={() => setShowAllApplicationFields((v) => !v)}
                         >
-                          {showAllApplicationFields ? 'Show less' : `View all (${TOTAL_ENABLED_FIELDS} enabled fields)`}
+                          {showAllApplicationFields ? 'Show less' : `View all (${group.items.length} enabled fields)`}
                         </button>
                       )}
                     </div>
@@ -1844,7 +2193,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                             width: el.w,
                             height: el.h,
                             opacity: el.enabled ? 1 : 0.4,
-                            zIndex: isSelected ? 20 : 1,
+                            zIndex: isSelected ? 20 : el.kind === 'goods' ? 0 : 1,
                           }}
                         >
                           <div
@@ -1864,7 +2213,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                               justifyContent: el.align === 'left' ? 'flex-start' : el.align === 'right' ? 'flex-end' : 'center',
                               alignItems: el.valign === 'top' ? 'flex-start' : el.valign === 'bottom' ? 'flex-end' : 'center',
                               color: el.color,
-                              background: el.bg,
+                              // The goods table has its own white panel on the generated PDF.
+                              background: el.kind === 'goods' ? '#ffffff' : el.bg,
                               border: `1.4px ${el.border === 'none' ? 'solid' : el.border} ${
                                 el.border === 'none' ? kindColors.border : el.borderColor
                               }`,
@@ -1875,6 +2225,8 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                           >
                             {el.imageUrl ? (
                               <img src={el.imageUrl} alt={el.text} className="w-full h-full object-contain" />
+                            ) : el.kind === 'goods' ? (
+                              <GoodsTableGlyph el={el} />
                             ) : el.typeLabel === 'QR Code' ? (
                               <QrGlyph />
                             ) : (
@@ -1943,14 +2295,25 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
 
               <div className="p-4">
                 {!selected ? (
-                  <div className="flex flex-col items-center justify-center py-14 text-center">
-                    <div className="w-16 h-16 bg-[#f9fafb] rounded-full flex items-center justify-center mb-4">
-                      <FiEye size={22} className="text-[#9ca3af]" />
+                  <>
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="w-16 h-16 bg-[#f9fafb] rounded-full flex items-center justify-center mb-4">
+                        <FiEye size={22} className="text-[#9ca3af]" />
+                      </div>
+                      <p className="text-[13px] text-[#6a7a9a] leading-relaxed max-w-[220px]">
+                        Select a component on the template to edit its position, size, typography and colors here.
+                      </p>
                     </div>
-                    <p className="text-[13px] text-[#6a7a9a] leading-relaxed max-w-[220px]">
-                      Select a component on the template to edit its position, size, typography and colors here.
-                    </p>
-                  </div>
+                    <GoodsLayoutPanel
+                      layout={goodsLayout}
+                      onChange={(patch) => {
+                        setGoodsLayout((g) => ({ ...g, ...patch }));
+                        setHasUnsavedChanges(true);
+                      }}
+                      repeatedCount={elements.filter((e) => isRenderedField(e) && e.repeated).length}
+                      rowCapacity={repeatedRowHeight(elements)}
+                    />
+                  </>
                 ) : (
                   <PropertiesForm
                     el={selected}
@@ -2063,6 +2426,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           pageH={pageH}
           pageIndex={templatePageIndex}
           templateDataUrl={templateDataUrl}
+          rowGap={goodsLayout.rowGap}
           onClose={() => setShowPreview(false)}
         />
       )}
@@ -2255,6 +2619,8 @@ function PropertiesForm({
       <p className="text-[10.5px] text-[#9aa5bb] mb-4">
         Tip: you can also drag the handles on the canvas to resize.
       </p>
+
+      {el.kind === 'goods' && <GoodsColumnsEditor el={el} onChange={onChange} />}
 
       {/* Typography */}
       <SectionLabel>Typography</SectionLabel>
@@ -2511,9 +2877,280 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="text-[10.5px] font-bold text-[#1a4a8a] uppercase tracking-wide mb-2">{children}</div>;
 }
 
+function GoodsLayoutPanel({
+  layout,
+  onChange,
+  repeatedCount,
+  rowCapacity,
+}: {
+  layout: GoodsLayout;
+  onChange: (patch: Partial<GoodsLayout>) => void;
+  repeatedCount: number;
+  rowCapacity: number;
+}) {
+  return (
+    <div className="mt-2 border-t border-[#e5e8f0] pt-4">
+      <SectionLabel>Goods line layout</SectionLabel>
+      <p className="text-[11px] text-[#6a7a9a] leading-relaxed mb-3">
+        Fields marked <strong>Repeated</strong> (Advanced section of a field) print once per goods line, stacked
+        downward from where you place them. These settings are saved with the template; the generated PDF only
+        follows them if the renderer reads them.
+      </p>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <NumberField
+          label="Gap between lines"
+          value={layout.rowGap}
+          onChange={(v) => onChange({ rowGap: Math.max(0, v) })}
+          suffix="pt"
+        />
+        <NumberField
+          label="Stop growing at Y (0 = page bottom)"
+          value={layout.tableBottomY}
+          onChange={(v) => onChange({ tableBottomY: Math.max(0, v) })}
+          suffix="pt"
+        />
+      </div>
+      <label className="flex items-center gap-2 text-[12px] text-[#3a4560] mb-3">
+        <input
+          type="checkbox"
+          checked={layout.autoRowHeight}
+          onChange={(e) => onChange({ autoRowHeight: e.target.checked })}
+          className="w-3.5 h-3.5"
+        />
+        Grow each line to fit its wrapped text
+      </label>
+      <p className="text-[10.5px] text-[#9aa5bb]">
+        Repeated fields: {repeatedCount}
+        {repeatedCount > 0 && <> · tallest line (at Max Lines): {rowCapacity} pt</>}
+      </p>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Template preview                                                    */
 /* ------------------------------------------------------------------ */
+
+// Designer view of the Goods Table: one band per column with a LEFT-aligned
+// header title and a few faded sample rows. With "Print header row" on, the
+// title row is drawn on the PDF too; with it off, titles are shown faded here
+// only (the form already prints its own header).
+function GoodsTableGlyph({ el }: { el: FieldElement }) {
+  const cols = getGoodsColumns(el).filter((c) => c.enabled);
+  const total = cols.reduce((s, c) => s + c.widthPct, 0) || 1;
+  const showHeader = el.showHeader !== false;
+  const headerH = goodsHeaderHeight(el);
+  return (
+    <div className="flex w-full h-full" style={{ fontSize: Math.min(el.fontSize, 9), lineHeight: 1.2 }}>
+      {cols.map((c, i) => (
+        <div
+          key={c.key}
+          className="h-full overflow-hidden"
+          style={{
+            width: `${(c.widthPct / total) * 100}%`,
+            borderLeft: i === 0 ? 'none' : '1px dashed #8fc99c',
+            color: '#1f6b32',
+          }}
+        >
+          <div
+            className="flex items-center justify-start text-left overflow-hidden"
+            style={{
+              fontWeight: 500,
+              height: showHeader ? headerH : undefined,
+              borderBottom: showHeader ? '1px solid #8fc99c' : 'none',
+              padding: '0 3px',
+              opacity: showHeader ? 1 : 0.5,
+              fontStyle: showHeader ? 'normal' : 'italic',
+            }}
+            title={showHeader ? undefined : 'Not printed: the header row is turned off'}
+          >
+            {c.label}
+          </div>
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              className="truncate"
+              style={{ opacity: 0.55, marginTop: 3, padding: '0 3px', textAlign: c.align }}
+            >
+              {sampleGoodsCell(c.key, n)}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Preview of the table: white panel with ruled borders, a left-aligned header
+// row (if on), then one row per goods line; a row grows to fit its wrapped
+// text and the next row starts below it.
+function GoodsRowsPreview({ el, rowGap }: { el: FieldElement; rowGap: number }) {
+  const cols = getGoodsColumns(el).filter((c) => c.enabled);
+  const total = cols.reduce((s, c) => s + c.widthPct, 0) || 1;
+  const showHeader = el.showHeader !== false;
+  const headerH = goodsHeaderHeight(el);
+  const cellWidth = (c: GoodsColumn) => `${(c.widthPct / total) * 100}%`;
+  const line = `${GOODS_BORDER_WIDTH}px solid ${GOODS_BORDER_COLOR}`;
+  return (
+    <div className="relative w-full self-stretch">
+      {/* Column dividers run the full height of the table box */}
+      <div className="absolute inset-0 flex pointer-events-none">
+        {cols.map((c, i) => (
+          <div key={c.key} style={{ width: cellWidth(c), borderLeft: i === 0 ? 'none' : line }} />
+        ))}
+      </div>
+
+      {showHeader && (
+        <div className="relative flex w-full" style={{ minHeight: headerH, borderBottom: line, marginBottom: rowGap }}>
+          {cols.map((c) => (
+            <div
+              key={c.key}
+              className="flex items-center"
+              style={{ width: cellWidth(c), textAlign: 'left', fontWeight: 400, padding: '0 3px', overflowWrap: 'anywhere' }}
+            >
+              {c.label}
+            </div>
+          ))}
+        </div>
+      )}
+      {[1, 2, 3].map((n) => (
+        <div key={n} className="relative flex w-full" style={{ paddingBottom: rowGap }}>
+          {cols.map((c) => (
+            <div
+              key={c.key}
+              style={{ width: cellWidth(c), textAlign: c.align, padding: '0 3px', overflowWrap: 'anywhere' }}
+            >
+              {sampleGoodsCell(c.key, n)}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GoodsColumnsEditor({
+  el,
+  onChange,
+}: {
+  el: FieldElement;
+  onChange: (patch: Partial<FieldElement>) => void;
+}) {
+  const cols = getGoodsColumns(el);
+  const setCols = (next: GoodsColumn[]) => onChange({ goodsColumns: next });
+  const update = (i: number, patch: Partial<GoodsColumn>) =>
+    setCols(cols.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= cols.length) return;
+    const next = cols.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    setCols(next);
+  };
+  const total = cols.filter((c) => c.enabled).reduce((s, c) => s + c.widthPct, 0);
+
+  return (
+    <div className="mb-4">
+      <SectionLabel>Goods table columns</SectionLabel>
+      <p className="text-[10.5px] text-[#6a7a9a] leading-relaxed mb-2">
+        Each goods line prints as one row inside this box, growing to fit wrapped text. Order and widths must match
+        the columns printed on the form; untick columns the form doesn&apos;t have. Remove any single fields
+        (description, marks, etc.) you&apos;re replacing with this table, or they will print twice.
+      </p>
+      <label className="flex items-center gap-2 text-[12px] text-[#3a4560] mb-1">
+        <input
+          type="checkbox"
+          checked={el.showHeader !== false}
+          onChange={(e) => onChange({ showHeader: e.target.checked })}
+          className="w-3.5 h-3.5"
+        />
+        Print the header row (column titles) on the PDF
+      </label>
+            <label className="flex items-center gap-2 text-[12px] text-[#3a4560] mb-1">
+        <input
+          type="checkbox"
+          checked={el.autoHeight !== false}
+          onChange={(e) => onChange({ autoHeight: e.target.checked })}
+          className="w-3.5 h-3.5"
+        />
+        Expand height automatically to fit all goods lines
+      </label>
+      <p className="text-[10.5px] text-[#9aa5bb] mb-2">
+        The box you draw is the minimum size. The table grows downward as lines are added.
+      </p>
+      <p className="text-[10.5px] text-[#9aa5bb] mb-2">
+        Turn this off if the form already prints its own column headings.
+      </p>
+            <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-[11px] text-[#6a7a9a]">Align all columns</span>
+        {(['left', 'center', 'right'] as Align[]).map((a) => (
+          <button
+            key={a}
+            type="button"
+            onClick={() => setCols(cols.map((c) => ({ ...c, align: a })))}
+            className="px-2 py-0.5 border border-[#d1d5db] rounded text-[11px] hover:bg-[#f4f5f7] capitalize"
+          >
+            {a}
+          </button>
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        {cols.map((c, i) => (
+          <div key={c.key} className="flex items-center gap-1.5 border border-[#e5e8f0] rounded px-1.5 py-1">
+            <input
+              type="checkbox"
+              checked={c.enabled}
+              onChange={(e) => update(i, { enabled: e.target.checked })}
+              className="w-3.5 h-3.5"
+              aria-label={`Show ${c.label}`}
+            />
+            <span className="flex-1 min-w-0 truncate text-[11.5px] text-[#1a2236]">{c.label}</span>
+            <input
+              type="number"
+              min={1}
+              value={c.widthPct}
+              onChange={(e) => update(i, { widthPct: Math.max(1, Number(e.target.value)) })}
+              className="w-11 px-1 py-0.5 border border-[#d1d5db] rounded text-[11px] text-center"
+              aria-label={`${c.label} width percent`}
+            />
+            <span className="text-[10px] text-[#9aa5bb]">%</span>
+            <select
+              value={c.align}
+              onChange={(e) => update(i, { align: e.target.value as Align })}
+              className="px-1 py-0.5 border border-[#d1d5db] rounded text-[11px]"
+              aria-label={`${c.label} alignment`}
+            >
+              <option value="left">L</option>
+              <option value="center">C</option>
+              <option value="right">R</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => move(i, -1)}
+              disabled={i === 0}
+              className="px-1 text-[12px] text-[#3a4560] disabled:opacity-30"
+              aria-label={`Move ${c.label} left`}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => move(i, 1)}
+              disabled={i === cols.length - 1}
+              className="px-1 text-[12px] text-[#3a4560] disabled:opacity-30"
+              aria-label={`Move ${c.label} right`}
+            >
+              ↓
+            </button>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10.5px] text-[#9aa5bb] mt-1.5">
+        Enabled widths add up to {total}% (they are scaled to the table&apos;s width).
+      </p>
+    </div>
+  );
+}
 
 function sampleValueFor(el: FieldElement): string {
   const key = el.text.toLowerCase();
@@ -2542,6 +3179,7 @@ function PreviewModal({
   pageH,
   pageIndex,
   templateDataUrl,
+  rowGap,
   onClose,
 }: {
   elements: FieldElement[];
@@ -2549,6 +3187,7 @@ function PreviewModal({
   pageH: number;
   pageIndex: number;
   templateDataUrl: string | null;
+  rowGap: number;
   onClose: () => void;
 }) {
   const [showBoxes, setShowBoxes] = useState(false);
@@ -2647,7 +3286,8 @@ function PreviewModal({
                         left: el.x,
                         top: el.y,
                         width: el.w,
-                        height: el.h,
+                                                height: el.kind === 'goods' && el.autoHeight !== false ? undefined : el.h,
+                        minHeight: el.h,
                         fontSize: el.fontSize,
                         lineHeight: (el.leading / el.fontSize).toFixed(2),
                         fontFamily: el.fontFamily,
@@ -2658,8 +3298,14 @@ function PreviewModal({
                         alignItems: el.valign === 'top' ? 'flex-start' : el.valign === 'bottom' ? 'flex-end' : 'center',
                         textAlign: el.align,
                         color: '#111827',
-                        background: showBoxes ? el.bg : 'transparent',
-                        border: showBoxes ? `1px ${el.border === 'dashed' ? 'dashed' : 'solid'} ${colors.border}` : 'none',
+                        // The goods table is printed on its own white panel with ruled borders.
+                        background: el.kind === 'goods' ? '#ffffff' : showBoxes ? el.bg : 'transparent',
+                        border:
+                          el.kind === 'goods'
+                            ? `${GOODS_BORDER_WIDTH}px solid ${GOODS_BORDER_COLOR}`
+                            : showBoxes
+                            ? `1px ${el.border === 'dashed' ? 'dashed' : 'solid'} ${colors.border}`
+                            : 'none',
                         padding: `${el.pad.t}px ${el.pad.r}px ${el.pad.b}px ${el.pad.l}px`,
                         whiteSpace: el.wrap ? 'pre-wrap' : 'nowrap',
                       }}
@@ -2669,27 +3315,7 @@ function PreviewModal({
                       ) : el.typeLabel === 'QR Code' ? (
                         <QrGlyph />
                       ) : el.typeLabel === 'Table' ? (
-                        <table className="w-full border-collapse" style={{ fontSize: el.fontSize }}>
-                          <thead>
-                            <tr>
-                              {['No.', 'Description', 'HS Code', 'Qty'].map((h) => (
-                                <th key={h} className="border border-[#9ca3af] px-1 text-left font-semibold">
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {[1, 2].map((n) => (
-                              <tr key={n}>
-                                <td className="border border-[#9ca3af] px-1">{n}</td>
-                                <td className="border border-[#9ca3af] px-1">Sample goods {n}</td>
-                                <td className="border border-[#9ca3af] px-1">0901.11</td>
-                                <td className="border border-[#9ca3af] px-1">{n * 50}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        <GoodsRowsPreview el={el} rowGap={rowGap} />
                       ) : (
                         sampleValueFor(el)
                       )}
