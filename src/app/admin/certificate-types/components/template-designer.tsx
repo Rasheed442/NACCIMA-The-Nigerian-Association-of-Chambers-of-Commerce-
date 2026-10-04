@@ -1168,6 +1168,17 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     origH: number;
   } | null>(null);
 
+  const colResizeRef = useRef<{
+  id: string;
+  leftKey: string;
+  rightKey: string;
+  startX: number;
+  origLeft: number;
+  origRight: number;
+  totalPct: number;
+  elW: number;
+} | null>(null);
+
   const selected = elements.find((e) => e.id === selectedId) ?? null;
 
   const commit = useCallback((updater: (prev: FieldElement[]) => FieldElement[]) => {
@@ -1369,6 +1380,33 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     };
   };
 
+  const onColResizeMouseDown = (
+  e: React.MouseEvent,
+  el: FieldElement,
+  left: GoodsColumn,
+  right: GoodsColumn,
+  totalPct: number
+) => {
+  e.preventDefault();
+  e.stopPropagation();
+  setSelectedId(el.id);
+  setPast((p) => [...p.slice(-49), elements]); // one undo step per drag
+  setFuture([]);
+  setHasUnsavedChanges(true);
+  dragRef.current = null;
+  resizeRef.current = null;
+  colResizeRef.current = {
+    id: el.id,
+    leftKey: left.key,
+    rightKey: right.key,
+    startX: e.clientX,
+    origLeft: left.widthPct,
+    origRight: right.widthPct,
+    totalPct,
+    elW: el.w,
+  };
+};
+
   const onDropOnCanvas = (e: React.DragEvent) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('text/plain');
@@ -1398,6 +1436,29 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     const snap = (v: number) => (snapOn ? Math.round(v / GRID_STEP) * GRID_STEP : Math.round(v));
 
     function onMove(e: MouseEvent) {
+
+      const cr = colResizeRef.current;
+if (cr) {
+  const dPct = (((e.clientX - cr.startX) / zoom) / cr.elW) * cr.totalPct;
+  const pair = cr.origLeft + cr.origRight; // the two neighbours share this space
+  const MIN_PCT = 3;
+  const left = Math.round(Math.min(Math.max(cr.origLeft + dPct, MIN_PCT), pair - MIN_PCT) * 10) / 10;
+  const right = Math.round((pair - left) * 10) / 10;
+  setElements((prev) =>
+    prev.map((el) =>
+      el.id !== cr.id
+        ? el
+        : {
+            ...el,
+            goodsColumns: getGoodsColumns(el).map((c) =>
+              c.key === cr.leftKey ? { ...c, widthPct: left } : c.key === cr.rightKey ? { ...c, widthPct: right } : c
+            ),
+          }
+    )
+  );
+  return;
+}
+
       const rz = resizeRef.current;
       if (rz) {
         const dx = (e.clientX - rz.startX) / zoom;
@@ -1450,6 +1511,7 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
     function onUp() {
       dragRef.current = null;
       resizeRef.current = null;
+      colResizeRef.current = null;
     }
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -2254,6 +2316,33 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
                                   }}
                                 />
                               ))}
+                              {el.kind === 'goods' &&
+  (() => {
+    const cols = getGoodsColumns(el).filter((c) => c.enabled);
+    const total = cols.reduce((s, c) => s + c.widthPct, 0) || 1;
+    let acc = 0;
+    return cols.slice(0, -1).map((c, i) => {
+      acc += c.widthPct;
+      return (
+        <div
+          key={c.key}
+          title="Drag to resize column"
+          onMouseDown={(e) => onColResizeMouseDown(e, el, c, cols[i + 1], total)}
+          className="absolute"
+          style={{
+            left: `${(acc / total) * 100}%`,
+            top: 0,
+            height: '100%',
+            width: 7 / zoom,
+            transform: 'translateX(-50%)',
+            cursor: 'col-resize',
+            background: 'rgba(26,74,138,0.35)',
+            zIndex: 25,
+          }}
+        />
+      );
+    });
+  })()}
                               <div
                                 className="absolute left-0 whitespace-nowrap bg-[#1a4a8a] text-white pointer-events-none"
                                 style={{
@@ -3048,7 +3137,7 @@ function GoodsColumnsEditor({
     setCols(next);
   };
   const total = cols.filter((c) => c.enabled).reduce((s, c) => s + c.widthPct, 0);
-
+const enabledTotal = cols.filter((c) => c.enabled).reduce((s, c) => s + c.widthPct, 0) || 1;
   return (
     <div className="mb-4">
       <SectionLabel>Goods table columns</SectionLabel>
