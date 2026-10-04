@@ -749,7 +749,7 @@ export default function VettingReviewPage({
                           )}
                           {item.createdAt && (
                             <p className="text-xs text-gray-400 mt-0.5">
-                              {format(new Date(item.createdAt), 'MMM dd, yyyy HH:mm')}
+                              {item.createdAt?.slice(0, 20)?.replace("T", `${" "}`)}
                             </p>
                           )}
                         </div>
