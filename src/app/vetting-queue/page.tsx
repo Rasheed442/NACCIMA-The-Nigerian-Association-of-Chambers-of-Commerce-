@@ -614,6 +614,13 @@ export default function VettingQueuePage() {
               <div className="flex gap-2">
                 <button
                   className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setCurrentPage(0)}
+                  disabled={currentPage === 0}
+                >
+                  → First
+                </button>
+                <button
+                  className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                   disabled={currentPage === 0}
                 >
@@ -625,6 +632,13 @@ export default function VettingQueuePage() {
                   disabled={currentPage >= totalPages - 1}
                 >
                   Next →
+                </button>
+                <button
+                  className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setCurrentPage(totalPages - 1)}
+                  disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                >
+                  Last →
                 </button>
               </div>
             </div>

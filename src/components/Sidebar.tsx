@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import React, { Suspense, useState, useEffect } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 interface SidebarProps {
   role?: 'exporter' | 'admin' | 'vetting';
@@ -12,9 +12,17 @@ interface Application {
   status: string;
 }
 
-export default function Sidebar({ role = 'exporter' }: SidebarProps) {
+// Local calendar date (YYYY-MM-DD). toISOString() would give the UTC date,
+// which is wrong for part of the day in timezones like Lagos (UTC+1).
+const getLocalToday = () => new Date().toLocaleDateString('en-CA');
+
+function SidebarInner({ role = 'exporter' }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentStatus = searchParams.get('status');
+  const currentDate = searchParams.get('date');
+  const [approvedTodayCount, setApprovedTodayCount] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [applicationsCount, setApplicationsCount] = useState(0);
@@ -204,6 +212,23 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       if (response.ok && result?.success !== false) {
         setVettingQueueCount(normalizeCount(result?.data ?? result));
       }
+
+      // Approved today badge (size=1: only totalElements is needed)
+      const approvedResponse = await fetch(
+        `${baseUrl}/api/v1/admin/certificates/vetting/applications?status=APPROVED&date=${getLocalToday()}&page=0&size=1`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+      const approvedResult = await approvedResponse.json().catch(() => ({}));
+
+      if (approvedResponse.ok && approvedResult?.success !== false) {
+        setApprovedTodayCount(normalizeCount(approvedResult?.data ?? approvedResult));
+      }
     } catch (err) {
       console.error('Failed to fetch vetting queue count:', err);
     } finally {
@@ -349,6 +374,13 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
   const feeManagementPath = '/admin/fee-management';
   const staffAccountsPath = '/admin/staff-accounts';
 
+  // Vetting sub-pages share one route and differ only by query string,
+  // so the active item is decided from the search params.
+  const onReviewPage = pathname === '/vetting-review';
+  const isApprovedTodayActive = onReviewPage && currentStatus === 'APPROVED' && currentDate === getLocalToday();
+  const isRejectedActive = onReviewPage && currentStatus === 'REJECTED';
+  const isMyReviewsActive = onReviewPage && !isApprovedTodayActive && !isRejectedActive;
+
   const renderAdminSidebar = () => (
     <>
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === dashboardPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(dashboardPath)}>
@@ -395,13 +427,13 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-queue' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation('/vetting-queue')}>
         <span className="text-[13px] w-[15px] text-center">📥</span> Applications Queue {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{vettingQueueCount}</span>}
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === '/vetting-review' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation('/vetting-review')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${isMyReviewsActive ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation('/vetting-review')}>
         <span className="text-[13px] w-[15px] text-center">🗂️</span> My Reviews
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => handleNavigation('/vetting-review?status=APPROVED')}>
-        <span className="text-[13px] w-[15px] text-center">✅</span> Approved Today {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">0</span>}
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${isApprovedTodayActive ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(`/vetting-review?status=APPROVED&date=${getLocalToday()}`)}>
+        <span className="text-[13px] w-[15px] text-center">✅</span> Approved Today {isLoading ? '' : <span className="ml-auto bg-[#059669] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{approvedTodayCount}</span>}
       </div>
-      <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]" onClick={() => handleNavigation('/vetting-review?status=REJECTED')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${isRejectedActive ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation('/vetting-review?status=REJECTED')}>
         <span className="text-[13px] w-[15px] text-center">❌</span> Rejected
       </div>
       <div className="px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] text-[#4a5a7a] cursor-pointer border-l-3 border-transparent transition-all hover:bg-[#edf2ff] hover:text-[#2c4a7a]">
@@ -422,10 +454,10 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
       <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath)}>
         <span className="text-[13px] w-[15px] text-center">📄</span> All Applications {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{allCount}</span>}
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.includes('status=PENDING') ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath + '?status=PENDING')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath && currentStatus === 'PENDING' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath + '?status=PENDING')}>
         <span className="text-[13px] w-[15px] text-center">🕐</span> Pending Payment {isLoading ? '' : <span className="ml-auto bg-[#e53e3e] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{pendingPaymentCount}</span>}
       </div>
-      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname.includes('status=UNDER_REVIEW') ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath + '?status=UNDER_REVIEW')}>
+      <div className={`px-[16px] text-[15px] py-[10px] flex items-center gap-2 text-[13px] cursor-pointer border-l-3 transition-all ${pathname === myApplicationsPath && currentStatus === 'UNDER_REVIEW' ? 'bg-[#e8f0fe] text-[#1a4a8a] border-l-[#3a7bd5] font-semibold' : 'text-[#4a5a7a] border-transparent hover:bg-[#edf2ff] hover:text-[#2c4a7a]'}`} onClick={() => handleNavigation(myApplicationsPath + '?status=UNDER_REVIEW')}>
         <span className="text-[13px] w-[15px] text-center">🔍</span> Under Review {isLoading ? '' : <span className="ml-auto bg-[#d97706] text-white text-[9px] font-bold px-[5px] py-[1px] rounded-[8px]">{underReviewCount}</span>}
       </div>
       <div className="px-[16px] text-[12px] py-[3px_16px_6px] text-[9px] font-medium pt-3 text-[#8a9aba] uppercase tracking-[0.8px]">Certificates</div>
@@ -451,5 +483,15 @@ export default function Sidebar({ role = 'exporter' }: SidebarProps) {
         <span className="text-[15px] w-3.75 text-center">🚪</span> Log Out
       </div>
     </nav>
+  );
+}
+
+// useSearchParams needs a Suspense boundary, otherwise pages that render the
+// sidebar can fail to build/prerender.
+export default function Sidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={null}>
+      <SidebarInner {...props} />
+    </Suspense>
   );
 }

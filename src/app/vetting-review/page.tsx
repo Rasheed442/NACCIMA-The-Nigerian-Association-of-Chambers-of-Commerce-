@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   FileText,
   CheckCircle,
@@ -40,7 +40,53 @@ interface ReviewApplication {
   fobValue: number;
   fobCurrency: string;
   status: string;
+  // The API's decision timestamp; the exact field name may vary, see
+  // DECISION_DATE_FIELDS below.
+  approvedAt?: string;
+  approvalDate?: string;
+  approvedDate?: string;
+  reviewedAt?: string;
+  decidedAt?: string;
+  decisionDate?: string;
+  completedAt?: string;
+  updatedAt?: string;
+  lastModifiedAt?: string;
 }
+
+/*
+ * Fields that may hold the moment an application was approved,
+ * most specific first. Used to guarantee "Approved Today" only shows
+ * applications approved today, even if the backend ignores `date`.
+ */
+const DECISION_DATE_FIELDS = [
+  'approvedAt',
+  'approvalDate',
+  'approvedDate',
+  'reviewedAt',
+  'decidedAt',
+  'decisionDate',
+  'completedAt',
+  'updatedAt',
+  'lastModifiedAt',
+] as const;
+
+const getDecisionDate = (app: ReviewApplication): string | null => {
+  for (const field of DECISION_DATE_FIELDS) {
+    const value = app[field];
+    if (typeof value === 'string' && value) return value;
+  }
+  return null;
+};
+
+// Compares in the user's local time zone (YYYY-MM-DD).
+const isOnLocalDay = (iso: string, day: string): boolean => {
+  const date = new Date(iso);
+  return !Number.isNaN(date.getTime()) && date.toLocaleDateString('en-CA') === day;
+};
+
+// When a date filter is active we load one big page and filter it here,
+// so matching rows can't be hidden on page 2+ of an unfiltered result.
+const DATE_FILTER_PAGE_SIZE = 200;
 
 type DropdownKey = 'certType' | 'status' | 'transport';
 
@@ -48,6 +94,9 @@ type DropdownOption = {
   value: string;
   label: string;
 };
+
+const DEFAULT_STATUS = 'PAID';
+const REVIEW_PATH = '/vetting-review';
 
 const certTypeOptions: DropdownOption[] = [
   { value: 'all', label: 'All Certificate Types' },
@@ -75,16 +124,10 @@ const transportOptions: DropdownOption[] = [
   { value: 'land', label: 'Land' },
 ];
 
-const getSelectedLabel = (
-  options: DropdownOption[],
-  value: string
-): string => {
-  return (
-    options.find((option) => option.value === value)?.label ||
-    options[0]?.label ||
-    'Select'
-  );
-};
+const getSelectedLabel = (options: DropdownOption[], value: string): string =>
+  options.find((option) => option.value === value)?.label ||
+  options[0]?.label ||
+  'Select';
 
 function CustomDropdown({
   options,
@@ -110,9 +153,7 @@ function CustomDropdown({
         onClick={onToggle}
         className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 rounded text-xs bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
       >
-        <span className="truncate">
-          {getSelectedLabel(options, value)}
-        </span>
+        <span className="truncate">{getSelectedLabel(options, value)}</span>
 
         {isOpen ? (
           <X className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
@@ -123,10 +164,7 @@ function CustomDropdown({
 
       {isOpen && (
         <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={onClose}
-          />
+          <div className="fixed inset-0 z-10" onClick={onClose} />
 
           <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-auto">
             {options.map((option) => (
@@ -155,64 +193,128 @@ function CustomDropdown({
 
 function VettingReviewContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  /*
+   * ---------------------------------------------------------
+   * Filters that live in the URL
+   *
+   * The sidebar links ("Approved Today", "Rejected", "My Reviews")
+   * only change the query string, which does NOT remount this
+   * page. So the URL is the source of truth for status + date,
+   * and every change to it triggers a refetch.
+   *
+   *   /vetting-review                          -> PAID (default)
+   *   /vetting-review?status=REJECTED          -> rejected
+   *   /vetting-review?status=APPROVED&date=... -> approved on that day
+   * ---------------------------------------------------------
+   */
+  const filterStatus = searchParams.get('status') || DEFAULT_STATUS;
+  const dateFilter = searchParams.get('date') || '';
+
+  const todayLocal = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local time
+  const isToday = dateFilter !== '' && dateFilter === todayLocal;
 
   /*
    * ---------------------------------------------------------
    * State
    * ---------------------------------------------------------
    */
-
   const [applications, setApplications] = useState<ReviewApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [filterCertType, setFilterCertType] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('PAID');
   const [filterTransport, setFilterTransport] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  /*
-   * Pagination
-   *
-   * currentPage is zero-based because this is what the backend
-   * expects.
-   */
+  // Zero-based because that is what the backend expects.
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(20);
 
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
-  const [openDropdown, setOpenDropdown] =
-    useState<DropdownKey | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<DropdownKey | null>(null);
+
+  // Prevent stale API responses from overwriting newer requests.
+  const requestIdRef = useRef(0);
 
   /*
-   * Prevent stale API responses from overwriting newer requests.
+   * ---------------------------------------------------------
+   * Summary stats
+   *
+   * These are true totals per status, fetched separately from the
+   * table (size=1, we only need totalElements). They don't change
+   * with the active filter, the search box or the current page.
+   * ---------------------------------------------------------
    */
-  const requestIdRef = useRef(0);
+  const [stats, setStats] = useState<Record<string, number>>({});
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      setStatsLoading(true);
+
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) return;
+
+      const statuses = statusOptions
+        .map((option) => option.value)
+        .filter((value) => value !== 'all');
+
+      const entries = await Promise.all(
+        statuses.map(async (status): Promise<[string, number]> => {
+          try {
+            const response = await apiFetch(
+              `${baseUrl}/api/v1/admin/certificates/vetting/applications?status=${encodeURIComponent(
+                status
+              )}&page=0&size=1`
+            );
+            const payload = await response.json();
+
+            return [
+              status,
+              response.ok && payload?.success
+                ? Number(payload?.data?.totalElements || 0)
+                : 0,
+            ];
+          } catch {
+            return [status, 0];
+          }
+        })
+      );
+
+      setStats(Object.fromEntries(entries));
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  /*
+   * Go back to page 1 whenever the URL filters change
+   * (e.g. user clicks Rejected in the sidebar while on page 3).
+   */
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [filterStatus, dateFilter]);
 
   /*
    * ---------------------------------------------------------
    * Logout modal
    * ---------------------------------------------------------
    */
-
   useEffect(() => {
-    const handleOpenLogoutModal = () => {
-      setShowLogoutModal(true);
-    };
+    const handleOpenLogoutModal = () => setShowLogoutModal(true);
 
-    window.addEventListener(
-      'open-logout-modal',
-      handleOpenLogoutModal
-    );
-
+    window.addEventListener('open-logout-modal', handleOpenLogoutModal);
     return () => {
-      window.removeEventListener(
-        'open-logout-modal',
-        handleOpenLogoutModal
-      );
+      window.removeEventListener('open-logout-modal', handleOpenLogoutModal);
     };
   }, []);
 
@@ -221,7 +323,6 @@ function VettingReviewContent() {
    * Fetch reviews
    * ---------------------------------------------------------
    */
-
   const fetchReviews = useCallback(async () => {
     const requestId = ++requestIdRef.current;
 
@@ -230,96 +331,87 @@ function VettingReviewContent() {
       setError('');
 
       const baseUrl = getBaseUrl();
-
       if (!baseUrl) {
         throw new Error('API base URL is not configured');
       }
 
       const params = new URLSearchParams();
 
-      /*
-       * Server-side status filtering.
-       */
       if (filterStatus !== 'all') {
         params.set('status', filterStatus);
       }
 
-      /*
-       * Server-side pagination.
-       */
-      params.set('page', currentPage.toString());
-      params.set('size', pageSize.toString());
+      if (dateFilter) {
+        params.set('date', dateFilter);
+      }
 
-      const query = params.toString();
+      params.set('page', dateFilter ? '0' : currentPage.toString());
+      params.set(
+        'size',
+        (dateFilter ? DATE_FILTER_PAGE_SIZE : pageSize).toString()
+      );
 
       const response = await apiFetch(
-        `${baseUrl}/api/v1/admin/certificates/vetting/applications${
-          query ? `?${query}` : ''
-        }`
+        `${baseUrl}/api/v1/admin/certificates/vetting/applications?${params.toString()}`
       );
 
       const payload = await response.json();
 
-      /*
-       * Ignore old requests.
-       */
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
+      // Ignore old requests.
+      if (requestId !== requestIdRef.current) return;
 
-      if (
-        response.ok &&
-        payload?.success &&
-        payload?.data
-      ) {
+      if (response.ok && payload?.success && payload?.data) {
         const data = payload.data;
+        let rows: ReviewApplication[] = data.content || [];
 
-        setApplications(data.content || []);
+        if (dateFilter) {
+          const hasDates = rows.some((app) => getDecisionDate(app));
 
-        setTotalElements(
-          Number(data.totalElements || 0)
-        );
+          if (rows.length > 0 && !hasDates) {
+            // Can't tell when anything was approved, so don't pretend.
+            setApplications([]);
+            setTotalElements(0);
+            setTotalPages(0);
+            setError(
+              'The API response has no approval date field, so applications cannot be filtered by day.'
+            );
+            return;
+          }
 
-        setTotalPages(
-          Number(data.totalPages || 0)
-        );
+          rows = rows.filter((app) => {
+            const when = getDecisionDate(app);
+            return when ? isOnLocalDay(when, dateFilter) : false;
+          });
+
+          setApplications(rows);
+          setTotalElements(rows.length);
+          setTotalPages(rows.length > 0 ? 1 : 0);
+        } else {
+          setApplications(rows);
+          setTotalElements(Number(data.totalElements || 0));
+          setTotalPages(Number(data.totalPages || 0));
+        }
       } else {
         setApplications([]);
         setTotalElements(0);
         setTotalPages(0);
-
-        setError(
-          payload?.message ||
-            'Unable to load review list.'
-        );
+        setError(payload?.message || 'Unable to load review list.');
       }
     } catch (err) {
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
+      if (requestId !== requestIdRef.current) return;
 
-      console.error(
-        'Failed to fetch vetting reviews:',
-        err
-      );
+      console.error('Failed to fetch vetting reviews:', err);
 
       setApplications([]);
       setTotalElements(0);
       setTotalPages(0);
-
-      setError(
-        'Unable to load review list right now.'
-      );
+      setError('Unable to load review list right now.');
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
       }
     }
-  }, [
-    filterStatus,
-    currentPage,
-    pageSize,
-  ]);
+  }, [filterStatus, dateFilter, currentPage, pageSize]);
 
   useEffect(() => {
     fetchReviews();
@@ -327,282 +419,106 @@ function VettingReviewContent() {
 
   /*
    * ---------------------------------------------------------
-   * Filters
+   * Filter handlers
    * ---------------------------------------------------------
    */
 
+  // Changing the status dropdown updates the URL, and drops the
+  // "today" date filter, since the user is now picking manually.
   const handleStatusChange = (value: string) => {
-    setFilterStatus(value);
-
-    /*
-     * Whenever a filter changes, go back to page 1.
-     */
-    setCurrentPage(0);
+    router.replace(`${REVIEW_PATH}?status=${encodeURIComponent(value)}`);
   };
 
-  const handleCertificateTypeChange = (
-    value: string
-  ) => {
+  const clearDateFilter = () => {
+    router.replace(`${REVIEW_PATH}?status=${encodeURIComponent(filterStatus)}`);
+  };
+
+  const handleCertificateTypeChange = (value: string) => {
     setFilterCertType(value);
-
-    /*
-     * Reset pagination.
-     */
     setCurrentPage(0);
   };
 
-  const handleTransportChange = (
-    value: string
-  ) => {
+  const handleTransportChange = (value: string) => {
     setFilterTransport(value);
-
-    /*
-     * Reset pagination.
-     */
     setCurrentPage(0);
   };
 
-  const handleSearchChange = (
-    value: string
-  ) => {
+  const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-
-    /*
-     * Reset pagination whenever search changes.
-     */
     setCurrentPage(0);
   };
 
   /*
    * ---------------------------------------------------------
-   * Client-side filters
-   *
-   * These operate on the current API page.
-   *
-   * Status is already handled by the backend.
+   * Client-side filters (operate on the current API page)
+   * Status and date are handled by the backend.
    * ---------------------------------------------------------
    */
+  const query = searchQuery.trim().toLowerCase();
 
-  const filteredApplications =
-    applications.filter((app) => {
-      if (
-        filterCertType !== 'all' &&
-        !app.certificateType
-          ?.toLowerCase()
-          .includes(
-            filterCertType.toLowerCase()
-          )
-      ) {
-        return false;
-      }
-
-      if (
-        filterTransport !== 'all' &&
-        app.modeOfTransport
-          ?.toLowerCase() !==
-          filterTransport.toLowerCase()
-      ) {
-        return false;
-      }
-
-      // if (
-      //   searchQuery.trim() &&
-      //   !app.tin
-      //     ?.toLowerCase()
-      //     .includes(
-      //       searchQuery.trim().toLowerCase()
-      //     )
-      // ) {
-      //   return false;
-      // }
-
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
-    }
-         if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return (
-        app.applicationId.toLowerCase().includes(query) ||
-        app.certificateType.toLowerCase().includes(query) ||
-        app.modeOfTransport.toLowerCase().includes(query) ||
-        app.status.toLowerCase().includes(query) ||
-        app.companyId.toLowerCase().includes(query) ||
-        app.approvalNumber.toLowerCase().includes(query)
-      );
+  const filteredApplications = applications.filter((app) => {
+    if (
+      filterCertType !== 'all' &&
+      !app.certificateType?.toLowerCase().includes(filterCertType.toLowerCase())
+    ) {
+      return false;
     }
 
-      return true;
-    });
+    if (
+      filterTransport !== 'all' &&
+      app.modeOfTransport?.toLowerCase() !== filterTransport.toLowerCase()
+    ) {
+      return false;
+    }
+
+    if (query) {
+      return [
+        app.applicationId,
+        app.tin,
+        app.certificateType,
+        app.modeOfTransport,
+        app.status,
+        app.companyId,
+        app.approvalNumber,
+      ].some((field) => (field ?? '').toLowerCase().includes(query));
+    }
+
+    return true;
+  });
 
   /*
    * ---------------------------------------------------------
    * Pagination helpers
    * ---------------------------------------------------------
    */
-
   const handlePageChange = (page: number) => {
     if (loading) return;
 
-    const maxPage = Math.max(
-      totalPages - 1,
-      0
-    );
-
-    const nextPage = Math.max(
-      0,
-      Math.min(page, maxPage)
-    );
+    const maxPage = Math.max(totalPages - 1, 0);
+    const nextPage = Math.max(0, Math.min(page, maxPage));
 
     if (nextPage !== currentPage) {
       setCurrentPage(nextPage);
     }
   };
 
-  const handlePreviousPage = () => {
-    handlePageChange(currentPage - 1);
-  };
+  const handlePreviousPage = () => handlePageChange(currentPage - 1);
+  const handleNextPage = () => handlePageChange(currentPage + 1);
 
-  const handleNextPage = () => {
-    handlePageChange(currentPage + 1);
-  };
-
-  /*
-   * ---------------------------------------------------------
-   * Pagination display numbers
-   * ---------------------------------------------------------
-   */
-
-  const firstRecord =
-    totalElements === 0
-      ? 0
-      : currentPage * pageSize + 1;
-
+  const firstRecord = totalElements === 0 ? 0 : currentPage * pageSize + 1;
   const lastRecord =
     totalElements === 0
       ? 0
-      : Math.min(
-          (currentPage + 1) * pageSize,
-          totalElements
-        );
+      : Math.min((currentPage + 1) * pageSize, totalElements);
 
   /*
    * ---------------------------------------------------------
    * Logout
    * ---------------------------------------------------------
    */
-
   const handleLogout = () => {
     setShowLogoutModal(false);
-
     localStorage.clear();
-
     router.push('/login');
   };
 
@@ -611,114 +527,65 @@ function VettingReviewContent() {
    * Dropdown
    * ---------------------------------------------------------
    */
-
-  const toggleDropdown = (
-    key: DropdownKey
-  ) => {
-    setOpenDropdown((previous) =>
-      previous === key ? null : key
-    );
+  const toggleDropdown = (key: DropdownKey) => {
+    setOpenDropdown((previous) => (previous === key ? null : key));
   };
 
-  const closeDropdown = () => {
-    setOpenDropdown(null);
-  };
+  const closeDropdown = () => setOpenDropdown(null);
 
   /*
    * ---------------------------------------------------------
-   * Counts
+   * Card numbers (from `stats`, not from the visible page)
    * ---------------------------------------------------------
-   *
-   * Since the API returns paginated data, applications.length
-   * is NOT the total number of applications.
-   *
-   * totalElements is the actual total for the current
-   * server-side status filter.
    */
+  const allCount = Object.values(stats).reduce((sum, n) => sum + n, 0);
+  const pendingCount = stats.PAID ?? 0;
+  const completedCount = (stats.APPROVED ?? 0) + (stats.REJECTED ?? 0);
 
-  const pendingCount =
-    applications.filter(
-      (app) => app.status === 'PAID'
-    ).length;
+  const formatStat = (n: number) => (statsLoading ? '—' : n.toLocaleString());
 
-  const completedCount =
-    applications.filter((app) =>
-      ['APPROVED', 'REJECTED'].includes(
-        app.status
-      )
-    ).length;
+  /*
+   * ---------------------------------------------------------
+   * Heading text
+   * ---------------------------------------------------------
+   */
+  const pageTitle =
+    filterStatus === 'APPROVED' && isToday
+      ? 'Approved Today'
+      : filterStatus === 'REJECTED'
+        ? 'Rejected Applications'
+        : 'My Reviews';
+
+  const pageSubtitle =
+    filterStatus === 'all'
+      ? 'Showing applications across all statuses'
+      : filterStatus === 'APPROVED' && dateFilter
+        ? `Showing applications approved ${isToday ? 'today' : `on ${dateFilter}`}`
+        : `Showing ${filterStatus.toLowerCase().replace(/_/g, ' ')} applications${
+            dateFilter ? ` for ${dateFilter}` : ''
+          }`;
 
   /*
    * ---------------------------------------------------------
    * Status badge
    * ---------------------------------------------------------
    */
-
-  const getStatusBadge = (
-    status: string
-  ) => {
-    const statusMap: Record<
-      string,
-      {
-        styles: string;
-        label: string;
-      }
-    > = {
-      SUBMITTED: {
-        styles:
-          'bg-[#dbeafe] text-[#1e40af]',
-        label: 'Submitted',
-      },
-
-      PAID: {
-        styles:
-          'bg-[#e0e7ff] text-[#3730a3]',
-        label: 'Paid',
-      },
-
-      UNDER_REVIEW: {
-        styles:
-          'bg-[#fef3c7] text-[#92400e]',
-        label: 'Under Review',
-      },
-
-      INFO_REQUESTED: {
-        styles:
-          'bg-[#dbeafe] text-[#1e40af]',
-        label: 'Info Requested',
-      },
-
-      RESUBMITTED: {
-        styles:
-          'bg-[#e0e7ff] text-[#3730a3]',
-        label: 'Resubmitted',
-      },
-
-      UNAPPROVED: {
-        styles:
-          'bg-[#fdf2f8] text-[#9d174d]',
-        label: 'Unapproved / Resubmitted',
-      },
-
-      APPROVED: {
-        styles:
-          'bg-[#d1fae5] text-[#065f46]',
-        label: 'Approved',
-      },
-
-      REJECTED: {
-        styles:
-          'bg-[#fee2e2] text-[#9b1c1c]',
-        label: 'Rejected',
-      },
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { styles: string; label: string }> = {
+      SUBMITTED: { styles: 'bg-[#dbeafe] text-[#1e40af]', label: 'Submitted' },
+      PAID: { styles: 'bg-[#e0e7ff] text-[#3730a3]', label: 'Paid' },
+      UNDER_REVIEW: { styles: 'bg-[#fef3c7] text-[#92400e]', label: 'Under Review' },
+      INFO_REQUESTED: { styles: 'bg-[#dbeafe] text-[#1e40af]', label: 'Info Requested' },
+      RESUBMITTED: { styles: 'bg-[#e0e7ff] text-[#3730a3]', label: 'Resubmitted' },
+      UNAPPROVED: { styles: 'bg-[#fdf2f8] text-[#9d174d]', label: 'Unapproved / Resubmitted' },
+      APPROVED: { styles: 'bg-[#d1fae5] text-[#065f46]', label: 'Approved' },
+      REJECTED: { styles: 'bg-[#fee2e2] text-[#9b1c1c]', label: 'Rejected' },
     };
 
-    const safe =
-      statusMap[status] || {
-        styles:
-          'bg-[#f3f4f6] text-[#6b7280]',
-        label: status || 'Unknown',
-      };
+    const safe = statusMap[status] || {
+      styles: 'bg-[#f3f4f6] text-[#6b7280]',
+      label: status || 'Unknown',
+    };
 
     return (
       <span
@@ -734,34 +601,14 @@ function VettingReviewContent() {
    * Transport icon
    * ---------------------------------------------------------
    */
-
-  const getTransportIcon = (
-    transport: string
-  ) => {
-    const icons: Record<
-      string,
-      React.ReactNode
-    > = {
-      SEA: (
-        <Ship className="w-4 h-4" />
-      ),
-
-      AIR: (
-        <Plane className="w-4 h-4" />
-      ),
-
-      LAND: (
-        <Truck className="w-4 h-4" />
-      ),
+  const getTransportIcon = (transport: string) => {
+    const icons: Record<string, React.ReactNode> = {
+      SEA: <Ship className="w-4 h-4" />,
+      AIR: <Plane className="w-4 h-4" />,
+      LAND: <Truck className="w-4 h-4" />,
     };
 
-    return (
-      icons[
-        transport?.toUpperCase()
-      ] || (
-        <FileText className="w-4 h-4" />
-      )
-    );
+    return icons[transport?.toUpperCase()] || <FileText className="w-4 h-4" />;
   };
 
   /*
@@ -769,99 +616,62 @@ function VettingReviewContent() {
    * Review action
    * ---------------------------------------------------------
    */
-
-  const handleReviewAction = async (
-    app: ReviewApplication
-  ) => {
-    /*
-     * Approved applications can simply be viewed.
-     */
-    if (app.status === 'APPROVED') {
-      router.push(
-        `/vetting-review/${app.applicationId}`
-      );
-
+  const handleReviewAction = async (app: ReviewApplication) => {
+    // Finished applications can simply be viewed.
+    if (app.status === 'APPROVED' || app.status === 'REJECTED') {
+      router.push(`${REVIEW_PATH}/${app.applicationId}`);
       return;
     }
 
-    /*
-     * Paid applications need to be self-assigned.
-     */
-    const requiresSelfAssign =
-      app.status === 'PAID';
-
-    if (requiresSelfAssign) {
+    // Paid applications need to be self-assigned first.
+    if (app.status === 'PAID') {
       try {
         const baseUrl = getBaseUrl();
-
         if (!baseUrl) {
-          throw new Error(
-            'API base URL is not configured'
-          );
+          throw new Error('API base URL is not configured');
         }
 
         const response = await apiFetch(
           `${baseUrl}/api/v1/admin/certificates/vetting/applications/${app.applicationId}/self-assign`,
           {
             method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              comment:
-                'Taking this application for review.',
+              comment: 'Taking this application for review.',
             }),
           }
         );
 
-        const payload =
-          await response.json();
+        const payload = await response.json();
 
-        if (
-          !response.ok ||
-          payload?.success === false
-        ) {
+        if (!response.ok || payload?.success === false) {
           console.error(
             'Failed to self-assign application:',
-            payload?.message ||
-              'Unknown error'
+            payload?.message || 'Unknown error'
           );
-
           setError(
-            payload?.message ||
-              'Failed to assign application. Please try again.'
+            payload?.message || 'Failed to assign application. Please try again.'
           );
-
           return;
         }
       } catch (err) {
-        console.error(
-          'Self-assign failed:',
-          err
-        );
-
-        setError(
-          'Failed to assign application. Please try again.'
-        );
-
+        console.error('Self-assign failed:', err);
+        setError('Failed to assign application. Please try again.');
         return;
       }
     }
 
-    router.push(
-      `/vetting-review/${app.applicationId}`
-    );
+    router.push(`${REVIEW_PATH}/${app.applicationId}`);
   };
+
+  const isFinished = (status: string) =>
+    status === 'APPROVED' || status === 'REJECTED';
 
   /*
    * ---------------------------------------------------------
    * Render
    * ---------------------------------------------------------
    */
-
   return (
     <div className="h-screen flex flex-col">
       <div className="h-full flex flex-col bg-white overflow-hidden shadow-[0_2px_16px_rgba(0,0,0,0.1)]">
@@ -871,56 +681,50 @@ function VettingReviewContent() {
           <Sidebar role="vetting" />
 
           <div className="flex-1 px-5.5 py-5 overflow-x-hidden overflow-auto bg-[#fbfbfe]">
-            {/* ------------------------------------------------ */}
             {/* Header */}
-            {/* ------------------------------------------------ */}
-
             <div className="mb-4.5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[16px] font-bold text-[#1a2236]">
-                    My Reviews
+                    {pageTitle}
                   </div>
 
                   <div className="text-[11.5px] text-[#6a7a9a] mt-1">
-                    {filterStatus ===
-                    'all'
-                      ? 'Showing applications across all statuses'
-                      : `Showing ${filterStatus
-                          .toLowerCase()
-                          .replace(
-                            /\_/g,
-                            ' '
-                          )} applications requiring review`}
+                    {pageSubtitle}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {dateFilter && (
+                    <button
+                      type="button"
+                      onClick={clearDateFilter}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-3 py-1.5 text-[12px] font-medium text-[#1e40af] hover:bg-[#dbeafe]"
+                      title="Remove date filter"
+                    >
+                      {isToday ? 'Today' : dateFilter}
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     className="inline-flex items-center gap-2 rounded border border-[#dbe2ee] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a2236] hover:bg-[#f4f7fb]"
                     onClick={() => {
                       fetchReviews();
+                      fetchStats();
                     }}
                     disabled={loading}
                   >
                     <FileText className="w-3.5 h-3.5" />
-
-                    {loading
-                      ? 'Refreshing...'
-                      : 'Refresh'}
+                    {loading ? 'Refreshing...' : 'Refresh'}
                   </button>
                 </div>
               </div>
             </div>
 
-     
-            {/* ------------------------------------------------ */}
             {/* Summary cards */}
-            {/* ------------------------------------------------ */}
-
             <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
-              {/* All reviews */}
               <div className="rounded border border-[#dbeafe] bg-[#f8fbff] p-4 shadow-[0_2px_10px_rgba(37,99,235,0.06)] transition-shadow hover:shadow-[0_6px_18px_rgba(37,99,235,0.10)]">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#3b6298]">
@@ -933,15 +737,14 @@ function VettingReviewContent() {
                 </div>
 
                 <div className="text-[28px] font-semibold text-[#1a2236]">
-                  {totalElements.toLocaleString()}
+                  {formatStat(allCount)}
                 </div>
 
                 <div className="text-[13px] font-medium text-[#59708f]">
-                  Applications in review
+                  Across all statuses
                 </div>
               </div>
 
-              {/* Pending */}
               <div className="rounded border border-[#fde7b0] bg-[#fffcf5] p-4 shadow-[0_2px_10px_rgba(180,83,9,0.05)] transition-shadow hover:shadow-[0_6px_18px_rgba(180,83,9,0.09)]">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#976527]">
@@ -954,7 +757,7 @@ function VettingReviewContent() {
                 </div>
 
                 <div className="text-[28px] font-semibold text-[#1a2236]">
-                  {pendingCount}
+                  {formatStat(pendingCount)}
                 </div>
 
                 <div className="text-[13px] font-medium text-[#7d6747]">
@@ -962,7 +765,6 @@ function VettingReviewContent() {
                 </div>
               </div>
 
-              {/* Completed */}
               <div className="rounded border border-[#cdebdc] bg-[#f6fdf9] p-4 shadow-[0_2px_10px_rgba(4,120,87,0.05)] transition-shadow hover:shadow-[0_6px_18px_rgba(4,120,87,0.09)]">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#327260]">
@@ -975,7 +777,7 @@ function VettingReviewContent() {
                 </div>
 
                 <div className="text-[28px] font-semibold text-[#1a2236]">
-                  {completedCount}
+                  {formatStat(completedCount)}
                 </div>
 
                 <div className="text-[13px] font-medium text-[#537568]">
@@ -984,82 +786,46 @@ function VettingReviewContent() {
               </div>
             </div>
 
-            {/* ------------------------------------------------ */}
             {/* Error */}
-            {/* ------------------------------------------------ */}
-
             {error && (
               <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-3 py-2.5 text-[12px] text-[#991b1b]">
                 <AlertCircle className="w-4 h-4" />
-
                 <span>{error}</span>
               </div>
             )}
 
-
-                   {/* ------------------------------------------------ */}
             {/* Filters */}
-            {/* ------------------------------------------------ */}
-
             <div className="flex items-center gap-3 mb-6 flex-wrap bg-gray-50 border border-gray-200 rounded-xl p-4">
               <CustomDropdown
                 options={certTypeOptions}
                 value={filterCertType}
-                onChange={
-                  handleCertificateTypeChange
-                }
+                onChange={handleCertificateTypeChange}
                 width="160px"
-                isOpen={
-                  openDropdown ===
-                  'certType'
-                }
-                onToggle={() =>
-                  toggleDropdown(
-                    'certType'
-                  )
-                }
+                isOpen={openDropdown === 'certType'}
+                onToggle={() => toggleDropdown('certType')}
                 onClose={closeDropdown}
               />
 
               <CustomDropdown
                 options={statusOptions}
                 value={filterStatus}
-                onChange={
-                  handleStatusChange
-                }
+                onChange={handleStatusChange}
                 width="140px"
-                isOpen={
-                  openDropdown ===
-                  'status'
-                }
-                onToggle={() =>
-                  toggleDropdown(
-                    'status'
-                  )
-                }
+                isOpen={openDropdown === 'status'}
+                onToggle={() => toggleDropdown('status')}
                 onClose={closeDropdown}
               />
 
               <CustomDropdown
                 options={transportOptions}
                 value={filterTransport}
-                onChange={
-                  handleTransportChange
-                }
+                onChange={handleTransportChange}
                 width="130px"
-                isOpen={
-                  openDropdown ===
-                  'transport'
-                }
-                onToggle={() =>
-                  toggleDropdown(
-                    'transport'
-                  )
-                }
+                isOpen={openDropdown === 'transport'}
+                onToggle={() => toggleDropdown('transport')}
                 onClose={closeDropdown}
               />
 
-              {/* Search */}
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
 
@@ -1067,8 +833,8 @@ function VettingReviewContent() {
                   type="text"
                   placeholder="Search Fields..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                 />
               </div>
 
@@ -1081,19 +847,15 @@ function VettingReviewContent() {
               </button>
             </div>
 
-
-            {/* ------------------------------------------------ */}
             {/* Table */}
-            {/* ------------------------------------------------ */}
-
             <div className="overflow-x-auto overflow-y-auto rounded-lg border border-[#dde3ee] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
               <table className="w-full min-w-[1040px] border-collapse text-[12px]">
                 <thead>
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
                     {[
-                      'applicationId',
-                      'tin',
-                      'Approval',
+                      'Application ID',
+                      'TIN',
+                      'Approval No.',
                       'Certificate',
                       'Transport',
                       'Submitted',
@@ -1112,29 +874,18 @@ function VettingReviewContent() {
                 </thead>
 
                 <tbody>
-                  {/* Loading */}
                   {loading ? (
                     <tr>
-                      <td
-                        colSpan={8}
-                        className="px-4 py-10 text-center"
-                      >
+                      <td colSpan={9} className="px-4 py-10 text-center">
                         <div className="flex items-center justify-center gap-3 text-[#6a7a9a]">
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#3a7bd5] border-t-transparent" />
-
-                          Loading your review
-                          list...
+                          Loading your review list...
                         </div>
                       </td>
                     </tr>
-                  ) : filteredApplications.length ===
-                    0 ? (
-                    /* Empty */
+                  ) : filteredApplications.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={8}
-                        className="px-4 py-12 text-center"
-                      >
+                      <td colSpan={9} className="px-4 py-12 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="w-16 h-16 rounded-full bg-[#f1f4f9] flex items-center justify-center">
                             <FileText className="w-8 h-8 text-[#9ca3af]" />
@@ -1142,148 +893,96 @@ function VettingReviewContent() {
 
                           <div>
                             <p className="text-sm font-medium text-[#374151]">
-                              No applications
-                              found
+                              No applications found
                             </p>
 
                             <p className="text-xs text-[#6b7280] mt-1">
-                              Try adjusting
-                              your filters or
-                              search criteria
+                              Try adjusting your filters or search criteria
                             </p>
                           </div>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    /* Applications */
-                    filteredApplications.map(
-                      (app) => (
-                        <tr
-                          key={
-                            app.applicationId
-                          }
-                          className="text-[12px] transition-colors hover:bg-[#f8faff]"
-                        >
-                          {/* TIN */}
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
-                            {app.applicationId}
-                          </td>
+                    filteredApplications.map((app) => (
+                      <tr
+                        key={app.applicationId}
+                        className="text-[12px] transition-colors hover:bg-[#f8faff]"
+                      >
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
+                          {app.applicationId}
+                        </td>
 
-                          {/* Approval */}
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            {app.tin}
-                          </td>
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            {app.approvalNumber}
-                          </td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {app.tin}
+                        </td>
 
-                          {/* Certificate */}
-                          <td className="max-w-55 whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            <div className="truncate">
-                              {
-                                app.certificateType
-                              }
-                            </div>
-                          </td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {app.approvalNumber}
+                        </td>
 
-                          {/* Transport */}
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            <div className="flex items-center gap-2">
-                              {getTransportIcon(
-                                app.modeOfTransport
-                              )}
+                        <td className="max-w-55 whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          <div className="truncate">{app.certificateType}</div>
+                        </td>
 
-                              <span>
-                                {
-                                  app.modeOfTransport
-                                }
-                              </span>
-                            </div>
-                          </td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          <div className="flex items-center gap-2">
+                            {getTransportIcon(app.modeOfTransport)}
+                            <span>{app.modeOfTransport}</span>
+                          </div>
+                        </td>
 
-                          {/* Submitted */}
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            {format(
-                              new Date(
-                                app.submittedAt
-                              ),
-                              'MMM dd, yyyy'
-                            )}
-                          </td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {app.submittedAt
+                            ? format(new Date(app.submittedAt), 'MMM dd, yyyy')
+                            : '—'}
+                        </td>
 
-                          {/* FOB */}
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            {app.fobCurrency ===
-                            'USD'
-                              ? '$'
-                              : '₦'}
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {app.fobCurrency === 'USD' ? '$' : '₦'}
+                          {Number(app.fobValue || 0).toLocaleString()}
+                        </td>
 
-                            {Number(
-                              app.fobValue || 0
-                            ).toLocaleString()}
-                          </td>
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {getStatusBadge(app.status)}
+                        </td>
 
-                          {/* Status */}
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            {getStatusBadge(
-                              app.status
-                            )}
-                          </td>
-
-                          {/* Action */}
-                          <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            <button
-                              type="button"
-                              className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${
-                                app.status ===
-                                'APPROVED'
-                                  ? 'border border-gray-300 bg-white text-[#2a3a56] hover:bg-[#f1f4f9]'
-                                  : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
-                              }`}
-                              onClick={() =>
-                                handleReviewAction(
-                                  app
-                                )
-                              }
-                            >
-                              {app.status ===
-                              'APPROVED'
-                                ? 'View'
-                                : app.status ===
-                                  'PAID'
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          <button
+                            type="button"
+                            className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${
+                              isFinished(app.status)
+                                ? 'border border-gray-300 bg-white text-[#2a3a56] hover:bg-[#f1f4f9]'
+                                : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
+                            }`}
+                            onClick={() => handleReviewAction(app)}
+                          >
+                            {isFinished(app.status)
+                              ? 'View'
+                              : app.status === 'PAID'
                                 ? 'Assign & Review'
                                 : 'Review'}
 
-                              {app.status !==
-                                'APPROVED' && (
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    )
+                            {!isFinished(app.status) && (
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
 
-            {/* ------------------------------------------------ */}
             {/* Pagination */}
-            {/* ------------------------------------------------ */}
-
-            {totalElements > 0 && (
+            {totalElements > 0 && !dateFilter && (
               <div className="flex flex-col gap-3 mt-4 sm:flex-row sm:items-center sm:justify-between">
-                {/* Result range */}
                 <div className="text-xs text-gray-500">
                   Showing{' '}
                   <span className="font-semibold text-gray-700">
                     {firstRecord}
-                    {firstRecord !==
-                    lastRecord
-                      ? `-${lastRecord}`
-                      : ''}
+                    {firstRecord !== lastRecord ? `-${lastRecord}` : ''}
                   </span>{' '}
                   of{' '}
                   <span className="font-semibold text-gray-700">
@@ -1292,24 +991,25 @@ function VettingReviewContent() {
                   applications
                 </div>
 
-                {/* Controls */}
                 <div className="flex items-center gap-2">
-                  {/* Previous */}
                   <button
                     type="button"
-                    onClick={
-                      handlePreviousPage
-                    }
-                    disabled={
-                      currentPage === 0 ||
-                      loading
-                    }
+                    onClick={() => handlePageChange(0)}
+                    disabled={currentPage === 0 || loading}
+                    className="px-3 py-1.5 text-xs cursor-pointer font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    « First
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 0 || loading}
                     className="px-3 py-1.5 text-xs cursor-pointer font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     ← Prev
                   </button>
 
-                  {/* Current page */}
                   <div className="min-w-[110px] text-center text-xs font-medium text-gray-600">
                     Page{' '}
                     <span className="font-semibold text-gray-900">
@@ -1317,43 +1017,38 @@ function VettingReviewContent() {
                     </span>{' '}
                     of{' '}
                     <span className="font-semibold text-gray-900">
-                      {Math.max(
-                        totalPages,
-                        1
-                      )}
+                      {Math.max(totalPages, 1)}
                     </span>
                   </div>
 
-                  {/* Next */}
                   <button
                     type="button"
-                    onClick={
-                      handleNextPage
-                    }
+                    onClick={handleNextPage}
                     disabled={
-                      loading ||
-                      totalPages ===
-                        0 ||
-                      currentPage >=
-                        totalPages - 1
+                      loading || totalPages === 0 || currentPage >= totalPages - 1
                     }
                     className="px-3 py-1.5 cursor-pointer text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next →
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePageChange(totalPages - 1)}
+                    disabled={
+                      loading || totalPages === 0 || currentPage >= totalPages - 1
+                    }
+                    className="px-3 py-1.5 cursor-pointer text-xs font-semibold border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Last »
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* ------------------------------------------------ */}
-            {/* Logout */}
-            {/* ------------------------------------------------ */}
-
             <LogoutModal
               isOpen={showLogoutModal}
-              onClose={() =>
-                setShowLogoutModal(false)
-              }
+              onClose={() => setShowLogoutModal(false)}
               onConfirm={handleLogout}
             />
           </div>
@@ -1365,11 +1060,7 @@ function VettingReviewContent() {
 
 export default function VettingReviewPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#f5f7fb]" />
-      }
-    >
+    <Suspense fallback={<div className="min-h-screen bg-[#f5f7fb]" />}>
       <VettingReviewContent />
     </Suspense>
   );

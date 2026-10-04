@@ -248,11 +248,11 @@ export default function AdminApplicationDetail() {
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Total Value (FOB)</div>
               </div>
               <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">${applicationDetail?.feePaid?.toLocaleString()}</div>
+                <div className="text-[24px] font-extrabold text-[#065f46] mb-[2px]">₦{applicationDetail?.feePaid?.toLocaleString()}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Fee Paid</div>
               </div>
               <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-                <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">{applicationDetail?.exchangeRate?.toFixed(2)}</div>
+                <div className="text-[24px] font-extrabold text-[#92400e] mb-[2px]">₦{applicationDetail?.exchangeRate?.toLocaleString()}</div>
                 <div className="text-[10.5px] text-[#6a7a9a] font-medium">Exchange Rate</div>
               </div>
               <div className="flex-1 bg-white border border-[#dde3ee] rounded px-[14px] py-[12px] shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
