@@ -372,9 +372,9 @@ function VettingReviewContent() {
             setApplications([]);
             setTotalElements(0);
             setTotalPages(0);
-            setError(
-              'The API response has no approval date field, so applications cannot be filtered by day.'
-            );
+            // setError(
+            //   'The API response has no approval date field, so applications cannot be filtered by day.'
+            // );
             return;
           }
 
