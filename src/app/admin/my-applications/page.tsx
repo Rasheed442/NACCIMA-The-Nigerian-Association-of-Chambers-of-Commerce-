@@ -792,6 +792,13 @@ export default function AdminApplications() {
                 <div className="flex items-center gap-1">
                   <button
                     className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                    onClick={() => handlePageChange(0)}
+                    disabled={currentPage === 0}
+                  >
+                    First
+                  </button>
+                  <button
+                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 0}
                   >
@@ -829,6 +836,13 @@ export default function AdminApplications() {
                     disabled={currentPage >= totalPages - 1}
                   >
                     →
+                  </button>
+                  <button
+                    className="px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                    onClick={() => handlePageChange(totalPages - 1)}
+                    disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                  >
+                    Last
                   </button>
                 </div>
               </div>

@@ -235,6 +235,13 @@ export default function AdminIssuedCertificates() {
                 <div className="flex items-center gap-1.5">
                   <button
                     className="rounded border border-[#ccd3e0] bg-white px-3 py-1.5 text-[11px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => handlePageChange(0)}
+                    disabled={currentPage === 0}
+                  >
+                    First
+                  </button>
+                  <button
+                    className="rounded border border-[#ccd3e0] bg-white px-3 py-1.5 text-[11px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 0}
                   >
@@ -249,6 +256,13 @@ export default function AdminIssuedCertificates() {
                     disabled={currentPage >= totalPages - 1}
                   >
                     Next
+                  </button>
+                  <button
+                    className="rounded border border-[#ccd3e0] bg-white px-3 py-1.5 text-[11px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => handlePageChange(totalPages - 1)}
+                    disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                  >
+                    Last
                   </button>
                 </div>
               </div>

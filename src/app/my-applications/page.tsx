@@ -671,6 +671,13 @@ function MyApplicationsContent() {
                 <div className="flex items-center gap-1.5">
                   <button 
                     className="rounded cursor-pointer border border-[#ccd3e0] bg-white px-6 py-1.5 text-[12px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => handlePageChange(1)}
+                    disabled={currentPage === 1}
+                  >
+                    First
+                  </button>
+                  <button 
+                    className="rounded cursor-pointer border border-[#ccd3e0] bg-white px-6 py-1.5 text-[12px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
                   >
@@ -685,6 +692,13 @@ function MyApplicationsContent() {
                     disabled={currentPage === filteredTotalPages}
                   >
                     Next
+                  </button>
+                  <button 
+                    className="rounded cursor-pointer border border-[#ccd3e0] bg-white px-6 py-1.5 text-[12px] font-medium text-[#2a3a56] transition-colors hover:bg-[#f1f4f9] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => handlePageChange(filteredTotalPages)}
+                    disabled={currentPage === filteredTotalPages || filteredTotalPages === 0}
+                  >
+                    Last
                   </button>
                 </div>
               </div>
