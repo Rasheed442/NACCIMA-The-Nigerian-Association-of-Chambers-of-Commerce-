@@ -31,6 +31,10 @@ interface FeeState {
   nonMemberRate: string;
   memberAmount: string;
   nonMemberAmount: string;
+  memberMinFee: string;
+  memberMaxFee: string;
+  nonMemberMinFee: string;
+  nonMemberMaxFee: string;
   vatRate: string;
   currency: string;
   processingFee: string;
@@ -45,6 +49,10 @@ export interface FeeChargesData {
     nonMemberRate: string;
     memberAmount: string;
     nonMemberAmount: string;
+    memberMinFee: string;
+    memberMaxFee: string;
+    nonMemberMinFee: string;
+    nonMemberMaxFee: string;
     vatRate: string;
     currency: string;
     processingFee: string;
@@ -203,6 +211,10 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
     nonMemberRate: "0.00125",
     memberAmount: "40000",
     nonMemberAmount: "52000",
+    memberMinFee: "10000",
+    memberMaxFee: "100000",
+    nonMemberMinFee: "15000",
+    nonMemberMaxFee: "150000",
     vatRate: "0.075",
     currency: "NGN",
     processingFee: "0.00",
@@ -326,6 +338,10 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
             type: state.feeBasis,
             memberRate: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.memberRate) || 0 : null,
             nonMemberRate: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.nonMemberRate) || 0 : null,
+            memberMinFee: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.memberMinFee) || 0 : null,
+            memberMaxFee: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.memberMaxFee) || 0 : null,
+            nonMemberMinFee: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.nonMemberMinFee) || 0 : null,
+            nonMemberMaxFee: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.nonMemberMaxFee) || 0 : null,
             memberAmount: state.feeBasis === 'FLAT' ? parseFloat(state.memberAmount) || 0 : null,
             nonMemberAmount: state.feeBasis === 'FLAT' ? parseFloat(state.nonMemberAmount) || 0 : null,
             vatRate: parseFloat(state.vatRate) || 0,
@@ -380,6 +396,10 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
       if (state.feeBasis === 'PERCENTAGE') {
         payload.memberRate = parseFloat(state.memberRate) || 0;
         payload.nonMemberRate = parseFloat(state.nonMemberRate) || 0;
+        payload.memberMinFee = parseFloat(state.memberMinFee) || 0;
+        payload.memberMaxFee = parseFloat(state.memberMaxFee) || 0;
+        payload.nonMemberMinFee = parseFloat(state.nonMemberMinFee) || 0;
+        payload.nonMemberMaxFee = parseFloat(state.nonMemberMaxFee) || 0;
         payload.memberAmount = null;
         payload.nonMemberAmount = null;
       } else if (state.feeBasis === 'FLAT') {
@@ -566,7 +586,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
             </>
           ) : state.feeBasis === "PERCENTAGE" ? (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <Field
                   label="Member Rate (%)"
                   required
@@ -596,11 +616,67 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
                 </Field>
               </div>
 
+              <div className="grid grid-cols-2 gap-6 my-2">
+                <Field
+                  label="Member Min Fee"
+                  hint="Minimum fee for members (NGN)"
+                >
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={state.memberMinFee}
+                    onChange={(e) => update("memberMinFee", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+
+                <Field
+                  label="Member Max Fee"
+                  hint="Maximum fee for members (NGN)"
+                >
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={state.memberMaxFee}
+                    onChange={(e) => update("memberMaxFee", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 mt-2 gap-6">
+                <Field
+                  label="Non-Member Min Fee"
+                  hint="Minimum fee for non-members (NGN)"
+                >
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={state.nonMemberMinFee}
+                    onChange={(e) => update("nonMemberMinFee", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+
+                <Field
+                  label="Non-Member Max Fee"
+                  hint="Maximum fee for non-members (NGN)"
+                >
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={state.nonMemberMaxFee}
+                    onChange={(e) => update("nonMemberMaxFee", e.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
+
               <hr className="my-6 border-slate-100" />
             </>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <Field
                   label="Member Fee"
                   required
@@ -634,7 +710,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
             </>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-6">
             <Field label="VAT Rate" required hint="Value Added Tax rate as decimal (e.g., 0.075 for 7.5%)">
               <input
                 type="text"
@@ -657,7 +733,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
 
           <hr className="my-6 border-slate-100" />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-6">
             <Field
               label={`Processing Fee (${state.currency})`}
               hint="Additional flat fee applied to total payable"

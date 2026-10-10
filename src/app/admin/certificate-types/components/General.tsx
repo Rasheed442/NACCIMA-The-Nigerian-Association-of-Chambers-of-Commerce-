@@ -38,6 +38,7 @@ interface GeneralProps {
     certNumberPrefix?: string;
     templateUrl?: string;
     templateConfig?: string | { page?: { index?: number; width?: number; height?: number } };
+    multipleGoodsItemsAllowed?: boolean;
   };
 }
 
@@ -47,7 +48,7 @@ export interface GeneralData {
   certPrefix: string;
   description: string;
   status: Status;
-  allowMultipleGoods: boolean;
+  multipleGoodsItemsAllowed: boolean;
   templateFileName: string;
   templateUrl: string;
   templateFile: File | null;
@@ -156,6 +157,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
       certPrefix: certificateType.certNumberPrefix || '',
       description: certificateType.description || '',
       status: certificateType.active === false ? 'inactive' : 'active',
+      allowMultipleGoods: certificateType.multipleGoodsItemsAllowed || false,
       templateFileName,
       templateUrl: certificateType.templateUrl || '',
       pageIndex: page?.index || 0,
@@ -302,19 +304,23 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
 
   // Expose data and validation via ref
   useImperativeHandle(ref, () => ({
-    getData: () => ({
-      displayName: form.displayName,
-      code: form.code,
-      certPrefix: form.certPrefix,
-      description: form.description,
-      status: form.status,
-      allowMultipleGoods: form.allowMultipleGoods,
-      templateFileName: form.templateFileName,
-      templateUrl: form.templateUrl,
-      templateFile: form.templateFile,
-      pageIndex: form.pageIndex,
-      pageSize: form.pageSize,
-    }),
+    getData: () => {
+      const data = {
+        displayName: form.displayName,
+        code: form.code,
+        certPrefix: form.certPrefix,
+        description: form.description,
+        status: form.status,
+        multipleGoodsItemsAllowed: form.allowMultipleGoods,
+        templateFileName: form.templateFileName,
+        templateUrl: form.templateUrl,
+        templateFile: form.templateFile,
+        pageIndex: form.pageIndex,
+        pageSize: form.pageSize,
+      };
+      console.log('General getData:', data);
+      return data;
+    },
     validate,
   }));
 
