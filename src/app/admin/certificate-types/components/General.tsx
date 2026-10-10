@@ -18,6 +18,7 @@ interface FormState {
   certPrefix: string;
   description: string;
   status: Status;
+  allowMultipleGoods: boolean;
   templateFile: File | null;
   templateFileName: string;
   templateUrl: string;
@@ -46,6 +47,7 @@ export interface GeneralData {
   certPrefix: string;
   description: string;
   status: Status;
+  allowMultipleGoods: boolean;
   templateFileName: string;
   templateUrl: string;
   templateFile: File | null;
@@ -115,6 +117,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
     pageIndex: 0,
     pageCount: 1,
     pageSize: null,
+    allowMultipleGoods: false,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -305,6 +308,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
       certPrefix: form.certPrefix,
       description: form.description,
       status: form.status,
+      allowMultipleGoods: form.allowMultipleGoods,
       templateFileName: form.templateFileName,
       templateUrl: form.templateUrl,
       templateFile: form.templateFile,
@@ -390,6 +394,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
                 onClose={() => setStatusDropdownOpen(false)}
               />
             </Field>
+
           </div>
         </section>
 
@@ -478,6 +483,28 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
                 </p>
               )}
             </div>
+
+            <Field label="Goods Configuration">
+              <div className="flex items-center justify-between py-2">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-[#1a2236]">Allow Multiple Goods Items</span>
+                  <span className="text-xs text-[#6a7a9a] mt-0.5">Enable if this certificate type supports multiple goods items per application</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setField("allowMultipleGoods", !form.allowMultipleGoods)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2 ${
+                    form.allowMultipleGoods ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                      form.allowMultipleGoods ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </Field>
           </div>
         </section>
       </div>
