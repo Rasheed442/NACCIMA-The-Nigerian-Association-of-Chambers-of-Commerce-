@@ -87,6 +87,7 @@ interface GoodsLineItem {
   marksNo: string;
   quantity: string;
   grossWeight: string;
+  netWeight: string;
   nomenclature: string;
   unit: string;
   value: string;
@@ -123,6 +124,7 @@ interface ReviewData {
       description?: string;
       quantity?: number | string;
       grossWeight?: number | string;
+      netWeight?: number | string;
       nomenclature?: string;
       value?: number | string;
     }>;
@@ -1928,6 +1930,7 @@ function NewApplicationContent() {
       marksNo: '',
       quantity: '',
       grossWeight: '',
+      netWeight: '',
       nomenclature: '',
       unit: '',
       value: '',
@@ -2058,6 +2061,7 @@ function NewApplicationContent() {
         marksNo: '',
         quantity: '',
         grossWeight: '',
+        netWeight: '',
         nomenclature: hs.description,
         unit: '',
         value: '',
@@ -2411,6 +2415,7 @@ function NewApplicationContent() {
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Marks/No. <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt. <span className="text-[#e53e3e]">*</span></th>
+                          <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Net Wt. <span className="text-[#e53e3e]">*</span></th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature {isFieldRequired('NOMENCLATURE') && <span className="text-[#e53e3e]">*</span>}</th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Unit</th>
                           <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD) {isFieldRequired('VALUE') && <span className="text-[#e53e3e]">*</span>}</th>
@@ -2512,6 +2517,19 @@ function NewApplicationContent() {
                                     const value = e.target.value.replace(/,/g, '');
                                     if (/^\d*$/.test(value)) {
                                       updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
+                                    }
+                                  }}
+                                  placeholder="200"
+                                />
+                              </td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                <input
+                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                  value={item.netWeight}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/,/g, '');
+                                    if (/^\d*$/.test(value)) {
+                                      updateLineItem(item.id, 'netWeight', formatNumberWithCommas(value));
                                     }
                                   }}
                                   placeholder="200"
@@ -2751,6 +2769,7 @@ function NewApplicationContent() {
                             <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Description</th>
                             <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">QTY</th>
                             <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Gross Wt.</th>
+                            <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Net Wt.</th>
                             <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Nomenclature</th>
                             <th className="px-2 py-2 text-left border-b-2 border-[#dde3ee]">Value (USD)</th>
                           </tr>
@@ -2763,6 +2782,7 @@ function NewApplicationContent() {
                               <td className="px-2 py-2 border-b border-[#edf0f5]">{item.description || '—'}</td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">{item.quantity || '—'}</td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">{item.grossWeight || '—'}</td>
+                              <td className="px-2 py-2 border-b border-[#edf0f5]">{item.netWeight || '—'}</td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">{item.nomenclature || '—'}</td>
                               <td className="px-2 py-2 border-b border-[#edf0f5]">{item.value ? `$${item.value}` : '—'}</td>
                             </tr>
