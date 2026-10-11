@@ -78,6 +78,22 @@ interface FeeChargesProps {
   certificateType?: {
     id: string;
     code: string;
+    feeStructure?: {
+      type: 'FLAT' | 'PERCENTAGE' | 'TIERED';
+      memberRate?: number;
+      nonMemberRate?: number;
+      memberAmount?: number;
+      nonMemberAmount?: number;
+      memberMinFee?: number;
+      memberMaxFee?: number;
+      nonMemberMinFee?: number;
+      nonMemberMaxFee?: number;
+      vatRate?: number;
+      currency?: string;
+      processingFee?: number;
+      rounding?: string;
+      tiers?: any[];
+    };
   } | null;
   mode?: 'create' | 'edit';
   getFormData?: () => any;
@@ -256,46 +272,35 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
     fetchFeeMethods();
   }, []);
 
-  // Fetch existing fee data in edit mode
+  // Prepopulate fee structure from certificateType data
   useEffect(() => {
-    const fetchFeeData = async () => {
-      if (mode === 'edit' && certificateType?.id) {
-        try {
-          const baseUrl = getBaseUrl();
-          const response = await apiFetch(`${baseUrl}/api/v1/admin/certificate-types/${certificateType.id}/fee`);
-          const data = await response.json();
-
-          if (data.success && data.data) {
-            const apiData = data.data;
-            setState((prev) => ({
-              ...prev,
-              feeBasis: apiData.feeBasis || prev.feeBasis,
-              memberRate: apiData.memberRate?.toString() || prev.memberRate,
-              nonMemberRate: apiData.nonMemberRate?.toString() || prev.nonMemberRate,
-              memberMinFee: apiData.memberMinFee?.toString() || prev.memberMinFee,
-              memberMaxFee: apiData.memberMaxFee?.toString() || prev.memberMaxFee,
-              nonMemberMinFee: apiData.nonMemberMinFee?.toString() || prev.nonMemberMinFee,
-              nonMemberMaxFee: apiData.nonMemberMaxFee?.toString() || prev.nonMemberMaxFee,
-              memberAmount: apiData.memberAmount?.toString() || prev.memberAmount,
-              nonMemberAmount: apiData.nonMemberAmount?.toString() || prev.nonMemberAmount,
-              vatRate: apiData.vatRate?.toString() || prev.vatRate,
-              tiers: apiData.tiers?.map((t: any, i: number) => ({
-                id: `tier-${i}`,
-                minFob: t.minFob?.toString() || "0",
-                maxFob: t.maxFob?.toString() || "",
-                memberRate: t.memberRate?.toString() || "0",
-                nonMemberRate: t.nonMemberRate?.toString() || "0",
-              })) || prev.tiers,
-            }));
-          }
-        } catch (error) {
-          console.error('Failed to fetch fee data:', error);
-        }
-      }
-    };
-
-    fetchFeeData();
-  }, [mode, certificateType?.id]);
+    if (mode === 'edit' && certificateType?.feeStructure) {
+      const feeData = certificateType.feeStructure;
+      setState((prev) => ({
+        ...prev,
+        feeBasis: (feeData.type as CalcMethod) || prev.feeBasis,
+        memberRate: feeData.memberRate?.toString() || prev.memberRate,
+        nonMemberRate: feeData.nonMemberRate?.toString() || prev.nonMemberRate,
+        memberMinFee: feeData.memberMinFee?.toString() || prev.memberMinFee,
+        memberMaxFee: feeData.memberMaxFee?.toString() || prev.memberMaxFee,
+        nonMemberMinFee: feeData.nonMemberMinFee?.toString() || prev.nonMemberMinFee,
+        nonMemberMaxFee: feeData.nonMemberMaxFee?.toString() || prev.nonMemberMaxFee,
+        memberAmount: feeData.memberAmount?.toString() || prev.memberAmount,
+        nonMemberAmount: feeData.nonMemberAmount?.toString() || prev.nonMemberAmount,
+        vatRate: feeData.vatRate?.toString() || prev.vatRate,
+        currency: feeData.currency || prev.currency,
+        processingFee: feeData.processingFee?.toString() || prev.processingFee,
+        rounding: (feeData.rounding as Rounding) || prev.rounding,
+        tiers: feeData.tiers?.map((t: any, i: number) => ({
+          id: `tier-${i}`,
+          minFob: t.minFob?.toString() || "0",
+          maxFob: t.maxFob?.toString() || "",
+          memberRate: t.memberRate?.toString() || "0",
+          nonMemberRate: t.nonMemberRate?.toString() || "0",
+        })) || prev.tiers,
+      }));
+    }
+  }, [mode, certificateType?.feeStructure]);
 
   const update = <K extends keyof FeeState>(key: K, value: FeeState[K]) =>
     setState((prev) => ({ ...prev, [key]: value }));
