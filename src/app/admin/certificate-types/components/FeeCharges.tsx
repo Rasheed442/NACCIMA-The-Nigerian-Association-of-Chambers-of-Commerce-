@@ -918,7 +918,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
       <div className="flex flex-wrap items-center justify-between gap-3 px-1">
         <span className="text-sm text-slate-500">Page 1 of 1</span>
         <div className="flex gap-2">
-          <button
+          {/* <button
             type="button"
             className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
@@ -931,7 +931,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Saving...' : 'Save Changes'}
-          </button>
+          </button> */}
         </div>
       </div>
     </div>
