@@ -1547,14 +1547,14 @@ if (cr) {
   }), [elements, templatePageSize]);
 
   const handleSave = async () => {
-    if (mode === 'create' || activeTab === 'general') {
-      const validationErrors = generalRef.current?.validate() ?? {};
-      if (Object.keys(validationErrors).length > 0) {
-        setActiveTab('general');
-        setSaveError('Complete the required General fields before saving.');
-        return;
-      }
-    }
+    // if (mode === 'create' || activeTab === 'general') {
+    //   const validationErrors = generalRef.current?.validate() ?? {};
+    //   if (Object.keys(validationErrors).length > 0) {
+    //     setActiveTab('general');
+    //     setSaveError('Complete the required General fields before saving.');
+    //     return;
+    //   }
+    // }
 
     // Refuse to save a layout where one field code is placed twice —
     // the server keys fields by code, so only one placement would survive.

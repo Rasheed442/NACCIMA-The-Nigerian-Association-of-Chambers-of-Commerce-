@@ -211,7 +211,7 @@ export default function AdminCertificateTypes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {certificateTypes.map((cert, index) => (
+                  {certificateTypes.filter(cert => !cert.name.includes("NAC44")).map((cert, index) => (
                     <tr 
                       key={cert.id}
                       className={`border-b border-[#dde3ee] hover:bg-[#f8fafd] ${index === 0 ? 'bg-[#f0f7ff]' : ''}`}
