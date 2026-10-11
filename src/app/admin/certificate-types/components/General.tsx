@@ -284,11 +284,11 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
         next.displayName = "Display name is required.";
       }
 
-      if (!form.code.trim() && certificateType.code) {
-        next.code = "Code is required.";
-      } else if (form.code.trim() && !CODE_PATTERN.test(form.code.trim())) {
-        next.code = "Use uppercase letters, numbers, and hyphens only.";
-      }
+      // if (!form.code.trim() && certificateType.code) {
+      //   next.code = "Code is required.";
+      // } else if (form.code.trim() && !CODE_PATTERN.test(form.code.trim())) {
+      //   next.code = "Use uppercase letters, numbers, and hyphens only.";
+      // }
 
       if (!form.certPrefix.trim() && certificateType.certNumberPrefix) {
         next.certPrefix = "Certificate number prefix is required.";
@@ -299,6 +299,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
       }
     }
 
+    console.log('Validation errors:', next);
     return next;
   };
 

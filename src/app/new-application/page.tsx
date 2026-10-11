@@ -1143,6 +1143,69 @@ function NewApplicationContent() {
       return <input key={key} type={inputType} step={inputType === 'number' ? 'any' : undefined} className={inputClassName} placeholder={field.name} value={String(inputValue)} readOnly={field.readOnly} required={field.required} onChange={(e) => onChange(e.target.value)} />;
     };
 
+    // Special handling for HS_CODE field with lookup when multiple goods are not allowed
+    if (field.code === 'HS_CODE' && !selectedCertificateType?.multipleGoodsItemsAllowed) {
+      const hsCodeValue = String(getDynamicFieldValue(field));
+      return (
+        <div key={field.code} className="flex flex-col gap-1">
+          <label className="text-[11px] font-semibold text-[#374151]">
+            {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              className={`px-[10px] w-full py-[7px] border rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5] ${formErrors[field.code] ? 'border-[#fca5a5]' : 'border-[#d1d5db]'}`}
+              placeholder="Search HS code..."
+              value={hsCodeValue}
+              onChange={(e) => {
+                setDynamicFieldValue(field, e.target.value);
+                if (e.target.value.length >= 2) {
+                  searchHsCodes(e.target.value);
+                }
+              }}
+              onFocus={() => {
+                if (hsCodeValue.length >= 2) {
+                  searchHsCodes(hsCodeValue);
+                }
+              }}
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setHsCodes([]);
+                }, 150);
+              }}
+            />
+            {(isSearchingHs || hsCodes.length > 0) && hsCodeValue.length >= 2 && (
+              <div className="absolute z-[9999] top-full mt-1 w-full max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
+                {isSearchingHs ? (
+                  <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                ) : hsCodes.length === 0 ? (
+                  <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
+                ) : (
+                  hsCodes.map((hs) => (
+                    <div
+                      key={hs.id}
+                      className="px-3 py-2 text-[13px] hover:bg-[#edf2ff] cursor-pointer"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setDynamicFieldValue(field, hs.cetCode);
+                        handleHsCodeSelect(hs);
+                        setHsCodes([]);
+                        if (formErrors[field.code]) setFormErrors(current => ({ ...current, [field.code]: '' }));
+                      }}
+                    >
+                      <span className="font-bold text-[#1a4a8a]">{hs.cetCode}</span>
+                      <span className="text-[#374151] ml-1 capitalize">{hs.description}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          {formErrors[field.code] && <div className="text-[10px] text-[#e53e3e]">{formErrors[field.code]}</div>}
+        </div>
+      );
+    }
+
     // templateComponent controls the input element. For repeatable fields,
     // retain every entered value instead of collapsing them into one string.
     return (
@@ -2045,6 +2108,25 @@ function NewApplicationContent() {
    */
   const handleHsCodeSelect = (hs: HSCode) => {
     setGoodsLineItems(current => {
+      // If multiple goods are not allowed, replace all items with a single item
+      if (!selectedCertificateType?.multipleGoodsItemsAllowed) {
+        lineItemIdRef.current += 1;
+        const newItem: GoodsLineItem = {
+          id: lineItemIdRef.current.toString(),
+          hsCode: hs.cetCode,
+          description: '',
+          marksNo: '',
+          quantity: '',
+          grossWeight: '',
+          netWeight: '',
+          nomenclature: hs.description,
+          unit: hs.unit || '',
+          value: '',
+        };
+        return [newItem];
+      }
+
+      // If multiple goods are allowed, use the existing logic
       const emptySlotIndex = current.findIndex(item => !item.hsCode);
 
       if (emptySlotIndex !== -1) {
@@ -2365,49 +2447,18 @@ function NewApplicationContent() {
                   )}
                 </div>
 
-                {/* Section 4: HS Code Lookup — disabled. HS Code search now
-                    happens inline on the HS Code column of the Goods Line
-                    Items table below (still labelled Section 4).
-                <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
-                      <div className="text-[13px] font-bold text-[#1a2236]">HS Code Lookup</div>
-                    </div>
-                    <div className="flex gap-2 mb-3">
-                      <input
-                        className="flex-1 px-[10px] py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
-                        placeholder="🔍 Search by HS code or description…"
-                        value={hsSearchQuery}
-                        onChange={handleHsSearchChange}
-                      />
-                    </div>
-                    {isSearchingHs && (
-                      <div className="text-[11px] text-[#6a7a9a] py-2">Searching...</div>
-                    )}
-                    <div className="space-y-1 max-h-[200px] oveflow-hidden overflow-scroll">
-                      {hsCodes.map((hs) => (
-                        <div
-                          key={hs.id}
-                          className="flex items-center gap-2 px-3 py-2 rounded-[6px] hover:bg-[#edf2ff] cursor-pointer"
-                          onClick={() => handleHsCodeSelect(hs)}
-                        >
-                          <span className="text-[13px] font-bold text-[#1a4a8a]">{hs.cetCode}</span>
-                          <span className="text-[13px] text-[#374151] capitalize">{hs.description}</span>
-                        </div>
-                      ))}
-                      {hsCodes.length === 0 && hsSearchQuery.length >= 2 && !isSearchingHs && (
-                        <div className="text-[11px] text-[#6a7a9a] py-2">No results found</div>
-                      )}
-                    </div>
-                  </div>
-                */}
+
 
                 {/* Section 4: Goods Line Items */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Goods Line Items</div>
-                    <span className="text-[10px] text-[#9ca3af]">Type in the HS Code column for suggestions</span>
+                    <span className="text-[10px] text-[#9ca3af]">
+                      {selectedCertificateType?.multipleGoodsItemsAllowed 
+                        ? "Type in the HS Code column for suggestions" 
+                        : "HS Code auto-populated from Consignee & Shipment Details"}
+                    </span>
                   </div>
                   <div className={activeHsCodeRowId ? "overflow-visible mb-3" : "overflow-x-auto mb-3"}>
                     <table className="w-full border-collapse text-[11px]">
