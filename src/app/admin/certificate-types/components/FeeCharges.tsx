@@ -25,6 +25,13 @@ interface Tier {
   nonMemberRate: string;
 }
 
+interface TierData {
+  minFob: number;
+  maxFob: number | null;
+  memberRate: number;
+  nonMemberRate: number;
+}
+
 interface FeeState {
   feeBasis: CalcMethod;
   memberRate: string;
@@ -45,19 +52,19 @@ interface FeeState {
 export interface FeeChargesData {
   feeStructure: {
     type: CalcMethod;
-    memberRate: string;
-    nonMemberRate: string;
-    memberAmount: string;
-    nonMemberAmount: string;
-    memberMinFee: string;
-    memberMaxFee: string;
-    nonMemberMinFee: string;
-    nonMemberMaxFee: string;
-    vatRate: string;
+    memberRate: number;
+    nonMemberRate: number;
+    memberAmount: number;
+    nonMemberAmount: number;
+    memberMinFee: number;
+    memberMaxFee: number;
+    nonMemberMinFee: number;
+    nonMemberMaxFee: number;
+    vatRate: number;
     currency: string;
-    processingFee: string;
+    processingFee: number;
     rounding: Rounding;
-    tiers: Tier[];
+    tiers: TierData[];
   };
 }
 
