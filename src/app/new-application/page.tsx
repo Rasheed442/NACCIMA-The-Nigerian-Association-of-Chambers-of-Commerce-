@@ -16,6 +16,7 @@ interface CertificateType {
   name: string;
   description: string;
   active: boolean;
+  multipleGoodsItemsAllowed?: boolean;
   feeType?: string;
   memberRate?: number;
   nonMemberRate?: number;
@@ -226,6 +227,9 @@ function NewApplicationContent() {
   const [isPaymentFlow, setIsPaymentFlow] = useState(false);
 
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string | boolean | string[]>>({});
+
+  // Compute selectedCertificateType from selectedCert ID
+  const selectedCertificateType = certificateTypes.find(c => c.id === selectedCert);
 
   // Keeps `applicationId` (for rendering) and `applicationIdRef` (for
   // synchronous reads inside handler chains) in sync. Always use this
@@ -739,7 +743,7 @@ function NewApplicationContent() {
     }, 0);
 
     return () => window.clearTimeout(fieldsFetchTimer);
-  }, [selectedCert]);
+  }, [selectedCert, certificateTypes]);
 
   const searchHsCodes = async (query: string) => {
     if (!query || query.length < 2) {
@@ -2423,160 +2427,163 @@ function NewApplicationContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {goodsLineItems.length === 0 ? (
-                          <tr>
-                            <td colSpan={10} className="px-4 py-8 text-center">
-                              <div className="flex flex-col items-center gap-2">
-                                <span className="text-[24px]">📦</span>
-                                <span className="text-[12px] text-[#6a7a9a]">Add Line Items</span>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : (
-                          goodsLineItems.map((item, index) => (
-                            <tr key={item.id} className="hover:bg-[#f8faff]">
-                              <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5] relative">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[90px] focus:outline-none focus:border-[#3a7bd5]"
-                                  value={item.hsCode}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    updateLineItem(item.id, 'hsCode', value);
-                                    setActiveHsCodeRowId(item.id);
-                                    searchHsCodes(value);
-                                  }}
-                                  onFocus={() => {
-                                    setActiveHsCodeRowId(item.id);
-                                    if (item.hsCode.length >= 2) searchHsCodes(item.hsCode);
-                                  }}
-                                  onBlur={() => {
-                                    window.setTimeout(() => {
-                                      setActiveHsCodeRowId(current => (current === item.id ? null : current));
-                                    }, 150);
-                                  }}
-                                  placeholder="Search code…"
-                                  autoComplete="off"
-                                />
-                                {activeHsCodeRowId === item.id && item.hsCode.length >= 2 && (isSearchingHs || hsCodes.length > 0) && (
-                                  <div className="absolute z-[9999] top-full mt-1 w-[300px] max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
-                                    {isSearchingHs ? (
-                                      <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
-                                    ) : hsCodes.length === 0 ? (
-                                      <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
-                                    ) : (
-                                      hsCodes.map((hs) => (
-                                        <div
-                                          key={hs.id}
-                                          className="px-3 py-2 text-[13px] hover:bg-[#edf2ff] cursor-pointer"
-                                          onMouseDown={(e) => e.preventDefault()}
-                                          onClick={() => handleInlineHsCodeSelect(item.id, hs)}
-                                        >
-                                          <span className="font-bold text-[#1a4a8a]">{hs.cetCode}</span>
-                                          <span className="text-[#374151] ml-1 capitalize">{hs.description}</span>
-                                        </div>
-                                      ))
-                                    )}
-                                  </div>
-                                )}
+                        {
+                          goodsLineItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={10} className="px-4 py-8 text-center">
+                                <div className="flex flex-col items-center gap-2">
+                                  <span className="text-[24px]">📦</span>
+                                  <span className="text-[12px] text-[#6a7a9a]">Add Line Items</span>
+                                </div>
                               </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
-                                  value={item.description}
-                                  onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
-                                  placeholder="Enter description"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                  value={item.marksNo}
-                                  onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
-                                  placeholder="Marks"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
-                                  value={item.quantity}
-                                  onChange={(e) => {
-                                    const value = e.target.value.replace(/,/g, '');
-                                    if (/^\d*$/.test(value)) {
-                                      updateLineItem(item.id, 'quantity', formatNumberWithCommas(value));
-                                    }
-                                  }}
-                                  placeholder="1,000"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                  value={item.grossWeight}
-                                  onChange={(e) => {
-                                    const value = e.target.value.replace(/,/g, '');
-                                    if (/^\d*$/.test(value)) {
-                                      updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
-                                    }
-                                  }}
-                                  placeholder="200"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
-                                  value={item.netWeight}
-                                  onChange={(e) => {
-                                    const value = e.target.value.replace(/,/g, '');
-                                    if (/^\d*$/.test(value)) {
-                                      updateLineItem(item.id, 'netWeight', formatNumberWithCommas(value));
-                                    }
-                                  }}
-                                  placeholder="200"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px] bg-[#f3f4f6] text-[#6a7a9a] cursor-not-allowed"
-                                  value={item.nomenclature}
-                                  readOnly
-                                  title="Auto-filled from the selected HS Code"
-                                  placeholder="From lookup"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] bg-[#f3f4f6] text-[#6a7a9a] text-[11px] w-[50px]"
-                                  value={item.unit}
-                                  onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
-                                  placeholder="KG"
-                                  readOnly
-
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5]">
-                                <input
-                                  className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
-                                  value={item.value}
-                                  onChange={(e) => {
-                                    const value = e.target.value.replace(/,/g, '');
-                                    if (/^\d*\.?\d*$/.test(value)) {
-                                      updateLineItem(item.id, 'value', formatNumberWithCommas(value));
-                                    }
-                                  }}
-                                  placeholder="0.00"
-                                />
-                              </td>
-                              <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => removeLineItem(item.id)}>✕</td>
                             </tr>
-                          ))
-                        )}
+                          ) : (
+                            goodsLineItems.map((item, index) => (
+                              <tr key={item.id} className="hover:bg-[#f8faff]">
+                                <td className="px-2 py-2 border-b border-[#edf0f5] text-[#9ca3af] text-[11px]">{index + 1}</td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5] relative">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[90px] focus:outline-none focus:border-[#3a7bd5]"
+                                    value={item.hsCode}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      updateLineItem(item.id, 'hsCode', value);
+                                      setActiveHsCodeRowId(item.id);
+                                      searchHsCodes(value);
+                                    }}
+                                    onFocus={() => {
+                                      setActiveHsCodeRowId(item.id);
+                                      if (item.hsCode.length >= 2) searchHsCodes(item.hsCode);
+                                    }}
+                                    onBlur={() => {
+                                      window.setTimeout(() => {
+                                        setActiveHsCodeRowId(current => (current === item.id ? null : current));
+                                      }, 150);
+                                    }}
+                                    placeholder="Search code…"
+                                    autoComplete="off"
+                                  />
+                                  {activeHsCodeRowId === item.id && item.hsCode.length >= 2 && (isSearchingHs || hsCodes.length > 0) && (
+                                    <div className="absolute z-[9999] top-full mt-1 w-[300px] max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
+                                      {isSearchingHs ? (
+                                        <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                                      ) : hsCodes.length === 0 ? (
+                                        <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
+                                      ) : (
+                                        hsCodes.map((hs) => (
+                                          <div
+                                            key={hs.id}
+                                            className="px-3 py-2 text-[13px] hover:bg-[#edf2ff] cursor-pointer"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => handleInlineHsCodeSelect(item.id, hs)}
+                                          >
+                                            <span className="font-bold text-[#1a4a8a]">{hs.cetCode}</span>
+                                            <span className="text-[#374151] ml-1 capitalize">{hs.description}</span>
+                                          </div>
+                                        ))
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[140px]"
+                                    value={item.description}
+                                    onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                                    placeholder="Enter description"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                    value={item.marksNo}
+                                    onChange={(e) => updateLineItem(item.id, 'marksNo', e.target.value)}
+                                    placeholder="Marks"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[60px]"
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const value = e.target.value.replace(/,/g, '');
+                                      if (/^\d*$/.test(value)) {
+                                        updateLineItem(item.id, 'quantity', formatNumberWithCommas(value));
+                                      }
+                                    }}
+                                    placeholder="1,000"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                    value={item.grossWeight}
+                                    onChange={(e) => {
+                                      const value = e.target.value.replace(/,/g, '');
+                                      if (/^\d*$/.test(value)) {
+                                        updateLineItem(item.id, 'grossWeight', formatNumberWithCommas(value));
+                                      }
+                                    }}
+                                    placeholder="200"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[65px]"
+                                    value={item.netWeight}
+                                    onChange={(e) => {
+                                      const value = e.target.value.replace(/,/g, '');
+                                      if (/^\d*$/.test(value)) {
+                                        updateLineItem(item.id, 'netWeight', formatNumberWithCommas(value));
+                                      }
+                                    }}
+                                    placeholder="200"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[120px] bg-[#f3f4f6] text-[#6a7a9a] cursor-not-allowed"
+                                    value={item.nomenclature}
+                                    readOnly
+                                    title="Auto-filled from the selected HS Code"
+                                    placeholder="From lookup"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] bg-[#f3f4f6] text-[#6a7a9a] text-[11px] w-[50px]"
+                                    value={item.unit}
+                                    onChange={(e) => updateLineItem(item.id, 'unit', e.target.value)}
+                                    placeholder="KG"
+                                    readOnly
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5]">
+                                  <input
+                                    className="px-2 py-1 border border-[#d1d5db] rounded-[4px] text-[11px] w-[85px]"
+                                    value={item.value}
+                                    onChange={(e) => {
+                                      const value = e.target.value.replace(/,/g, '');
+                                      if (/^\d*\.?\d*$/.test(value)) {
+                                        updateLineItem(item.id, 'value', formatNumberWithCommas(value));
+                                      }
+                                    }}
+                                    placeholder="0.00"
+                                  />
+                                </td>
+                                <td className="px-2 py-2 border-b border-[#edf0f5] text-center cursor-pointer text-[#e53e3e]" onClick={() => removeLineItem(item.id)}>✕</td>
+                              </tr>
+                            ))
+                          )
+                         }
                       </tbody>
                     </table>
                   </div>
-                  <div className="flex justify-start items-center mt-4">
-                    <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem}>➕ Add Line Item</button>
-                  </div>
+                  {selectedCertificateType?.multipleGoodsItemsAllowed && (
+                    <div className="flex justify-start items-center mt-4">
+                      <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem}>➕ Add Line Item</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 5: Supporting Documents */}
