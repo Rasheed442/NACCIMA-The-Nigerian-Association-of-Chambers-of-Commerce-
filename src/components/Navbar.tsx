@@ -57,7 +57,7 @@ export default function Navbar({ activeScreen, onScreenChange }: NavbarProps) {
         <div className={`nav-item ${activeScreen === 's-admin-companies' ? 'active' : ''}`} onClick={() => onScreenChange('s-admin-companies')}>🏢 Company Profiles</div>
         <div className={`nav-item ${activeScreen === 's-admin-company-detail' ? 'active' : ''}`} onClick={() => onScreenChange('s-admin-company-detail')}>👤 Company Detail + Membership</div>
         <div className={`nav-item ${activeScreen === 's-admin-staff' ? 'active' : ''}`} onClick={() => onScreenChange('s-admin-staff')}>👥 Staff Accounts</div>
-        <div className={`nav-item ${activeScreen === 's-admin-fees' ? 'active' : ''}`} onClick={() => onScreenChange('s-admin-fees')}>💰 Fee Management</div>
+        {/* <div className={`nav-item ${activeScreen === 's-admin-fees' ? 'active' : ''}`} onClick={() => onScreenChange('s-admin-fees')}>💰 Fee Management</div> */}
         <div className={`nav-item ${activeScreen === 's-admin-certs' ? 'active' : ''}`} onClick={() => onScreenChange('s-admin-certs')}>⚙️ Certificate Config</div>
       </div>
       <div className="nav-sep"></div>
