@@ -1588,13 +1588,17 @@ if (cr) {
       if (mode === 'create' || !certificateType?.id) {
         const feeChargesData = feeChargesRef.current?.getData();
         const feeStructureJson = feeChargesData?.feeStructure 
-          ? JSON.stringify(feeChargesData.feeStructure)
-          : JSON.stringify({
+          ? feeChargesData.feeStructure
+          : {
               type: 'PERCENTAGE',
-              memberRate: 0.11,
-              nonMemberRate: 0.125,
+              memberRate: 0.0011,
+              nonMemberRate: 0.00125,
+              memberMinFee: 10000.00,
+              memberMaxFee: 100000.00,
+              nonMemberMinFee: 15000.00,
+              nonMemberMaxFee: 150000.00,
               vatRate: 0.075
-            });
+            };
 
         console.log('Fee structure JSON:', feeStructureJson);
 
@@ -1659,6 +1663,20 @@ if (cr) {
           window.location.href = '/admin/certificate-types';
         }, 1500);
       } else {
+        const feeChargesData = feeChargesRef.current?.getData();
+        const feeStructureJson = feeChargesData?.feeStructure 
+          ? feeChargesData.feeStructure
+          : {
+              type: 'PERCENTAGE',
+              memberRate: 0.0011,
+              nonMemberRate: 0.00125,
+              memberMinFee: 10000.00,
+              memberMaxFee: 100000.00,
+              nonMemberMinFee: 15000.00,
+              nonMemberMaxFee: 150000.00,
+              vatRate: 0.075
+            };
+
         const response = await apiFetch(`${getBaseUrl()}/api/v1/admin/certificate-types/${certificateType.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1674,6 +1692,7 @@ if (cr) {
             templateUrl: formData.templateUrl,
             certNumberPrefix: formData.certNumberPrefix,
             templateConfig: formData.templateConfig,
+            feeStructure: feeStructureJson,
           }),
         });
         const result = await response.json();

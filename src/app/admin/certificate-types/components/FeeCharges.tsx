@@ -44,7 +44,7 @@ interface FeeState {
 
 export interface FeeChargesData {
   feeStructure: {
-    feeBasis: CalcMethod;
+    type: CalcMethod;
     memberRate: string;
     nonMemberRate: string;
     memberAmount: string;
@@ -265,6 +265,10 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
               feeBasis: apiData.feeBasis || prev.feeBasis,
               memberRate: apiData.memberRate?.toString() || prev.memberRate,
               nonMemberRate: apiData.nonMemberRate?.toString() || prev.nonMemberRate,
+              memberMinFee: apiData.memberMinFee?.toString() || prev.memberMinFee,
+              memberMaxFee: apiData.memberMaxFee?.toString() || prev.memberMaxFee,
+              nonMemberMinFee: apiData.nonMemberMinFee?.toString() || prev.nonMemberMinFee,
+              nonMemberMaxFee: apiData.nonMemberMaxFee?.toString() || prev.nonMemberMaxFee,
               memberAmount: apiData.memberAmount?.toString() || prev.memberAmount,
               nonMemberAmount: apiData.nonMemberAmount?.toString() || prev.nonMemberAmount,
               vatRate: apiData.vatRate?.toString() || prev.vatRate,
@@ -334,7 +338,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
           active: formData.active !== undefined ? formData.active : true,
           applicableFields: formData.applicableFields,
           requiredDocuments: formData.requiredDocuments,
-          feeStructure: JSON.stringify({
+          feeStructure: {
             type: state.feeBasis,
             memberRate: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.memberRate) || 0 : null,
             nonMemberRate: state.feeBasis === 'PERCENTAGE' ? parseFloat(state.nonMemberRate) || 0 : null,
@@ -351,7 +355,7 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
               memberRate: parseFloat(t.memberRate) || 0,
               nonMemberRate: parseFloat(t.nonMemberRate) || 0,
             })) : null,
-          }),
+          },
           templateUrl: formData.templateUrl,
           certNumberPrefix: formData.certNumberPrefix,
           templateConfig: formData.templateConfig,
@@ -388,12 +392,13 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
       // In edit mode, update only the fee structure using the correct endpoint
       console.log('Proceeding with edit mode API call');
       let payload: any = {
-        feeBasis: state.feeBasis,
+        type: state.feeBasis,
         vatRate: parseFloat(state.vatRate) || 0,
       };
 
       // Build payload based on fee basis
       if (state.feeBasis === 'PERCENTAGE') {
+        payload.type = state.feeBasis;
         payload.memberRate = parseFloat(state.memberRate) || 0;
         payload.nonMemberRate = parseFloat(state.nonMemberRate) || 0;
         payload.memberMinFee = parseFloat(state.memberMinFee) || 0;
@@ -403,11 +408,13 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
         payload.memberAmount = null;
         payload.nonMemberAmount = null;
       } else if (state.feeBasis === 'FLAT') {
+        payload.type = state.feeBasis;
         payload.memberAmount = parseFloat(state.memberAmount) || 0;
         payload.nonMemberAmount = parseFloat(state.nonMemberAmount) || 0;
         payload.memberRate = null;
         payload.nonMemberRate = null;
       } else if (state.feeBasis === 'TIERED') {
+        payload.type = state.feeBasis;
         payload.tiers = state.tiers.map((t) => ({
           minFob: parseFloat(t.minFob) || 0,
           maxFob: t.maxFob === '' ? null : parseFloat(t.maxFob) || null,
@@ -452,7 +459,27 @@ const FeeStructurePanel = forwardRef<FeeChargesRef, FeeChargesProps>(({ onTabCha
   // Expose data via ref
   useImperativeHandle(ref, () => ({
     getData: () => ({
-      feeStructure: state,
+      feeStructure: {
+        type: state.feeBasis,
+        memberRate: parseFloat(state.memberRate) || 0,
+        nonMemberRate: parseFloat(state.nonMemberRate) || 0,
+        memberAmount: parseFloat(state.memberAmount) || 0,
+        nonMemberAmount: parseFloat(state.nonMemberAmount) || 0,
+        memberMinFee: parseFloat(state.memberMinFee) || 0,
+        memberMaxFee: parseFloat(state.memberMaxFee) || 0,
+        nonMemberMinFee: parseFloat(state.nonMemberMinFee) || 0,
+        nonMemberMaxFee: parseFloat(state.nonMemberMaxFee) || 0,
+        vatRate: parseFloat(state.vatRate) || 0,
+        currency: state.currency,
+        processingFee: parseFloat(state.processingFee) || 0,
+        rounding: state.rounding,
+        tiers: state.tiers.map((t) => ({
+          minFob: parseFloat(t.minFob) || 0,
+          maxFob: t.maxFob === '' ? null : parseFloat(t.maxFob) || null,
+          memberRate: parseFloat(t.memberRate) || 0,
+          nonMemberRate: parseFloat(t.nonMemberRate) || 0,
+        })),
+      },
     }),
   }));
 
