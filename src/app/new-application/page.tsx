@@ -1717,6 +1717,7 @@ function NewApplicationContent() {
           unit: item.unit,
           quantity: parseFloat(item.quantity.replace(/,/g, '')) || 0,
           grossWeight: parseFloat(item.grossWeight.replace(/,/g, '')) || 0,
+          netWeight: parseFloat(item.netWeight.replace(/,/g, '')) || 0,
           nomenclature: item.nomenclature,
           value: parseFloat(item.value.replace(/,/g, '')) || 0,
         })),
