@@ -163,8 +163,11 @@ function NewApplicationContent() {
   const [isLoadingFields, setIsLoadingFields] = useState(false);
   const [transportModes, setTransportModes] = useState<TransportMode[]>([]);
   const [hsCodes, setHsCodes] = useState<HSCode[]>([]);
-  const [hsSearchQuery, setHsSearchQuery] = useState('');
   const [isSearchingHs, setIsSearchingHs] = useState(false);
+  const [hsSearchError, setHsSearchError] = useState('');
+  const [hsResultsQuery, setHsResultsQuery] = useState('');
+  const hsSearchRequestRef = useRef(0);
+  const [isHsCodeInputFocused, setIsHsCodeInputFocused] = useState(false);
   // Tracks which Goods Line Item row currently has its HS Code suggestion
   // dropdown open (see Section 4 below). Only one row's suggestions are
   // shown at a time.
@@ -201,6 +204,7 @@ function NewApplicationContent() {
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [isLoadingRate, setIsLoadingRate] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<Record<string, File>>({});
+  const [savedDocumentFiles, setSavedDocumentFiles] = useState<Record<string, File>>({});
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -282,6 +286,7 @@ function NewApplicationContent() {
       setFormErrors({});
       setGoodsLineItems([]);
       setUploadedDocuments({});
+      setSavedDocumentFiles({});
       setDynamicFieldValues({});
       return;
     }
@@ -746,20 +751,27 @@ function NewApplicationContent() {
   }, [selectedCert, certificateTypes]);
 
   const searchHsCodes = async (query: string) => {
-    if (!query || query.length < 2) {
+    const normalizedQuery = query.trim();
+    const requestId = ++hsSearchRequestRef.current;
+    setHsResultsQuery(normalizedQuery);
+    setHsSearchError('');
+
+    if (normalizedQuery.length < 2) {
       setHsCodes([]);
+      setIsSearchingHs(false);
       return;
     }
 
     setIsSearchingHs(true);
+    setHsCodes([]);
 
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
-        return;
+        throw new Error('API base URL is not configured.');
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/hs-codes?query=${encodeURIComponent(query)}`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/hs-codes?query=${encodeURIComponent(normalizedQuery)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -768,20 +780,30 @@ function NewApplicationContent() {
 
       const result = await response.json();
 
-      if (response.ok) {
-        setHsCodes(result);
-      }
+      if (!response.ok) throw new Error(result?.message || 'Failed to search HS codes.');
+
+      const results = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result?.data?.content)
+            ? result.data.content
+            : [];
+
+      if (requestId === hsSearchRequestRef.current) setHsCodes(results);
     } catch (err) {
       console.error('Failed to search HS codes:', err);
+      if (requestId === hsSearchRequestRef.current) {
+        setHsCodes([]);
+        setHsSearchError(err instanceof Error ? err.message : 'Failed to search HS codes.');
+      }
     } finally {
-      setIsSearchingHs(false);
+      if (requestId === hsSearchRequestRef.current) setIsSearchingHs(false);
     }
   };
 
   const handleHsSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setHsSearchQuery(query);
-    searchHsCodes(query);
+    void searchHsCodes(e.target.value);
   };
 
   const getCertificateDisplay = (cert: CertificateType) => {
@@ -871,6 +893,10 @@ function NewApplicationContent() {
       MODE_OF_TRANSPORT: transportMode || '',
     };
     if (field.code in profileValues) return profileValues[field.code];
+
+    if (field.code === 'DESTINATION') {
+      return dynamicFieldValues[field.code] || 'Nigeria';
+    }
 
     return dynamicFieldValues[field.code] || '';
   };
@@ -1159,27 +1185,29 @@ function NewApplicationContent() {
               value={hsCodeValue}
               onChange={(e) => {
                 setDynamicFieldValue(field, e.target.value);
-                if (e.target.value.length >= 2) {
-                  searchHsCodes(e.target.value);
-                }
+                handleHsSearchChange(e);
               }}
               onFocus={() => {
-                if (hsCodeValue.length >= 2) {
-                  searchHsCodes(hsCodeValue);
-                }
+                setIsHsCodeInputFocused(true);
+                if (hsCodeValue.trim().length >= 2) void searchHsCodes(hsCodeValue);
               }}
               onBlur={() => {
+                setIsHsCodeInputFocused(false);
                 window.setTimeout(() => {
                   setHsCodes([]);
                 }, 150);
               }}
             />
-            {(isSearchingHs || hsCodes.length > 0) && hsCodeValue.length >= 2 && (
+            {isHsCodeInputFocused && hsCodeValue.trim().length >= 2 && hsResultsQuery === hsCodeValue.trim() && (
               <div className="absolute z-[9999] top-full mt-1 w-full max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
                 {isSearchingHs ? (
                   <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                ) : hsSearchError ? (
+                  <div role="alert" className="px-3 py-2 text-[13px] text-[#b91c1c]">{hsSearchError}</div>
                 ) : hsCodes.length === 0 ? (
-                  <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
+                  <div role="status" className="px-3 py-2 text-[13px] text-[#6a7a9a]">
+                    No HS code found. Please check the code and try again.
+                  </div>
                 ) : (
                   hsCodes.map((hs) => (
                     <div
@@ -1190,6 +1218,7 @@ function NewApplicationContent() {
                         setDynamicFieldValue(field, hs.cetCode);
                         handleHsCodeSelect(hs);
                         setHsCodes([]);
+                        setIsHsCodeInputFocused(false);
                         if (formErrors[field.code]) setFormErrors(current => ({ ...current, [field.code]: '' }));
                       }}
                     >
@@ -1643,6 +1672,22 @@ function NewApplicationContent() {
     }
   };
 
+  const uploadPendingDocuments = async () => {
+    const pendingDocuments = Object.entries(uploadedDocuments).filter(
+      ([docCode, file]) => savedDocumentFiles[docCode] !== file
+    );
+
+    for (const [docCode, file] of pendingDocuments) {
+      try {
+        await uploadDocumentToServer(docCode, file);
+      } catch (error) {
+        console.error(`Failed to upload document ${docCode}:`, error);
+        throw new Error(`Failed to upload document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      setSavedDocumentFiles((current) => ({ ...current, [docCode]: file }));
+    }
+  };
+
   const saveAllDetails = async () => {
     setIsSavingAll(true);
     setValidationError(null);
@@ -1662,17 +1707,8 @@ function NewApplicationContent() {
         return false;
       }
 
-      // Step 3: Upload all documents
-      const docEntries = Object.entries(uploadedDocuments);
-      for (const [docCode, file] of docEntries) {
-        try {
-          await uploadDocumentToServer(docCode, file);
-        } catch (err) {
-          console.error(`Failed to upload document ${docCode}:`, err);
-          setValidationError(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
-          return false;
-        }
-      }
+      // Step 3: Upload only files that haven't already been saved to this draft.
+      await uploadPendingDocuments();
 
       // All successful
       setSuccessMessage('All details saved successfully');
@@ -1680,7 +1716,7 @@ function NewApplicationContent() {
       return true;
     } catch (err) {
       console.error('Failed to save all details:', err);
-      setValidationError('Failed to save details. Please try again.');
+      setValidationError(err instanceof Error ? err.message : 'Failed to save details. Please try again.');
       return false;
     } finally {
       setIsSavingAll(false);
@@ -1821,17 +1857,8 @@ function NewApplicationContent() {
         return;
       }
 
-      // Step 3: Upload all documents
-      const docEntries = Object.entries(uploadedDocuments);
-      for (const [docCode, file] of docEntries) {
-        try {
-          await uploadDocumentToServer(docCode, file);
-        } catch (err) {
-          console.error(`Failed to upload document ${docCode}:`, err);
-          setValidationError(`Failed to upload document: ${err instanceof Error ? err.message : 'Unknown error'}`);
-          return;
-        }
-      }
+      // Skip documents already uploaded by Save Draft.
+      await uploadPendingDocuments();
 
       // All successful, proceed to step 3
       fetchExchangeRate();
@@ -1839,7 +1866,7 @@ function NewApplicationContent() {
       fetchReviewData();
     } catch (err) {
       console.error('Failed to save details:', err);
-      setValidationError('Failed to save details. Please try again.');
+      setValidationError(err instanceof Error ? err.message : 'Failed to save details. Please try again.');
     } finally {
       setIsSavingAll(false);
     }
@@ -2013,6 +2040,11 @@ function NewApplicationContent() {
   const handleDocumentUpload = async (docCode: string, file: File) => {
     // Just store the file locally, don't upload yet
     setUploadedDocuments(prev => ({ ...prev, [docCode]: file }));
+    setSavedDocumentFiles(prev => {
+      const next = { ...prev };
+      delete next[docCode];
+      return next;
+    });
     setUploadError(null);
   };
 
@@ -2094,6 +2126,11 @@ function NewApplicationContent() {
       delete updated[docCode];
       return updated;
     });
+    setSavedDocumentFiles(prev => {
+      const updated = { ...prev };
+      delete updated[docCode];
+      return updated;
+    });
   };
 
   const updateLineItem = (id: string, field: keyof GoodsLineItem, value: string) => {
@@ -2156,7 +2193,7 @@ function NewApplicationContent() {
       return [...current, newItem];
     });
 
-    setHsSearchQuery('');
+    setHsResultsQuery('');
     setHsCodes([]);
   };
 
@@ -2515,12 +2552,16 @@ function NewApplicationContent() {
                                     placeholder="Search code…"
                                     autoComplete="off"
                                   />
-                                  {activeHsCodeRowId === item.id && item.hsCode.length >= 2 && (isSearchingHs || hsCodes.length > 0) && (
+                                  {activeHsCodeRowId === item.id && item.hsCode.trim().length >= 2 && hsResultsQuery === item.hsCode.trim() && (
                                     <div className="absolute z-[9999] top-full mt-1 w-[300px] max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
                                       {isSearchingHs ? (
                                         <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                                      ) : hsSearchError ? (
+                                        <div role="alert" className="px-3 py-2 text-[13px] text-[#b91c1c]">{hsSearchError}</div>
                                       ) : hsCodes.length === 0 ? (
-                                        <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
+                                        <div role="status" className="px-3 py-2 text-[13px] text-[#6a7a9a]">
+                                          No HS code found. Please check the code and try again.
+                                        </div>
                                       ) : (
                                         hsCodes.map((hs) => (
                                           <div

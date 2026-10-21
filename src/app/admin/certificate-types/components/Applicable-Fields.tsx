@@ -136,7 +136,7 @@ const TYPE_MAP: Record<string, string> = {
 // Fallback fields if API fails
 const FALLBACK_FIELDS: FieldDef[] = [
   { id: "importerEmail", label: "Importer Email", icon: Mail, type: "Email", group: "application", badge: null, defaultEnabled: true },
-  { id: "modeOfTransport", label: "Mode of Transport", icon: Plane, type: "Dropdown", group: "application", badge: null, defaultEnabled: true },
+  { id: "modeOfTransport", label: "Mode of Transport", icon: Plane, type: "Dropdown", group: "readOnly", badge: "read-only", defaultEnabled: true },
   { id: "consignee", label: "Consignee", icon: Users, type: "Text", group: "application", badge: null, defaultEnabled: true },
   { id: "consigneeAddress", label: "Consignee Address", icon: MapPin, type: "Text", group: "application", badge: null, defaultEnabled: true },
   { id: "carrier", label: "Carrier", icon: UserRound, type: "Text", group: "application", badge: null, defaultEnabled: true },
@@ -173,7 +173,7 @@ function mapApiFieldToFieldDef(apiField: ApiField): FieldDef {
   let group: Group = "application";
   let badge: Badge = null;
   
-  if (apiField.readOnly || apiField.systemGenerated) {
+  if (apiField.readOnly || apiField.systemGenerated || apiField.code === "MODE_OF_TRANSPORT") {
     group = "readOnly";
     badge = "read-only";
   } else if (apiField.systemRequired) {
@@ -420,6 +420,8 @@ const ApplicableFieldsPanel = forwardRef<ApplicableFieldsRef, ApplicableFieldsPr
             const meta = GROUP_META[group];
             const GroupIcon = meta.icon;
             const groupFields = fieldsByGroup[group];
+            if (groupFields.length === 0) return null;
+
             const groupEnabledCount = groupFields.filter((f) => enabled[f.id]).length;
             const isOpen = openGroups[group];
 

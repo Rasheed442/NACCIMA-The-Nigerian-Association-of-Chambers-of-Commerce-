@@ -630,7 +630,7 @@ function MyApplicationsContent() {
                 <table className="w-full min-w-[1040px] border-collapse text-[12px]">
                   <thead className="sticky top-0 z-2">
                     <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
-                      <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Approval #</th>
+                      {/* <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Approval #</th> */}
                       <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Approval Number</th>
                       <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Cert Type</th>
                       <th className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]">Transport</th>
@@ -644,7 +644,7 @@ function MyApplicationsContent() {
                   <tbody>
                     {filteredCurrentItems.map((app) => (
                       <tr key={app.id} className="text-[12px] transition-colors hover:bg-[#f8faff]">
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.id}</td>
+                        {/* <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.id}</td> */}
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.approvalNumber || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.certificateType || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getTransportIcon(app.modeOfTransport)} {app.modeOfTransport || '—'}</td>

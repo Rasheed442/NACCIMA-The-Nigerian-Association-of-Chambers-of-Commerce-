@@ -16,6 +16,7 @@ interface CertificateType {
   name: string;
   description: string;
   active: boolean;
+  multipleGoodsItemsAllowed?: boolean;
   feeType?: string;
   memberRate?: number;
   nonMemberRate?: number;
@@ -179,6 +180,10 @@ export default function EditResubmissionPage() {
   const [hsCodes, setHsCodes] = useState<HSCode[]>([]);
   const [hsSearchQuery, setHsSearchQuery] = useState('');
   const [isSearchingHs, setIsSearchingHs] = useState(false);
+  const [hsSearchError, setHsSearchError] = useState('');
+  const [hsResultsQuery, setHsResultsQuery] = useState('');
+  const hsSearchRequestRef = useRef(0);
+  const [isHsCodeInputFocused, setIsHsCodeInputFocused] = useState(false);
   const [activeHsCodeRowId, setActiveHsCodeRowId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [certificateFields, setCertificateFields] = useState<CertificateTypeFields | null>(null);
@@ -1075,6 +1080,79 @@ export default function EditResubmissionPage() {
 
     if (!field.applicable) return null;
 
+    if (field.code === 'HS_CODE' && !getSelectedCertificateType()?.multipleGoodsItemsAllowed) {
+      const hsCodeValue = String(getDynamicFieldValue(field));
+      return (
+        <div key={field.code} className="flex flex-col gap-1">
+          <label className="text-[11px] font-semibold text-[#374151]">
+            {field.name} {field.required && <span className="text-[#e53e3e]">*</span>}
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              className="px-[10px] w-full py-[7px] border border-[#d1d5db] rounded-[5px] text-[12px] text-[#1a2236] bg-white focus:outline-none focus:border-[#3a7bd5]"
+              placeholder="Search HS code..."
+              value={hsCodeValue}
+              readOnly={field.readOnly || isPaymentMode}
+              onChange={(event) => {
+                if (field.readOnly || isPaymentMode) return;
+                setIsHsCodeInputFocused(true);
+                setDynamicFieldValue(field, event.target.value);
+                setHsSearchQuery(event.target.value);
+                void searchHsCodes(event.target.value);
+              }}
+              onClick={() => {
+                if (field.readOnly || isPaymentMode) return;
+                setIsHsCodeInputFocused(true);
+                if (hsCodeValue.trim().length >= 2 && hsResultsQuery !== hsCodeValue.trim()) {
+                  void searchHsCodes(hsCodeValue);
+                }
+              }}
+              onFocus={() => {
+                if (field.readOnly || isPaymentMode) return;
+                setIsHsCodeInputFocused(true);
+                if (hsCodeValue.trim().length >= 2) void searchHsCodes(hsCodeValue);
+              }}
+              onBlur={() => {
+                setIsHsCodeInputFocused(false);
+                window.setTimeout(() => setHsCodes([]), 150);
+              }}
+            />
+            {isHsCodeInputFocused && hsCodeValue.trim().length >= 2 && hsResultsQuery === hsCodeValue.trim() && (
+              <div className="absolute z-[9999] top-full mt-1 w-full max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
+                {isSearchingHs ? (
+                  <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                ) : hsSearchError ? (
+                  <div role="alert" className="px-3 py-2 text-[13px] text-[#b91c1c]">{hsSearchError}</div>
+                ) : hsCodes.length === 0 ? (
+                  <div role="status" className="px-3 py-2 text-[13px] text-[#6a7a9a]">
+                    No HS code found. Please check the code and try again.
+                  </div>
+                ) : (
+                  hsCodes.map((hs) => (
+                    <button
+                      key={hs.id}
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-[13px] hover:bg-[#edf2ff]"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setDynamicFieldValue(field, hs.cetCode);
+                        handleHsCodeSelect(hs);
+                        setHsResultsQuery('');
+                      }}
+                    >
+                      <span className="font-bold text-[#1a4a8a]">{hs.cetCode}</span>
+                      <span className="text-[#374151] ml-1 capitalize">{hs.description}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     // Special handling for country dropdowns
     if (field.code === 'DESTINATION') {
       const filteredCountries = countries?.filter(country =>
@@ -1315,26 +1393,39 @@ export default function EditResubmissionPage() {
     return selectedTransportModeDetails || transportModes.find(tm => tm.code === transportMode);
   };
 
+  const getSelectedCertificateType = () => certificateTypes.find(certificate =>
+    certificate.code === application?.certificateType ||
+    certificate.id === application?.certificateType ||
+    certificate.name === application?.certificateType
+  );
+
   const handleSelectTransportMode = async (code: string) => {
     setTransportMode(code);
     await fetchTransportModeDetails(code);
   };
 
   const searchHsCodes = async (query: string) => {
-    if (!query || query.length < 2) {
+    const normalizedQuery = query.trim();
+    const requestId = ++hsSearchRequestRef.current;
+    setHsResultsQuery(normalizedQuery);
+    setHsSearchError('');
+
+    if (normalizedQuery.length < 2) {
       setHsCodes([]);
+      setIsSearchingHs(false);
       return;
     }
 
     setIsSearchingHs(true);
+    setHsCodes([]);
 
     try {
       const baseUrl = getBaseUrl();
       if (!baseUrl) {
-        return;
+        throw new Error('API base URL is not configured.');
       }
 
-      const response = await apiFetch(`${baseUrl}/api/v1/certificates/hs-codes?query=${encodeURIComponent(query)}`, {
+      const response = await apiFetch(`${baseUrl}/api/v1/certificates/hs-codes?query=${encodeURIComponent(normalizedQuery)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1343,20 +1434,32 @@ export default function EditResubmissionPage() {
 
       const result = await response.json();
 
-      if (response.ok) {
-        setHsCodes(result);
-      }
+      if (!response.ok) throw new Error(result?.message || 'Failed to search HS codes.');
+
+      const results = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result?.data?.content)
+            ? result.data.content
+            : [];
+
+      if (requestId === hsSearchRequestRef.current) setHsCodes(results);
     } catch (err) {
       console.error('Failed to search HS codes:', err);
+      if (requestId === hsSearchRequestRef.current) {
+        setHsCodes([]);
+        setHsSearchError(err instanceof Error ? err.message : 'Failed to search HS codes.');
+      }
     } finally {
-      setIsSearchingHs(false);
+      if (requestId === hsSearchRequestRef.current) setIsSearchingHs(false);
     }
   };
 
   const handleHsSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
     setHsSearchQuery(query);
-    searchHsCodes(query);
+    void searchHsCodes(query);
   };
 
   const handleHsCodeSelect = (hs: HSCode) => {
@@ -1373,9 +1476,19 @@ export default function EditResubmissionPage() {
       unit: hs.unit || '',
       value: '',
     };
-    setGoodsLineItems([...goodsLineItems, newItem]);
+    if (!getSelectedCertificateType()?.multipleGoodsItemsAllowed) {
+      setGoodsLineItems(current => {
+        const existingItem = current[0];
+        return [existingItem
+          ? { ...existingItem, hsCode: hs.cetCode, nomenclature: hs.description, unit: hs.unit || '' }
+          : newItem];
+      });
+    } else {
+      setGoodsLineItems(current => [...current, newItem]);
+    }
     setHsSearchQuery('');
     setHsCodes([]);
+    setIsHsCodeInputFocused(false);
   };
 
   const handleInlineHsCodeSelect = (rowId: string, hs: HSCode) => {
@@ -2392,7 +2505,11 @@ export default function EditResubmissionPage() {
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
                     <div className="text-[13px] font-bold text-[#1a2236]">Goods Line Items</div>
-                    <span className="text-[10px] text-[#9ca3af]">Type in the HS Code column for suggestions</span>
+                    <span className="text-[10px] text-[#9ca3af]">
+                      {getSelectedCertificateType()?.multipleGoodsItemsAllowed
+                        ? 'Type in the HS Code column for suggestions'
+                        : 'HS Code is selected in Consignee & Shipment Details'}
+                    </span>
                   </div>
                   <div className={activeHsCodeRowId ? "overflow-visible mb-3" : "overflow-x-auto mb-3"}>
                     <table className="w-full border-collapse text-[11px]">
@@ -2434,13 +2551,13 @@ export default function EditResubmissionPage() {
                                       const value = e.target.value;
                                       updateLineItem(item.id, 'hsCode', value);
                                       setActiveHsCodeRowId(item.id);
-                                      searchHsCodes(value);
+                                      void searchHsCodes(value);
                                     }
                                   }}
                                   onFocus={() => {
                                     if (!isPaymentMode) {
                                       setActiveHsCodeRowId(item.id);
-                                      if (item.hsCode.length >= 2) searchHsCodes(item.hsCode);
+                                      if (item.hsCode.trim().length >= 2) void searchHsCodes(item.hsCode);
                                     }
                                   }}
                                   onBlur={() => {
@@ -2453,12 +2570,16 @@ export default function EditResubmissionPage() {
                                   disabled={isPaymentMode}
                                   readOnly={isPaymentMode}
                                 />
-                                {activeHsCodeRowId === item.id && item.hsCode.length >= 2 && (isSearchingHs || hsCodes.length > 0) && (
+                                {activeHsCodeRowId === item.id && item.hsCode.trim().length >= 2 && hsResultsQuery === item.hsCode.trim() && (
                                   <div className="absolute z-[9999] top-full mt-1 w-[300px] max-h-[200px] overflow-auto bg-white border border-[#d1d5db] rounded-[6px] shadow-lg">
                                     {isSearchingHs ? (
                                       <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">Searching...</div>
+                                    ) : hsSearchError ? (
+                                      <div role="alert" className="px-3 py-2 text-[13px] text-[#b91c1c]">{hsSearchError}</div>
                                     ) : hsCodes.length === 0 ? (
-                                      <div className="px-3 py-2 text-[13px] text-[#6a7a9a]">No results found</div>
+                                      <div role="status" className="px-3 py-2 text-[13px] text-[#6a7a9a]">
+                                        No HS code found. Please check the code and try again.
+                                      </div>
                                     ) : (
                                       hsCodes.map((hs) => (
                                         <div
@@ -2590,9 +2711,11 @@ export default function EditResubmissionPage() {
                       </tbody>
                     </table>
                   </div>
-                  <div className="flex justify-start items-center mt-4">
-                    <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem} disabled={isPaymentMode}>➕ Add Line Item</button>
-                  </div>
+                  {getSelectedCertificateType()?.multipleGoodsItemsAllowed && (
+                    <div className="flex justify-start items-center mt-4">
+                      <button className="inline-flex items-center gap-1 px-[14px] py-[7px] rounded-[6px] text-[12px] font-semibold cursor-pointer border-none transition-all bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]" onClick={addLineItem} disabled={isPaymentMode}>➕ Add Line Item</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Section 5: Supporting Documents */}

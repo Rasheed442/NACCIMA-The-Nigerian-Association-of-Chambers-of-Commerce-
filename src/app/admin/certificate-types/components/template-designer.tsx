@@ -2897,7 +2897,7 @@ function PropertiesForm({
           />
         </div>
       </div>
-      <div className="flex items-center gap-6 mb-4">
+      {/* <div className="flex items-center gap-6 mb-4">
         <label className="flex items-center gap-2 text-[12px] text-[#3a4560]">
           <input type="checkbox" checked={el.required} onChange={(e) => onChange({ required: e.target.checked })} className="w-3.5 h-3.5" />
           Required Field
@@ -2906,7 +2906,7 @@ function PropertiesForm({
           <input type="checkbox" checked={el.readOnly} onChange={(e) => onChange({ readOnly: e.target.checked })} className="w-3.5 h-3.5" />
           Read Only
         </label>
-      </div>
+      </div> */}
 
       {/* Border & Padding */}
       <CollapsibleSection title="Border & Padding (Optional)" open={openBorder} onToggle={() => setOpenBorder(!openBorder)}>
