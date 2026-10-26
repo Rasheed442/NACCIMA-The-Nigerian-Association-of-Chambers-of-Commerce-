@@ -894,8 +894,12 @@ function NewApplicationContent() {
     };
     if (field.code in profileValues) return profileValues[field.code];
 
-    if (field.code === 'DESTINATION') {
+    if (field.code === 'COUNTRY_OF_MANUFACTURING') {
       return dynamicFieldValues[field.code] || 'Nigeria';
+    }
+
+    if (field.code === 'DESTINATION') {
+      return dynamicFieldValues[field.code] || '';
     }
 
     return dynamicFieldValues[field.code] || '';

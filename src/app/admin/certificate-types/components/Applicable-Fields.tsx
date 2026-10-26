@@ -173,10 +173,10 @@ function mapApiFieldToFieldDef(apiField: ApiField): FieldDef {
   let group: Group = "application";
   let badge: Badge = null;
   
-  if (apiField.readOnly || apiField.systemGenerated || apiField.code === "MODE_OF_TRANSPORT") {
+  if (apiField.readOnly || apiField.systemGenerated) {
     group = "readOnly";
     badge = "read-only";
-  } else if (apiField.systemRequired) {
+  } else if (apiField.systemRequired && apiField.code !== "MODE_OF_TRANSPORT") {
     group = "nrsLocked";
     badge = "nrs-locked";
   }
