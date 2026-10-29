@@ -25,7 +25,6 @@ interface Certificate {
   destinationCountry: string;
   destinationPort: string;
   modeOfTransport: string;
-  pdfUrl: string;
   voided: boolean;
 }
 
@@ -38,6 +37,7 @@ export default function IssuedCerts() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     const handleOpenLogoutModal = () => setShowLogoutModal(true);
@@ -48,6 +48,12 @@ export default function IssuedCerts() {
   useEffect(() => {
     fetchCertificates();
   }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const fetchCertificates = async () => {
     setIsLoading(true);
@@ -95,8 +101,48 @@ export default function IssuedCerts() {
     return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  const handleDownload = (pdfUrl: string) => {
-    window.open(pdfUrl, '_blank');
+  const handleDownload = async (applicationId: string) => {
+    try {
+      const baseUrl = getBaseUrl();
+      if (!baseUrl) {
+        setToast({ type: 'error', message: 'API URL not configured' });
+        return;
+      }
+
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        setToast({ type: 'error', message: 'No access token found. Please log in.' });
+        return;
+      }
+
+      const downloadUrl = `${baseUrl}/api/v1/certificates/${applicationId}/download`;
+      
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData?.message || 'Failed to download certificate');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificate-${applicationId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Failed to download certificate:', err);
+      const message = err instanceof Error ? err.message : 'Failed to download certificate';
+      setToast({ type: 'error', message });
+    }
   };
 
   const handleView = (applicationId: string) => {
@@ -174,7 +220,7 @@ export default function IssuedCerts() {
                           <div className="flex gap-[9px]">
                             <button 
                               className="inline-flex items-center gap-1 px-[9px] py-[5px] rounded text-[13px] font-medium cursor-pointer border-none transition-all bg-[#065f46] text-white hover:bg-[#047857]"
-                              onClick={() => handleDownload(cert.pdfUrl)}
+                              onClick={() => handleDownload(cert.applicationId)}
                             >
                               Download
                             </button>
@@ -244,6 +290,21 @@ export default function IssuedCerts() {
       </div>
 
       <LogoutModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)} onConfirm={handleLogout} />
+
+      {toast && (
+        <div className="fixed top-5 right-5 z-[9999] max-w-[320px]">
+          <div
+            className={`flex items-start gap-3 rounded-[10px] border px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.15)] ${
+              toast.type === 'success'
+                ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'
+                : 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b]'
+            }`}
+          >
+            <div className="mt-0.5 text-[16px]">{toast.type === 'success' ? '✅' : '⚠️'}</div>
+            <div className="text-[12px] font-medium leading-5">{toast.message}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

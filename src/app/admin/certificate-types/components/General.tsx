@@ -19,6 +19,7 @@ interface FormState {
   description: string;
   status: Status;
   allowMultipleGoods: boolean;
+  goodsItemsAllowed: boolean;
   templateFile: File | null;
   templateFileName: string;
   templateUrl: string;
@@ -39,6 +40,7 @@ interface GeneralProps {
     templateUrl?: string;
     templateConfig?: string | { page?: { index?: number; width?: number; height?: number } };
     multipleGoodsItemsAllowed?: boolean;
+    goodsItemsAllowed?: boolean;
   };
 }
 
@@ -49,6 +51,7 @@ export interface GeneralData {
   description: string;
   status: Status;
   multipleGoodsItemsAllowed: boolean;
+  goodsItemsAllowed: boolean;
   templateFileName: string;
   templateUrl: string;
   templateFile: File | null;
@@ -119,6 +122,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
     pageCount: 1,
     pageSize: null,
     allowMultipleGoods: false,
+    goodsItemsAllowed: false,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -158,6 +162,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
       description: certificateType.description || '',
       status: certificateType.active === false ? 'inactive' : 'active',
       allowMultipleGoods: certificateType.multipleGoodsItemsAllowed || false,
+      goodsItemsAllowed: certificateType.goodsItemsAllowed || false,
       templateFileName,
       templateUrl: certificateType.templateUrl || '',
       pageIndex: page?.index || 0,
@@ -313,6 +318,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
         description: form.description,
         status: form.status,
         multipleGoodsItemsAllowed: form.allowMultipleGoods,
+        goodsItemsAllowed: form.goodsItemsAllowed,
         templateFileName: form.templateFileName,
         templateUrl: form.templateUrl,
         templateFile: form.templateFile,
@@ -500,13 +506,42 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
                 <button
                   type="button"
                   onClick={() => setField("allowMultipleGoods", !form.allowMultipleGoods)}
+                  disabled={!form.goodsItemsAllowed}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2 ${
                     form.allowMultipleGoods ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'
-                  }`}
+                  } ${!form.goodsItemsAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
                       form.allowMultipleGoods ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </Field>
+            
+            <Field label="Goods Section">
+              <div className="flex items-center justify-between py-2">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-[#1a2236]">Enable Goods Line Items</span>
+                  <span className="text-xs text-[#6a7a9a] mt-0.5">Enable if this certificate type requires goods line items section</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newValue = !form.goodsItemsAllowed;
+                    setField("goodsItemsAllowed", newValue);
+                    if (!newValue) {
+                      setField("allowMultipleGoods", false);
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2 ${
+                    form.goodsItemsAllowed ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                      form.goodsItemsAllowed ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>

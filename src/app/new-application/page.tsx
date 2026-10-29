@@ -17,6 +17,7 @@ interface CertificateType {
   description: string;
   active: boolean;
   multipleGoodsItemsAllowed?: boolean;
+  goodsItemsAllowed?: boolean;
   feeType?: string;
   memberRate?: number;
   nonMemberRate?: number;
@@ -2492,6 +2493,7 @@ function NewApplicationContent() {
 
 
                 {/* Section 4: Goods Line Items */}
+                {selectedCertificateType?.goodsItemsAllowed !== false && (
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-[20px] h-[20px] rounded-full bg-[#3a7bd5] text-white text-[11px] font-bold flex items-center justify-center">4</div>
@@ -2682,6 +2684,7 @@ function NewApplicationContent() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Section 5: Supporting Documents */}
                 <div className="bg-[#f8fafd] border border-[#dde3ee] rounded-[8px] p-5 mb-4">
