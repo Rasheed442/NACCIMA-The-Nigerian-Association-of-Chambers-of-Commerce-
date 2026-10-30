@@ -424,13 +424,12 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
                 }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={onDrop}
-                className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
-                  isDragging
+                className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors ${isDragging
                     ? "border-[#1a4a8a] bg-[#e8f0fe]"
                     : errors.templateFile
-                    ? "border-red-300 bg-white"
-                    : "border-[#d1d5db] bg-white"
-                }`}
+                      ? "border-red-300 bg-white"
+                      : "border-[#d1d5db] bg-white"
+                  }`}
               >
                 <div className="flex min-w-0 items-center gap-2 text-sm text-[#4a5a7a]">
                   <DocIcon />
@@ -507,20 +506,18 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
                   type="button"
                   onClick={() => setField("allowMultipleGoods", !form.allowMultipleGoods)}
                   disabled={!form.goodsItemsAllowed}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2 ${
-                    form.allowMultipleGoods ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'
-                  } ${!form.goodsItemsAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1a4a8a] focus:ring-offset-2 ${form.allowMultipleGoods ? 'bg-[#1a4a8a]' : 'bg-[#d1d5db]'
+                    } ${!form.goodsItemsAllowed ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
-                      form.allowMultipleGoods ? 'translate-x-6' : 'translate-x-1'
-                    }`}
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${form.allowMultipleGoods ? 'translate-x-6' : 'translate-x-1'
+                      }`}
                   />
                 </button>
               </div>
             </Field>
-            
-            <Field label="Goods Section">
+
+            {/* <Field label="Goods Section">
               <div className="flex items-center justify-between py-2">
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-[#1a2236]">Enable Goods Line Items</span>
@@ -546,7 +543,7 @@ const General = forwardRef<GeneralRef, GeneralProps>(({ onTabChange, certificate
                   />
                 </button>
               </div>
-            </Field>
+            </Field> */}
           </div>
         </section>
       </div>
@@ -617,11 +614,10 @@ function Field({
 }
 
 function inputClass(hasError: boolean) {
-  return `w-full rounded-lg border px-3 py-2.5 text-sm text-[#1a2236] placeholder:text-[#9ca3af] outline-none transition-colors focus:ring-2 focus:ring-[#e8f0fe] ${
-    hasError
+  return `w-full rounded-lg border px-3 py-2.5 text-sm text-[#1a2236] placeholder:text-[#9ca3af] outline-none transition-colors focus:ring-2 focus:ring-[#e8f0fe] ${hasError
       ? "border-red-300 focus:border-red-400"
       : "border-[#d1d5db] focus:border-[#1a4a8a]"
-  }`;
+    }`;
 }
 
 function DocIcon() {
@@ -668,11 +664,10 @@ function Dropdown<T extends string | number>({
         type="button"
         onClick={disabled ? undefined : onToggle}
         disabled={disabled}
-        className={`w-full rounded-lg border px-3 py-2.5 text-sm text-[#1a2236] outline-none transition-colors flex items-center justify-between ${
-          disabled
+        className={`w-full rounded-lg border px-3 py-2.5 text-sm text-[#1a2236] outline-none transition-colors flex items-center justify-between ${disabled
             ? "border-[#d1d5db] bg-[#f9fafb] text-[#9ca3af] cursor-not-allowed"
             : "border-[#d1d5db] hover:border-[#1a4a8a] focus:border-[#1a4a8a]"
-        }`}
+          }`}
       >
         <span className="truncate">{selectedOption?.label || "Select..."}</span>
         {!disabled && (isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />)}
@@ -693,11 +688,10 @@ function Dropdown<T extends string | number>({
                   onChange(option.value);
                   onClose();
                 }}
-                className={`w-full px-3 py-2.5 text-sm text-left transition-colors ${
-                  option.value === value
+                className={`w-full px-3 py-2.5 text-sm text-left transition-colors ${option.value === value
                     ? "bg-[#e8f0fe] text-[#1a4a8a]"
                     : "text-[#1a2236] hover:bg-[#f9fafb]"
-                }`}
+                  }`}
               >
                 {option.label}
               </button>
