@@ -900,16 +900,19 @@ export default function EditResubmissionPage() {
     );
     if (!selectedCertificate) return null;
 
-    // Use memberRate/nonMemberRate if available, otherwise use memberAmount/nonMemberAmount
-    const memberValue = selectedCertificate.memberRate !== undefined ? selectedCertificate.memberRate : selectedCertificate.memberAmount;
+    // For PERCENTAGE use memberRate; for FLAT use memberAmount
+    const isPercentage = selectedCertificate.feeType === 'PERCENTAGE';
+    const memberValue = isPercentage
+      ? (selectedCertificate.memberRate ?? selectedCertificate.memberAmount)
+      : (selectedCertificate.memberAmount ?? selectedCertificate.memberRate);
     
-    if (selectedCertificate.feeType && memberValue !== undefined) {
+    if (selectedCertificate.feeType && memberValue != null) {
       return {
         rate: memberValue,
         feeType: selectedCertificate.feeType,
-        display: selectedCertificate.feeType === 'FLAT' 
-          ? `₦${memberValue.toLocaleString()}` 
-          : `${(memberValue * 100).toFixed(2)}% FOB`
+        display: isPercentage 
+          ? `${(memberValue * 100).toFixed(2)}% FOB`
+          : `₦${memberValue.toLocaleString()}`
       };
     }
     

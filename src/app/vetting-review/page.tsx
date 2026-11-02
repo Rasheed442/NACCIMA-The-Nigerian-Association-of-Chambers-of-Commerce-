@@ -175,11 +175,10 @@ function CustomDropdown({
                   onChange(option.value);
                   onClose();
                 }}
-                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 transition-colors ${
-                  value === option.value
+                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 transition-colors ${value === option.value
                     ? 'bg-blue-50 text-blue-700 font-medium'
                     : 'text-gray-700'
-                }`}
+                  }`}
               >
                 {option.label}
               </button>
@@ -561,9 +560,8 @@ function VettingReviewContent() {
       ? 'Showing applications across all statuses'
       : filterStatus === 'APPROVED' && dateFilter
         ? `Showing applications approved ${isToday ? 'today' : `on ${dateFilter}`}`
-        : `Showing ${filterStatus.toLowerCase().replace(/_/g, ' ')} applications${
-            dateFilter ? ` for ${dateFilter}` : ''
-          }`;
+        : `Showing ${filterStatus.toLowerCase().replace(/_/g, ' ')} applications${dateFilter ? ` for ${dateFilter}` : ''
+        }`;
 
   /*
    * ---------------------------------------------------------
@@ -853,7 +851,7 @@ function VettingReviewContent() {
                 <thead>
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
                     {[
-                      'Application ID',
+                      // 'Application ID',
                       'TIN',
                       'Approval No.',
                       'Certificate',
@@ -906,12 +904,12 @@ function VettingReviewContent() {
                   ) : (
                     filteredApplications.map((app) => (
                       <tr
-                        key={app.applicationId}
+                        key={app.tin}
                         className="text-[12px] transition-colors hover:bg-[#f8faff]"
                       >
-                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
+                        {/* <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
                           {app.applicationId}
-                        </td>
+                        </td> */}
 
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           {app.tin}
@@ -950,11 +948,10 @@ function VettingReviewContent() {
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           <button
                             type="button"
-                            className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${
-                              isFinished(app.status)
+                            className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${isFinished(app.status)
                                 ? 'border border-gray-300 bg-white text-[#2a3a56] hover:bg-[#f1f4f9]'
                                 : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
-                            }`}
+                              }`}
                             onClick={() => handleReviewAction(app)}
                           >
                             {isFinished(app.status)

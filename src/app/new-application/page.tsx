@@ -813,7 +813,7 @@ function NewApplicationContent() {
       'NACCIMA': { icon: '📜', note: '' },
       'GSP': { icon: '🌍', note: '' },
       'ECOWAS_FRE': { icon: '🤝', note: '' },
-      'ECOWAS': { icon: '🤝', note: '.' },
+      'ECOWAS': { icon: '🤝', note: '' },
       'MOVEMENT': { icon: '🚚', note: '' },
       'SOLID_MINERAL': { icon: '⛏️', note: '' },
       'MINERAL': { icon: '⛏️', note: '' },
@@ -824,17 +824,22 @@ function NewApplicationContent() {
     // Build tag with fee information from certificate type
     let tag = '';
     
-    // Use memberRate/nonMemberRate if available, otherwise use memberAmount/nonMemberAmount
-    const memberValue = cert.memberRate !== undefined ? cert.memberRate : cert.memberAmount;
-    const nonMemberValue = cert.nonMemberRate !== undefined ? cert.nonMemberRate : cert.nonMemberAmount;
+    // For PERCENTAGE use memberRate / nonMemberRate; for FLAT use memberAmount / nonMemberAmount
+    const isPercentage = cert.feeType === 'PERCENTAGE';
+    const memberValue = isPercentage
+      ? (cert.memberRate ?? cert.memberAmount)
+      : (cert.memberAmount ?? cert.memberRate);
+    const nonMemberValue = isPercentage
+      ? (cert.nonMemberRate ?? cert.nonMemberAmount)
+      : (cert.nonMemberAmount ?? cert.nonMemberRate);
     
-    if (cert.feeType && memberValue !== undefined && nonMemberValue !== undefined) {
-      const memberRate = cert.feeType === 'FLAT' 
-        ? `₦${memberValue.toLocaleString()}` 
-        : `${(memberValue * 100).toFixed(2)}% FOB`;
-      const nonMemberRate = cert.feeType === 'FLAT' 
-        ? `₦${nonMemberValue.toLocaleString()}` 
-        : `${(nonMemberValue * 100).toFixed(2)}% FOB`;
+    if (memberValue != null && nonMemberValue != null) {
+      const memberRate = isPercentage 
+        ? `${(memberValue * 100).toFixed(2)}% FOB` 
+        : `₦${memberValue.toLocaleString()}`;
+      const nonMemberRate = isPercentage 
+        ? `${(nonMemberValue * 100).toFixed(2)}% FOB` 
+        : `₦${nonMemberValue.toLocaleString()}`;
       
       tag = display.note 
         ? `${display.note} · Member: ${memberRate} · Non-Member: ${nonMemberRate}`
@@ -2335,8 +2340,13 @@ function NewApplicationContent() {
                           className={`p-4 rounded-[8px] border cursor-pointer transition-all ${selectedCert === cert.id ? 'border-[#3a7bd5] bg-[#e8f0fe]' : 'border-[#dde3ee] hover:border-[#3a7bd5]'}`}
                           onClick={() => {
                             setSelectedCert(cert.id);
-                            const memberValue = cert.memberRate !== undefined ? cert.memberRate : cert.memberAmount;
-                            const nonMemberValue = cert.nonMemberRate !== undefined ? cert.nonMemberRate : cert.nonMemberAmount;
+                            const isPercentage = cert.feeType === 'PERCENTAGE';
+                            const memberValue = isPercentage
+                              ? (cert.memberRate ?? cert.memberAmount)
+                              : (cert.memberAmount ?? cert.memberRate);
+                            const nonMemberValue = isPercentage
+                              ? (cert.nonMemberRate ?? cert.nonMemberAmount)
+                              : (cert.nonMemberAmount ?? cert.nonMemberRate);
                             setSelectedCertRate({
                               memberRate: memberValue || 0,
                               nonMemberRate: nonMemberValue || 0,
@@ -2940,7 +2950,7 @@ function NewApplicationContent() {
                               {selectedCertRate ? (
                                 selectedCertRate.feeType === 'FLAT' 
                                   ? `₦${(companyProfile?.membershipStatus === "MEMBER" ? selectedCertRate.memberRate : selectedCertRate.nonMemberRate).toLocaleString()}`
-                                  : `${(companyProfile?.membershipStatus === "MEMBER" ? selectedCertRate.memberRate : selectedCertRate.nonMemberRate * 100).toFixed(2)}% of FOB`
+                                  : `${(((companyProfile?.membershipStatus === "MEMBER" ? selectedCertRate.memberRate : selectedCertRate.nonMemberRate)) * 100).toFixed(2)}% of FOB`
                               ) : 'N/A'}
                             </span>
                           </div>}

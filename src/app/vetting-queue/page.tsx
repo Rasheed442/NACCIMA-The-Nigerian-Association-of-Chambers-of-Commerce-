@@ -137,9 +137,8 @@ function CustomDropdown({
                   onChange(option.value);
                   onClose();
                 }}
-                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 transition-colors ${
-                  value === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
-                }`}
+                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 transition-colors ${value === option.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'
+                  }`}
               >
                 {option.label}
               </button>
@@ -506,7 +505,7 @@ export default function VettingQueuePage() {
               <table className="w-full min-w-[1040px] border-collapse text-[12px]">
                 <thead className="sticky top-0 z-2">
                   <tr className="bg-[#f1f4f9] text-[#4a5a7a]">
-                    {['applicationId','tin','approvalNumber', 'Certificate Type', 'Transport', 'Submitted', 'FOB Value', 'Status', 'Actions'].map((h) => (
+                    {['tin', 'approvalNumber', 'Certificate Type', 'Transport', 'Submitted', 'FOB Value', 'Status', 'Actions'].map((h) => (
                       <th
                         key={h}
                         className="whitespace-nowrap border-b-2 border-[#dde3ee] px-[11px] py-[10px] text-left text-[10px] font-semibold uppercase tracking-[0.06em]"
@@ -547,12 +546,12 @@ export default function VettingQueuePage() {
                   ) : (
                     filteredApplications.map((app) => (
                       <tr key={app.applicationId} className="text-[12px] transition-colors hover:bg-[#f8faff]">
-                                                  <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
+                        {/* <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
                             {app.applicationId}
-                          </td>
-                           <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
-                            {app.tin}
-                          </td>
+                          </td> */}
+                        <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
+                          {app.tin}
+                        </td>
 
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px] font-mono text-[#1a4a8a]">
                           <span>{app.approvalNumber}</span>
@@ -578,11 +577,10 @@ export default function VettingQueuePage() {
                         </td>
                         <td className="whitespace-nowrap border-b border-[#edf0f5] px-[11px] py-[10px]">
                           <button
-                            className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${
-                              app.status === 'APPROVED'
+                            className={`inline-flex items-center gap-1 rounded px-[9px] py-[5px] text-[13px] font-medium transition-all ${app.status === 'APPROVED'
                                 ? 'border border-gray-300 bg-white text-[#2a3a56] hover:bg-[#f1f4f9]'
                                 : 'bg-[#1a4a8a] text-white hover:bg-[#153c70]'
-                            } ${assigningApplicationId === app.applicationId ? 'opacity-70 cursor-not-allowed' : ''}`}
+                              } ${assigningApplicationId === app.applicationId ? 'opacity-70 cursor-not-allowed' : ''}`}
                             onClick={() => handleReviewAction(app)}
                             disabled={assigningApplicationId === app.applicationId}
                           >
