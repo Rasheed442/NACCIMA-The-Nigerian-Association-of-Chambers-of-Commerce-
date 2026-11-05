@@ -731,11 +731,13 @@ function findGoodsConflicts(elements: FieldElement[]): FieldElement[] {
 }
 
 // What to show next to a palette row so used fields stay visible but are flagged.
+// NOTE: Fields can now be added multiple times, so we don't show 'placed' status anymore
 function paletteStatus(item: PaletteItem, elements: FieldElement[]): 'placed' | 'in-table' | undefined {
   if (item.kind === 'goods') return elements.some((e) => e.kind === 'goods') ? 'placed' : undefined;
   if (item.kind === 'component') return undefined;
-  const code = backendFieldCode(item.type);
-  if (elements.some((e) => isRenderedField(e) && backendFieldCode(e.text) === code)) return 'placed';
+  // Removed: don't show 'placed' status to allow adding fields multiple times
+  // const code = backendFieldCode(item.type);
+  // if (elements.some((e) => isRenderedField(e) && backendFieldCode(e.text) === code)) return 'placed';
   const table = elements.find((e) => e.kind === 'goods' && e.enabled);
   const key = GOODS_COLUMN_FOR_FIELD[item.type];
   if (table && key && getGoodsColumns(table).some((c) => c.key === key && c.enabled)) return 'in-table';
@@ -1252,11 +1254,12 @@ const TemplateDesigner = forwardRef<TemplateDesignerRef, TemplateDesignerProps>(
           );
           return;
         }
-        const code = backendFieldCode(item.type);
-        if (elements.some((e) => isRenderedField(e) && backendFieldCode(e.text) === code)) {
-          setNotice(`"${item.label}" is already on the template. Move or delete the existing one instead of adding it again.`);
-          return;
-        }
+        // NOTE: Removed duplicate check to allow adding same field multiple times
+        // const code = backendFieldCode(item.type);
+        // if (elements.some((e) => isRenderedField(e) && backendFieldCode(e.text) === code)) {
+        //   setNotice(`"${item.label}" is already on the template. Move or delete the existing one instead of adding it again.`);
+        //   return;
+        // }
       }
 
       const p = kindPalette(item.kind);
@@ -1556,17 +1559,16 @@ if (cr) {
     //   }
     // }
 
-    // Refuse to save a layout where one field code is placed twice —
-    // the server keys fields by code, so only one placement would survive.
-    const duplicateCodes = findDuplicateCodes(elements);
-    if (duplicateCodes.length > 0) {
-      setActiveTab('template-designer');
-      setSaveError(
-        `These fields are placed more than once and only one placement can be rendered: ${duplicateCodes.join(', ')}. ` +
-        'Delete or disable the extra copies, then save again.'
-      );
-      return;
-    }
+    // NOTE: Duplicate field codes are now allowed - fields can be placed multiple times
+    // const duplicateCodes = findDuplicateCodes(elements);
+    // if (duplicateCodes.length > 0) {
+    //   setActiveTab('template-designer');
+    //   setSaveError(
+    //     `These fields are placed more than once and only one placement can be rendered: ${duplicateCodes.join(', ')}. ` +
+    //     'Delete or disable the extra copies, then save again.'
+    //   );
+    //   return;
+    // }
 
     // Fields that are also Goods Table columns would be printed twice.
     const goodsDupes = findGoodsConflicts(elements);
