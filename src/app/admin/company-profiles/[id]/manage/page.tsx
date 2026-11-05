@@ -388,7 +388,7 @@ export default function AdminCompanyManage() {
                   disabled={isSaving}
                   className="w-full px-4 py-2.5 bg-[#1a4a8a] text-white rounded-[4px] text-[12px] font-medium hover:bg-[#153c70] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSaving ? 'Saving...' : 'Save Contact & Status Changes'}
+                  {isSaving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
 

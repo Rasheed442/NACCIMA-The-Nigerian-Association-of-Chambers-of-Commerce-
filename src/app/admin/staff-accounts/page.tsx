@@ -265,7 +265,7 @@ export default function AdminStaffAccounts() {
       }
 
       const response = await apiFetch(`${baseUrl}/api/v1/admin/staff/${staff.userId}/status?enabled=${!staff.enabled}`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
