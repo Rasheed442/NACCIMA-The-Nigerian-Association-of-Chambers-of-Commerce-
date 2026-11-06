@@ -254,7 +254,7 @@ export default function AdminCompanyManage() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <button 
-                  className="text-[12px] text-[#1a4a8a] hover:underline mb-2 cursor-pointer"
+                  className="text-[15px] text-[#1a4a8a] hover:underline mb-2 cursor-pointer"
                   onClick={() => router.push('/admin/company-profiles')}
                 >
                   ← Back to Company Profiles
