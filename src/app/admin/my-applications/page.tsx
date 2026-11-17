@@ -6,11 +6,12 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import AppHeader from '@/components/AppHeader';
 import LogoutModal from '@/components/LogoutModal';
-import { ChevronDown,ArrowRight } from 'lucide-react';
+import { ChevronDown, ArrowRight } from 'lucide-react';
 import { ClipLoader } from 'react-spinners';
 import { apiFetch, getBaseUrl } from '@/utils/api';
 
 interface Application {
+  approvalNumber: string;
   applicationId: string;
   companyId: string;
   companyName: string;
@@ -23,6 +24,7 @@ interface Application {
   totalValueFob: number;
   valueCurrency: string;
   assignedTo?: string;
+  assignedToName?: string;
 }
 
 interface StaffMember {
@@ -742,15 +744,15 @@ export default function AdminApplications() {
                   </thead>
                   <tbody>
                     {filteredApps.map((app) => (
-                      <tr key={app.applicationId} className="hover:bg-[#f8faff] text-[14px] transition-colors">
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.applicationId}</td>
+                      <tr key={app.approvalNumber} className="hover:bg-[#f8faff] text-[14px] transition-colors">
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] font-mono text-[#1a4a8a] whitespace-nowrap">{app.approvalNumber}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.companyName || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap font-mono">{app.tin || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.certificateType || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{formatDate(app.submittedAt)}</td>
                         {/* <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.totalValueFob ? `${app.valueCurrency || 'USD'} ${app.totalValueFob.toLocaleString()}` : '—'}</td> */}
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{getStatusBadge(app.status)}</td>
-                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.assignedTo || '—'}</td>
+                        <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">{app.assignedToName || '—'}</td>
                         <td className="px-[11px] py-[10px] border-b border-[#edf0f5] whitespace-nowrap">
                           {app.status === 'PAID' && (!app.assignedTo || app.assignedTo.trim() === '') ? (
                             <button
@@ -773,8 +775,8 @@ export default function AdminApplications() {
                               onClick={() => router.push(`/admin/my-applications/${app.applicationId}/review`)}
                             >
                               Review
-                                                                                        <ArrowRight className="w-3.5 h-3.5" />
-                              
+                              <ArrowRight className="w-3.5 h-3.5" />
+
                             </button>
                           )}
                         </td>
@@ -819,11 +821,10 @@ export default function AdminApplications() {
                     return (
                       <button
                         key={pageNum}
-                        className={`px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all ${
-                          currentPage === pageNum
-                            ? 'bg-[#1a4a8a] text-white'
-                            : 'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]'
-                        }`}
+                        className={`px-3 py-2 rounded-lg text-[13px] font-medium cursor-pointer border-none transition-all ${currentPage === pageNum
+                          ? 'bg-[#1a4a8a] text-white'
+                          : 'bg-white text-[#2a3a56] border border-[#ccd3e0] hover:bg-[#f1f4f9]'
+                          }`}
                         onClick={() => handlePageChange(pageNum)}
                       >
                         {pageNum + 1}
@@ -929,11 +930,10 @@ export default function AdminApplications() {
       {toast && (
         <div className="fixed bottom-5 right-5 z-[9999] max-w-[320px]">
           <div
-            className={`flex items-start gap-3 rounded-[10px] border px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.15)] ${
-              toast.type === 'success'
-                ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'
-                : 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b]'
-            }`}
+            className={`flex items-start gap-3 rounded-[10px] border px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.15)] ${toast.type === 'success'
+              ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'
+              : 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b]'
+              }`}
           >
             <div className="mt-0.5 text-[16px]">{toast.type === 'success' ? '✅' : '⚠️'}</div>
             <div className="text-[12px] font-medium leading-5">{toast.message}</div>
